@@ -1,0 +1,31 @@
+# UI Sitemap v1.0
+
+- Dashboard
+- Scanner
+- Inventory
+  - Laptops
+  - Parts
+- Receiving
+  - Import Lot (Wizard)
+  - Verification
+  - Grading
+- Processing
+  - Tracks A–E (Kanban)
+  - WIP Jobs
+- Sales
+  - New Sale
+  - All Sales
+  - Receipts
+- Purchases
+  - New Purchase
+  - All Purchases
+  - Payments
+- Finance
+  - Cash Register
+  - Owner Ledger
+  - VAT Report
+- Master Data
+  - Suppliers
+  - Lots
+- Reports
+- Settings

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ALMASFUFA Manager — Laptop Refurbishment ERP</title>
+    <style>
+      body { background: #06060e; margin: 0; }
+      #root-loader {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+        background: radial-gradient(circle at 30% 20%, rgba(0,240,255,0.04), transparent 50%), #06060e;
+        font-family: 'Orbitron', monospace, sans-serif; color: rgba(0,240,255,0.6);
+      }
+      #root-loader .logo { font-size: 28px; letter-spacing: 0.15em; text-shadow: 0 0 20px rgba(0,240,255,0.4); }
+      #root-loader .sub { font-size: 10px; letter-spacing: 0.3em; color: rgba(0,240,255,0.25); }
+      #root-loader .bar { width: 180px; height: 3px; background: rgba(0,240,255,0.08); border-radius: 99px; overflow: hidden; }
+      #root-loader .bar-fill { height: 100%; width: 40%; background: linear-gradient(90deg, rgba(0,240,255,0.6), rgba(123,45,255,0.6)); border-radius: 99px; animation: load 1.2s ease-in-out infinite alternate; }
+      @keyframes load { from { transform: translateX(-50%); } to { transform: translateX(200%); } }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="root-loader">
+        <div class="logo">⬡ ALMASFUFA</div>
+        <div class="sub">INITIALIZING SYSTEMS</div>
+        <div class="bar"><div class="bar-fill"></div></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
