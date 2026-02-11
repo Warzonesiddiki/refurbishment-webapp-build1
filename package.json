@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "launcher": "python3 tools/local_launcher_gui.py",
+    "java:server": "bash tools/run_java_server.sh 8085"
   },
   "dependencies": {
     "@testing-library/jest-dom": "^6.9.1",

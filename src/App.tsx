@@ -26,6 +26,8 @@ import { SettingsPage } from "@/components/pages/SettingsPage";
 import { ActionFeedbackProvider } from "@/context/ActionFeedbackContext";
 import { StoreProvider } from "@/context/StoreContext";
 import { ToastHost } from "@/components/ui/ToastHost";
+import { LoginPage } from "@/components/pages/LoginPage";
+import { clearAuthToken, fetchCurrentUser } from "@/utils/javaAuth";
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -44,6 +46,15 @@ function Placeholder({ title }: { title: string }) {
 export function App() {
   const [activePage, setActivePage] = useState<string>("dashboard");
   const [theme, setTheme] = useState<"cyber" | "pro">(() => getInitialTheme());
+  const [authReady, setAuthReady] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    fetchCurrentUser().then((u) => {
+      setIsAuthenticated(Boolean(u));
+      setAuthReady(true);
+    });
+  }, []);
 
   useEffect(() => {
     applyThemeClass(theme);
@@ -77,6 +88,18 @@ export function App() {
     }
   };
 
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-grid flex items-center justify-center">
+        <p className="text-cyan-300/70" style={{ fontFamily: "Orbitron" }}>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage onAuthenticated={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <StoreProvider>
       <ActionFeedbackProvider>
@@ -85,6 +108,10 @@ export function App() {
           onNavigate={setActivePage}
           onToggleTheme={() => setTheme((t: "cyber" | "pro") => (t === "cyber" ? "pro" : "cyber"))}
           theme={theme}
+          onLogout={() => {
+            clearAuthToken();
+            setIsAuthenticated(false);
+          }}
         >
           {renderPage()}
         </Layout>
