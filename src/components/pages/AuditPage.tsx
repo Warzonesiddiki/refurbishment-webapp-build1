@@ -19,7 +19,7 @@ export function AuditPage() {
       userName: l.user,
       sessionId: null,
       changes: [],
-      metadata: l.note ? { note: l.note } : {},
+      metadata: {},
       ipAddress: null,
       userAgent: null,
       result: "SUCCESS",

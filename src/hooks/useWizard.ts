@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 export type StepConfig = { validate?: () => boolean | Promise<boolean> };
 

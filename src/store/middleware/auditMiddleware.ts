@@ -1,4 +1,4 @@
-import type { AuditCategory, AuditLogRecord } from "@/store/types/AuditTypes";
+import type { AuditCategory, AuditChange, AuditLogRecord } from "@/store/types/AuditTypes";
 import { computeDiff } from "@/utils/diffCalculator";
 import { isSensitiveField, maskSensitiveData } from "@/utils/dataMasking";
 
@@ -39,7 +39,7 @@ export function wrapReducerWithAudit<State, Action extends { type: string }>(
         fieldLabel: d.path,
         oldValue: isSensitiveField(d.field) ? maskSensitiveData(d.oldValue) : d.oldValue,
         newValue: isSensitiveField(d.field) ? maskSensitiveData(d.newValue) : d.newValue,
-        changeType: d.type === "ADDED" ? "CREATE" : d.type === "REMOVED" ? "DELETE" : "UPDATE",
+        changeType: (d.type === "ADDED" ? "CREATE" : d.type === "REMOVED" ? "DELETE" : "UPDATE") as AuditChange["changeType"],
       }));
       onAuditCreated?.({
         id,

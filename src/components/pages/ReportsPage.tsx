@@ -20,6 +20,20 @@ type ReportKey = (typeof reportCards)[number]["key"];
 
 const runAgingBucket = (days: number) => (days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+");
 
+
+type ReportDataKey = "inventory" | "lowStock" | "aging" | "track" | "wip" | "profit" | "payables" | "receivables";
+
+const dataKeyByReport: Record<ReportKey, ReportDataKey> = {
+  inventory: "inventory",
+  "low-stock": "lowStock",
+  aging: "aging",
+  track: "track",
+  wip: "wip",
+  profit: "profit",
+  payables: "payables",
+  receivables: "receivables",
+};
+
 export function ReportsPage() {
   const state = useAppState();
   const { run: logExport } = useIdempotentAction("export-reports", "report");
@@ -104,7 +118,7 @@ export function ReportsPage() {
 
   const handleExport = (format: "excel" | "csv" | "json") => {
     logExport(`report-${format}`, { format, report: selected });
-    const payload = data[selected] ?? data;
+    const payload = data[dataKeyByReport[selected]] ?? data;
 
     if (format === "json") {
       exportJson(`report-${selected}-${new Date().toISOString().slice(0, 10)}.json`, payload);

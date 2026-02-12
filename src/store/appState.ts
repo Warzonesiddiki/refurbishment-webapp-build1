@@ -265,7 +265,7 @@ function getTrackKey(trackLabel: string): keyof typeof trackStages | null {
   return key in trackStages ? key : null;
 }
 
-function buildTrackEFollowupFromFailedTesting(wip: WipRecord): WipRecord {
+export function buildTrackEFollowupFromFailedTesting(wip: WipRecord): WipRecord {
   return {
     id: uid(),
     wip: generators.wip(new Date()),
@@ -1494,31 +1494,10 @@ export function appReducer(state: AppState, action: Action): AppState {
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_add", payload: { tech: action.tech, hours: action.hours } }
       );
 
-      const existingTrackE = failedTestingToTrackE
-        ? state.wipJobs.find((x) => x.id !== wip.id && x.laptop === wip.laptop && x.track === "Track E" && x.status !== "Completed")
-        : null;
-      const followup = failedTestingToTrackE && !existingTrackE ? buildTrackEFollowupFromFailedTesting(wip) : null;
-
       return {
         ...state,
         ...logs,
-        alerts: failedTestingToTrackE
-          ? [
-              {
-                id: uid(),
-                title: existingTrackE ? "Track E follow-up already open" : "Track E follow-up created",
-                description: existingTrackE
-                  ? `${wip.wip} failed testing; existing follow-up ${existingTrackE.wip} kept active`
-                  : `${wip.wip} failed testing and was routed to ${followup?.wip}`,
-                tone: "yellow",
-              },
-              ...state.alerts,
-            ].slice(0, 50)
-          : state.alerts,
-        wipJobs: [
-          ...state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
-          ...(followup ? [followup] : []),
-        ],
+        wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
       };
     }
 
@@ -1531,31 +1510,10 @@ export function appReducer(state: AppState, action: Action): AppState {
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "diagnosis_update" },
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "diagnosis_update", payload: { notesLen: action.notes.length } }
       );
-      const existingTrackE = failedTestingToTrackE
-        ? state.wipJobs.find((x) => x.id !== wip.id && x.laptop === wip.laptop && x.track === "Track E" && x.status !== "Completed")
-        : null;
-      const followup = failedTestingToTrackE && !existingTrackE ? buildTrackEFollowupFromFailedTesting(wip) : null;
-
       return {
         ...state,
         ...logs,
-        alerts: failedTestingToTrackE
-          ? [
-              {
-                id: uid(),
-                title: existingTrackE ? "Track E follow-up already open" : "Track E follow-up created",
-                description: existingTrackE
-                  ? `${wip.wip} failed testing; existing follow-up ${existingTrackE.wip} kept active`
-                  : `${wip.wip} failed testing and was routed to ${followup?.wip}`,
-                tone: "yellow",
-              },
-              ...state.alerts,
-            ].slice(0, 50)
-          : state.alerts,
-        wipJobs: [
-          ...state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
-          ...(followup ? [followup] : []),
-        ],
+        wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
       };
     }
 

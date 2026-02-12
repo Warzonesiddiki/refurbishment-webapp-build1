@@ -1,5 +1,5 @@
 import { APP_STATE_KEY, IStorageAdapter, STORAGE_PREFIX } from "@/store/persistence/IStorageAdapter";
-import { StorageCorruptError, StorageQuotaError, StorageUnavailableError } from "@/store/persistence/errors";
+import { StorageQuotaError, StorageUnavailableError } from "@/store/persistence/errors";
 
 type MemoryStore = Record<string, string>;
 
