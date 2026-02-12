@@ -14,15 +14,25 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [message, setMessage] = useState<string | null>(null);
 
   const submit = async () => {
+    if (loading) return;
     setMessage(null);
+
+    const normalizedEmail = email.trim();
+    const normalizedFullName = fullName.trim();
+
+    if (!normalizedEmail || !password || (mode === "register" && !normalizedFullName)) {
+      setMessage("Please complete all required fields.");
+      return;
+    }
+
     setLoading(true);
     try {
       if (mode === "register") {
-        await registerUser({ email, fullName, password });
+        await registerUser({ email: normalizedEmail, fullName: normalizedFullName, password });
         setMessage("Registration successful. You can now log in.");
         setMode("login");
       } else {
-        await loginUser({ email, password });
+        await loginUser({ email: normalizedEmail, password });
         onAuthenticated();
       }
     } catch (err) {
@@ -89,6 +99,10 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
           {message && (
             <div className="text-xs p-2 rounded border border-cyan-500/20 text-cyan-200/80 bg-cyan-500/5">{message}</div>
           )}
+
+          <p className="text-[11px] text-cyan-500/45" style={{ fontFamily: "Share Tech Mono" }}>
+            If you see a network error, start the Java API server (`npm run java:server`) and ensure VITE_JAVA_API_BASE is reachable.
+          </p>
         </div>
       </div>
     </div>

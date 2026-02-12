@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { navigation, NavItem } from "@/data/mockData";
 import { cn } from "@/utils/cn";
 import { GlobalSearch } from "@/components/ui/GlobalSearch";
@@ -7,8 +7,9 @@ import { useStore } from "@/context/StoreContext";
 import { exportJson } from "@/utils/exporters";
 import { toLocalDateStamp } from "@/utils/dateUtils";
 import { resolveActionRoute } from "@/utils/actionRouting";
-import { ActionKey } from "@/data/actionKeys";
 import { parseBackupJson } from "@/utils/backup";
+import { KEYBOARD_SHORTCUT_MAP } from "@/utils/actionShortcuts";
+import { ActionCommandPalette } from "@/components/ui/ActionCommandPalette";
 
 export type LayoutProps = {
   activePage: string;
@@ -21,6 +22,7 @@ export type LayoutProps = {
 
 export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber", children, onLogout }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const { state, dispatch } = useStore();
 
   const createBackup = useCallback(() => {
@@ -53,21 +55,6 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
     input.click();
   }, [dispatch]);
 
-  const shortcutRoutes = useMemo<Record<string, ActionKey | "backup" | "restore-backup">>(
-    () => ({
-      "ctrl+/": "scan",
-      "ctrl+s": "new-sale",
-      "ctrl+l": "import-lot",
-      "ctrl+g": "grade",
-      "ctrl+shift+l": "add-laptop",
-      "ctrl+shift+p": "add-part",
-      "ctrl+shift+r": "export-reports",
-      "ctrl+shift+w": "add-wip-job",
-      "ctrl+b": "backup",
-      "ctrl+shift+b": "restore-backup",
-    }),
-    []
-  );
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -86,10 +73,14 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
         .filter(Boolean)
         .join("+");
 
-      const action = shortcutRoutes[combo];
+      const action = KEYBOARD_SHORTCUT_MAP[combo];
       if (!action) return;
 
       event.preventDefault();
+      if (action === "command-palette") {
+        setCommandPaletteOpen(true);
+        return;
+      }
       if (action === "backup") {
         createBackup();
         return;
@@ -106,7 +97,7 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [createBackup, onNavigate, restoreBackup, shortcutRoutes]);
+  }, [createBackup, onNavigate, restoreBackup]);
 
   return (
     <div className="flex h-screen bg-grid">
@@ -171,7 +162,7 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+        <nav className="flex-1 overflow-y-auto p-2 space-y-1" role="navigation" aria-label="Primary">
           {navigation.map((item) => (
             <NavGroup
               key={item.id}
@@ -346,6 +337,12 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
           {children}
         </main>
       </div>
+      <ActionCommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onNavigate={onNavigate}
+        theme={theme}
+      />
     </div>
   );
 }
@@ -439,6 +436,7 @@ function NavGroup({
           {item.children.map((child) => (
             <button
               key={child.id}
+              aria-current={child.id === activePage ? "page" : undefined}
               className={cn(
                 "w-full text-left px-3 py-1.5 rounded text-[13px] transition-all",
                 child.id === activePage

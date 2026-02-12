@@ -1,6 +1,33 @@
 version: "3.9"
 
 services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: almasfufa-web
+    restart: unless-stopped
+    ports:
+      - "4173:80"
+    depends_on:
+      java-api:
+        condition: service_healthy
+
+  java-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.java
+    container_name: almasfufa-java-api
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8085/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   postgres:
     image: postgres:16-alpine
     container_name: almasfufa-postgres

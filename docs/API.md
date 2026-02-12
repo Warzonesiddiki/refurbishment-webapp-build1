@@ -1,5 +1,13 @@
 # API Outline v1.0
 
+## Contract-first spec (started)
+
+- OpenAPI starter contract: `docs/openapi.yaml`
+- This file now acts as the baseline for endpoint naming, auth expectations,
+  tenant scoping headers, and idempotency requirements.
+- Next iterations should expand schemas/response errors and keep the frontend
+  API client generated from this contract.
+
 ## Inventory
 - GET/POST /api/laptops
 - GET/PUT/DELETE /api/laptops/:id

@@ -1,0 +1,360 @@
+openapi: 3.1.0
+info:
+  title: ALMASFUFA Refurbishment ERP API
+  version: 0.1.0
+  description: |
+    Initial contract-first API skeleton to begin closing backend completeness gaps.
+    This spec focuses on high-traffic ERP workflows and standardizes auth,
+    idempotency and tenant scoping expectations.
+servers:
+  - url: /api
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Inventory
+  - name: Receiving
+  - name: WIP
+  - name: Sales
+  - name: Finance
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate user and issue access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Access token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh expired access token
+      security: []
+      responses:
+        '200':
+          description: New access token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+  /laptops:
+    get:
+      tags: [Inventory]
+      summary: List laptops for tenant
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Laptop list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Laptop'
+    post:
+      tags: [Inventory]
+      summary: Create laptop record
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLaptopRequest'
+      responses:
+        '201':
+          description: Laptop created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Laptop'
+  /lots/import/commit:
+    post:
+      tags: [Receiving]
+      summary: Commit lot import and create lot + laptop records
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LotImportCommitRequest'
+      responses:
+        '200':
+          description: Lot import committed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotImportCommitResponse'
+  /lots/verify/scan:
+    post:
+      tags: [Receiving]
+      summary: Verify incoming unit by scan code
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scanCode]
+              properties:
+                scanCode:
+                  type: string
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, laptopId]
+                properties:
+                  status:
+                    type: string
+                    enum: [verified, already_verified, not_found]
+                  laptopId:
+                    type: string
+  /wip:
+    post:
+      tags: [WIP]
+      summary: Open a WIP job ticket
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWipTicketRequest'
+      responses:
+        '201':
+          description: WIP ticket created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WipTicket'
+  /wip/{id}/stage:
+    post:
+      tags: [WIP]
+      summary: Move a WIP ticket between workflow stages
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stage]
+              properties:
+                stage:
+                  type: string
+      responses:
+        '200':
+          description: WIP ticket updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WipTicket'
+  /sales:
+    get:
+      tags: [Sales]
+      summary: List sales transactions
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Sales list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Sale'
+    post:
+      tags: [Sales]
+      summary: Create a sale
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSaleRequest'
+      responses:
+        '201':
+          description: Sale created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+  /vat:
+    get:
+      tags: [Finance]
+      summary: VAT summary for selected period
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: VAT summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  outputVat:
+                    type: number
+                  inputVat:
+                    type: number
+                  payableVat:
+                    type: number
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantHeader:
+      name: X-Tenant-ID
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Tenant scope key for multi-tenant authorization checks.
+    IdempotencyHeader:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Required for state-changing endpoints.
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    AuthResponse:
+      type: object
+      required: [accessToken, expiresInSeconds]
+      properties:
+        accessToken:
+          type: string
+        expiresInSeconds:
+          type: integer
+    Laptop:
+      type: object
+      required: [id, serial, status]
+      properties:
+        id:
+          type: string
+        serial:
+          type: string
+        status:
+          type: string
+    CreateLaptopRequest:
+      type: object
+      required: [serial]
+      properties:
+        serial:
+          type: string
+        model:
+          type: string
+        grade:
+          type: string
+    LotImportCommitRequest:
+      type: object
+      required: [supplierId, receivedDate, lines]
+      properties:
+        supplierId:
+          type: string
+        receivedDate:
+          type: string
+          format: date
+        lines:
+          type: array
+          items:
+            type: object
+            required: [serial]
+            properties:
+              serial:
+                type: string
+    LotImportCommitResponse:
+      type: object
+      required: [lotId, createdLaptopCount]
+      properties:
+        lotId:
+          type: string
+        createdLaptopCount:
+          type: integer
+    CreateWipTicketRequest:
+      type: object
+      required: [laptopId, issue]
+      properties:
+        laptopId:
+          type: string
+        issue:
+          type: string
+    WipTicket:
+      type: object
+      required: [id, laptopId, stage]
+      properties:
+        id:
+          type: string
+        laptopId:
+          type: string
+        stage:
+          type: string
+    CreateSaleRequest:
+      type: object
+      required: [laptopId, paymentMethod, total]
+      properties:
+        laptopId:
+          type: string
+        paymentMethod:
+          type: string
+        total:
+          type: number
+    Sale:
+      type: object
+      required: [id, laptopId, total]
+      properties:
+        id:
+          type: string
+        laptopId:
+          type: string
+        total:
+          type: number

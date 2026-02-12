@@ -1,0 +1,163 @@
+import type { AppState } from "@/store/appState";
+import type { BalanceSheet, MarginBreakdown, MarginReport, ProfitLossReport } from "@/store/types/ReportTypes";
+import type { VATReturn } from "@/store/types/VATTransactionTypes";
+
+const inRange = (date: string, start: Date, end: Date) => {
+  const d = +new Date(date);
+  return d >= +start && d <= +end;
+};
+const round2 = (n: number) => Number(n.toFixed(2));
+
+export function generateProfitLossReport(
+  state: AppState,
+  periodStart: Date,
+  periodEnd: Date,
+  comparisonPeriod?: { start: Date; end: Date }
+): ProfitLossReport {
+  const sales = state.sales.filter((s) => inRange(s.date, periodStart, periodEnd) && ["confirmed", "paid"].includes(s.status.toLowerCase()));
+  const salesRevenue = round2(sales.reduce((sum, s) => sum + s.subtotal, 0));
+  const cogs = round2(sales.reduce((sum, s) => sum + s.lineItems.reduce((a, l) => a + (l.cost || 0), 0), 0));
+  const totalRevenue = salesRevenue;
+  const grossProfit = round2(totalRevenue - cogs);
+  const expenses = {
+    parts: round2(state.wipJobs.reduce((s, w) => s + (w.partsCost || 0), 0)),
+    labor: round2(state.wipJobs.reduce((s, w) => s + (w.laborEntries || []).reduce((a, l) => a + l.hours * l.rate, 0), 0)),
+    overhead: 0,
+    other: 0,
+    totalExpenses: 0,
+  };
+  expenses.totalExpenses = round2(expenses.parts + expenses.labor + expenses.overhead + expenses.other);
+  const operatingProfit = round2(grossProfit - expenses.totalExpenses);
+  const netProfit = operatingProfit;
+
+  const report: ProfitLossReport = {
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+    revenue: { salesRevenue, otherIncome: 0, totalRevenue },
+    costOfGoodsSold: { openingInventory: 0, purchases: cogs, closingInventory: 0, totalCOGS: cogs },
+    grossProfit,
+    grossMarginPercent: totalRevenue ? round2((grossProfit / totalRevenue) * 100) : 0,
+    expenses,
+    operatingProfit,
+    otherExpenses: 0,
+    netProfit,
+    netMarginPercent: totalRevenue ? round2((netProfit / totalRevenue) * 100) : 0,
+    comparison: null,
+  };
+
+  if (comparisonPeriod) {
+    report.comparison = generateProfitLossReport(state, comparisonPeriod.start, comparisonPeriod.end);
+  }
+  return report;
+}
+
+export function generateVATReport(state: AppState, periodStart: Date, periodEnd: Date): VATReturn {
+  const sales = state.sales.filter((s) => inRange(s.date, periodStart, periodEnd));
+  const purchases = state.purchases.filter((p) => inRange(p.date, periodStart, periodEnd));
+  const outputVAT = round2(sales.reduce((sum, s) => sum + s.vat, 0));
+  const inputVAT = round2(purchases.reduce((sum, p) => sum + p.vat, 0));
+  const netVAT = round2(outputVAT - inputVAT);
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+    status: "CALCULATED",
+    outputVAT,
+    inputVAT,
+    netVAT,
+    adjustments: 0,
+    finalAmount: netVAT,
+    lines: [
+      { box: 1, description: "Output VAT", amount: outputVAT },
+      { box: 4, description: "Input VAT", amount: inputVAT },
+      { box: 5, description: "Net VAT", amount: netVAT },
+    ],
+    transactionCount: sales.length + purchases.length,
+    filedDate: null,
+    paidDate: null,
+    reference: null,
+    notes: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function generateBalanceSheet(state: AppState, asOfDate: Date): BalanceSheet {
+  const cash = round2(state.cashEntries.filter((c) => +new Date(c.time) <= +asOfDate).reduce((s, c) => s + c.amount, 0));
+  const receivables = round2(
+    state.sales.filter((s) => +new Date(s.date) <= +asOfDate).reduce((sum, s) => sum + s.total, 0) -
+      state.receipts.filter((r) => +new Date(r.date) <= +asOfDate).reduce((sum, r) => sum + r.amount, 0)
+  );
+  const inventory = round2(state.laptops.filter((l) => l.status !== "sold").reduce((s, l) => s + Number(l.cost || 0), 0));
+  const payables = round2(
+    state.purchases.filter((p) => +new Date(p.date) <= +asOfDate).reduce((sum, p) => sum + p.total, 0) -
+      state.payments.filter((p) => +new Date(p.date) <= +asOfDate).reduce((sum, p) => sum + p.amount, 0)
+  );
+  const vatPayable = round2(
+    state.sales.filter((s) => +new Date(s.date) <= +asOfDate).reduce((sum, s) => sum + s.vat, 0) -
+      state.purchases.filter((p) => +new Date(p.date) <= +asOfDate).reduce((sum, p) => sum + p.vat, 0)
+  );
+  const currentProfit = generateProfitLossReport(state, new Date(asOfDate.getFullYear(), 0, 1), asOfDate).netProfit;
+
+  const assetsCurrent = { cash, receivables, inventory, prepaidExpenses: 0, totalCurrent: round2(cash + receivables + inventory) };
+  const fixedAssets = { equipment: 0, accumulatedDepreciation: 0, totalFixed: 0 };
+  const totalAssets = round2(assetsCurrent.totalCurrent + fixedAssets.totalFixed);
+  const liabilitiesCurrent = { payables, vatPayable, accruedExpenses: 0, totalCurrent: round2(payables + vatPayable) };
+  const liabilities = { currentLiabilities: liabilitiesCurrent, longTermLiabilities: { loans: 0, totalLongTerm: 0 }, totalLiabilities: liabilitiesCurrent.totalCurrent };
+  const equity = {
+    ownerCapital: round2(state.ownerEntries.filter((o) => o.type.toLowerCase().includes("invest")).reduce((s, o) => s + o.amount, 0)),
+    drawings: round2(state.ownerEntries.filter((o) => o.type.toLowerCase().includes("draw")).reduce((s, o) => s + o.amount, 0)),
+    retainedEarnings: 0,
+    currentPeriodProfit: currentProfit,
+    totalEquity: 0,
+  };
+  equity.totalEquity = round2(equity.ownerCapital - equity.drawings + equity.retainedEarnings + equity.currentPeriodProfit);
+  return {
+    asOfDate: asOfDate.toISOString(),
+    assets: { currentAssets: assetsCurrent, fixedAssets, totalAssets },
+    liabilities,
+    equity,
+    balanceCheck: round2(totalAssets) === round2(liabilities.totalLiabilities + equity.totalEquity),
+  };
+}
+
+function grouped(items: AppState["sales"], key: (sale: AppState["sales"][number]) => string): MarginBreakdown[] {
+  const map = new Map<string, MarginBreakdown>();
+  for (const sale of items) {
+    const id = key(sale) || "unknown";
+    const units = sale.lineItems.length || sale.items || 0;
+    const revenue = sale.total;
+    const cost = sale.lineItems.reduce((s, l) => s + l.cost, 0);
+    const existing = map.get(id) ?? { id, name: id, unitsSold: 0, revenue: 0, cost: 0, margin: 0, marginPercent: 0 };
+    existing.unitsSold += units;
+    existing.revenue += revenue;
+    existing.cost += cost;
+    existing.margin = round2(existing.revenue - existing.cost);
+    existing.marginPercent = existing.revenue ? round2((existing.margin / existing.revenue) * 100) : 0;
+    map.set(id, existing);
+  }
+  return [...map.values()];
+}
+
+export function generateMarginReport(state: AppState, periodStart: Date, periodEnd: Date): MarginReport {
+  const sales = state.sales.filter((s) => inRange(s.date, periodStart, periodEnd));
+  const revenue = round2(sales.reduce((s, x) => s + x.total, 0));
+  const cost = round2(sales.reduce((s, x) => s + x.lineItems.reduce((a, l) => a + l.cost, 0), 0));
+  const margin = round2(revenue - cost);
+  return {
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+    overall: {
+      unitsSold: sales.reduce((s, x) => s + (x.items || x.lineItems.length), 0),
+      revenue,
+      cost,
+      margin,
+      marginPercent: revenue ? round2((margin / revenue) * 100) : 0,
+    },
+    bySupplier: grouped(sales, (s) => s.customer),
+    byLot: grouped(sales, (s) => s.invoice.slice(0, 7)),
+    byGrade: grouped(sales, (s) => s.status),
+    byModel: grouped(sales, (s) => s.lineItems[0]?.name || "unknown"),
+  };
+}

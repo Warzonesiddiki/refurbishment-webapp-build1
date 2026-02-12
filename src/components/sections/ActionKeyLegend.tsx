@@ -44,7 +44,7 @@ export function ActionKeyLegend() {
         ))}
       </div>
       <p className="text-[11px] text-cyan-500/25" style={{ fontFamily: 'Share Tech Mono' }}>
-        All primary buttons carry data-action attributes. Use these keys to wire keyboard shortcuts or trigger global command palette.
+        All primary buttons carry data-action attributes. Use these keys with the global shortcuts or open Command Palette (Ctrl+K).
       </p>
     </div>
   );
