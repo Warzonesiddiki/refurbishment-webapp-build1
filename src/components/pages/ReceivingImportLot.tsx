@@ -26,17 +26,27 @@ export function ReceivingImportLot() {
   const { trigger } = useUiActionFeedback();
 
   const previewRows = useMemo(() => {
+    const seen = new Set<string>();
+    const existing = new Set(state.laptops.map((l) => l.barcode.toUpperCase()));
+
     return rawRows.map((r) => {
-      const barcode = r[mapping.barcode] || "";
-      const brand = r[mapping.brand] || "";
-      const model = r[mapping.model] || "";
+      const barcode = (r[mapping.barcode] || "").trim();
+      const normalized = barcode.toUpperCase();
+      const brand = (r[mapping.brand] || "").trim();
+      const model = (r[mapping.model] || "").trim();
       const cost = Number(r[mapping.cost] || 0);
-      const error = !barcode || !brand || !model ? "Missing required fields" : "";
+      let error = "";
+
+      if (!barcode || !brand || !model) error = "Missing required fields";
+      else if (existing.has(normalized)) error = "Barcode already exists";
+      else if (seen.has(normalized)) error = "Duplicate barcode in file";
+
+      seen.add(normalized);
       return { barcode, brand, model, cost, error };
     });
-  }, [rawRows, mapping]);
+  }, [rawRows, mapping, state.laptops]);
 
-  const validRows = previewRows.filter(r => !r.error);
+  const validRows = previewRows.filter((r) => !r.error);
 
   const parseCsv = (text: string) => {
     const lines = text.split(/\r?\n/).filter(Boolean);
@@ -57,6 +67,19 @@ export function ReceivingImportLot() {
   };
 
   const handleCommit = () => {
+    if (!lotNumber.trim()) {
+      trigger("error", "Lot number is required");
+      return;
+    }
+    if (state.lots.some((l) => l.lot.toUpperCase() === lotNumber.trim().toUpperCase())) {
+      trigger("error", `Lot ${lotNumber} already exists`);
+      return;
+    }
+    if (validRows.length === 0) {
+      trigger("error", "No valid rows to import");
+      return;
+    }
+
     logCommit(lotNumber, { validRows: validRows.length, totalRows: previewRows.length });
     dispatch({ type: "ADD_LOT", payload: { lot: lotNumber, supplier, received: new Date().toISOString().slice(0, 10), status: "Pending", items: validRows.length, verified: 0, graded: 0, cost: totalCost } });
     validRows.forEach((r) => {
@@ -138,9 +161,12 @@ export function ReceivingImportLot() {
           <table className="w-full text-sm">
             <thead><tr><th className="py-2 px-3">Barcode</th><th className="py-2 px-3">Brand</th><th className="py-2 px-3">Model</th><th className="py-2 px-3">Cost</th><th className="py-2 px-3">Status</th></tr></thead>
             <tbody>{previewRows.map((r, i) => (
-              <tr key={i}><td className="py-2 px-3 neon-text-cyan" style={{ fontFamily: "Share Tech Mono" }}>{r.barcode || "—"}</td><td className="py-2 px-3">{r.brand}</td><td className="py-2 px-3">{r.model}</td><td className="py-2 px-3">AED {r.cost}</td><td className="py-2 px-3">{r.error ? "Error" : "Valid"}</td></tr>
+              <tr key={i}><td className="py-2 px-3 neon-text-cyan" style={{ fontFamily: "Share Tech Mono" }}>{r.barcode || "—"}</td><td className="py-2 px-3">{r.brand}</td><td className="py-2 px-3">{r.model}</td><td className="py-2 px-3">AED {r.cost}</td><td className="py-2 px-3">{r.error || "Valid"}</td></tr>
             ))}</tbody>
           </table>
+          <p className="text-xs text-cyan-400/50 mt-3">
+            Valid: {validRows.length} / {previewRows.length}
+          </p>
           <div className="flex justify-between mt-6"><button className="btn-ghost" onClick={() => setActiveStep(3)}>← Back</button><button data-testid="import-commit" className="btn-cyber" onClick={handleCommit}>✓ Import {validRows.length} Rows</button></div>
         </div>
       )}

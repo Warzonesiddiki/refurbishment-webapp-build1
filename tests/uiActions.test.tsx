@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { ReceivingImportLot } from "@/components/pages/ReceivingImportLot";
 import { ReceivingVerification } from "@/components/pages/ReceivingVerification";
 import { ReceivingGrading } from "@/components/pages/ReceivingGrading";
@@ -20,37 +20,59 @@ function renderWithStore(node: ReactElement) {
 }
 
 describe("UI action wiring", () => {
-  it("commits import lot", () => {
+  it("commits import lot", async () => {
     renderWithStore(<ReceivingImportLot />);
-    fireEvent.click(screen.getByText("Next → Upload"));
-    fireEvent.click(screen.getByText("Next → Map"));
-    fireEvent.click(screen.getByText("Next → Preview"));
+    await act(async () => {
+      fireEvent.click(screen.getByText("Next → Upload"));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Next → Map"));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Next → Preview"));
+    });
 
     const btn = screen.getByTestId("import-commit");
-    fireEvent.click(btn);
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+
     expect(btn).toBeInTheDocument();
   });
 
-  it("completes verification", () => {
+  it("completes verification", async () => {
     renderWithStore(<ReceivingVerification />);
     const btn = screen.getByTestId("verification-complete");
-    fireEvent.click(btn);
+
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+
     expect(btn).toBeInTheDocument();
   });
 
-  it("saves grading", () => {
+  it("saves grading", async () => {
     renderWithStore(<ReceivingGrading />);
     const btn = screen.getByTestId("grading-save");
-    fireEvent.click(btn);
+
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+
     expect(btn).toBeInTheDocument();
   });
 
-  it("opens and closes WIP details", () => {
+  it("opens and closes WIP details", async () => {
     renderWithStore(<WipJobs />);
-    fireEvent.click(screen.getByText("ALM-WIP-20240115-0001"));
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("ALM-WIP-20240115-0001"));
+    });
     expect(screen.getByText("✓ Complete Job")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("✕ Close"));
+    await act(async () => {
+      fireEvent.click(screen.getByText("✕ Close"));
+    });
     expect(screen.queryByText("✓ Complete Job")).not.toBeInTheDocument();
   });
 });
