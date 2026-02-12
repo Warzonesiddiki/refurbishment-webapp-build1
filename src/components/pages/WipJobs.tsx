@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { KpiCard } from "@/components/cards/KpiCard";
 import { nextWipNumber } from "@/utils/dateUtils";
+import { trackStages } from "@/domain";
 
 const priorityColors: Record<string, string> = { High: "cyber-badge-red", Normal: "cyber-badge-yellow", Low: "cyber-badge-green" };
 const statusColors: Record<string, string> = { "In Progress": "cyber-badge-purple", Active: "cyber-badge-cyan", "Awaiting Parts": "cyber-badge-yellow", Completed: "cyber-badge-green" };
@@ -87,6 +88,18 @@ export function WipJobs() {
   const completeJob = () => {
     if (!selectedJob) return;
     dispatch({ type: "WIP_COMPLETE", wipId: selectedJob.id });
+  };
+
+
+  const moveToNextStage = () => {
+    if (!selectedJob) return;
+    const m = /Track\s*([A-E])/i.exec(selectedJob.track);
+    if (!m) return;
+    const key = m[1].toUpperCase() as keyof typeof trackStages;
+    const stages = trackStages[key];
+    const idx = stages.indexOf(selectedJob.stage);
+    if (idx === -1 || idx >= stages.length - 1) return;
+    dispatch({ type: "WIP_MOVE_STAGE", wipId: selectedJob.id, toStage: stages[idx + 1] });
   };
 
   const laborCost = selectedJob ? selectedJob.laborEntries.reduce((a, l) => a + l.hours * l.rate, 0) : 0;
@@ -228,6 +241,7 @@ export function WipJobs() {
             )}
             <div className="flex justify-end gap-3">
               <button className="btn-ghost" onClick={() => setSelectedJobId(null)}>Close</button>
+              <button className="btn-ghost" data-action="wip-move-stage" onClick={moveToNextStage}>→ Next Stage</button>
               <button className="btn-cyber" onClick={completeJob}>✓ Complete Job</button>
             </div>
           </div>
