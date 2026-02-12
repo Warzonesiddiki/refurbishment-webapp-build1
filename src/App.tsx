@@ -22,6 +22,7 @@ import { FinanceVat } from "@/components/pages/FinanceVat";
 import { MasterSuppliers } from "@/components/pages/MasterSuppliers";
 import { MasterLots } from "@/components/pages/MasterLots";
 import { ReportsPage } from "@/components/pages/ReportsPage";
+import { AuditPage } from "@/components/pages/AuditPage";
 import { SettingsPage } from "@/components/pages/SettingsPage";
 import { ActionFeedbackProvider } from "@/context/ActionFeedbackContext";
 import { StoreProvider } from "@/context/StoreContext";
@@ -90,6 +91,7 @@ export function App() {
       case "master-suppliers": return <MasterSuppliers />;
       case "master-lots":      return <MasterLots />;
       case "reports":          return <ReportsPage />;
+      case "audit":            return <AuditPage />;
       case "settings":         return <SettingsPage />;
       default:                 return <Placeholder title={activePage.replace(/-/g, " ")} />;
     }
