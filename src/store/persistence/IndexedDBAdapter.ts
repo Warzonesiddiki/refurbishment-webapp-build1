@@ -71,6 +71,7 @@ export class IndexedDBAdapter implements IStorageAdapter {
         resolve(db);
       };
       req.onblocked = () => {
+        this.dbPromise = null;
         reject(new StorageUnavailableError("IndexedDB open request was blocked"));
       };
       req.onerror = () => {
@@ -86,9 +87,9 @@ export class IndexedDBAdapter implements IStorageAdapter {
     return this.withFallback(
       "get",
       async () => {
-      const raw = await this.withStore<string | undefined>("readonly", (store) => store.get(key));
-      if (!raw) return null;
-      return JSON.parse(raw) as T;
+        const raw = await this.withStore<string | undefined>("readonly", (store) => store.get(key));
+        if (!raw) return null;
+        return JSON.parse(raw) as T;
       },
       () => this.fallback.get<T>(key)
     );
@@ -125,8 +126,8 @@ export class IndexedDBAdapter implements IStorageAdapter {
     return this.withFallback(
       "keys",
       async () => {
-      const allKeys = await this.withStore<IDBValidKey[]>("readonly", (store) => store.getAllKeys());
-      return allKeys.map(String).filter((key) => key.startsWith(STORAGE_PREFIX));
+        const allKeys = await this.withStore<IDBValidKey[]>("readonly", (store) => store.getAllKeys());
+        return allKeys.map(String).filter((key) => key.startsWith(STORAGE_PREFIX));
       },
       () => this.fallback.keys()
     );
