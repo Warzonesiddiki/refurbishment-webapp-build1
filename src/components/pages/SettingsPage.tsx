@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useReducer, useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
+import { BackupRestoreModal, BackupSettings as BackupSettingsPanel } from "@/components/Backup";
+import { backupReducer, createInitialBackupState } from "@/store/reducers/backupReducer";
+import { createFullBackup, createIncrementalBackup, downloadBackup } from "@/utils/backup/createBackup";
+import type { BackupFile } from "@/store/types/BackupTypes";
 
 export function SettingsPage() {
   const state = useAppState();
@@ -8,6 +12,8 @@ export function SettingsPage() {
   const [form, setForm] = useState({ ...state.settings });
   const [activeSection, setActiveSection] = useState("company");
   const [showDanger, setShowDanger] = useState(false);
+  const [backupState, backupDispatch] = useReducer(backupReducer, undefined, createInitialBackupState);
+  const [backupModalMode, setBackupModalMode] = useState<"EXPORT" | "IMPORT" | null>(null);
 
   const save = () => {
     dispatch({ type: "UPDATE_SETTINGS", payload: form });
@@ -156,43 +162,58 @@ export function SettingsPage() {
 
           {activeSection === "backup" && (
             <div className="glass-card corner-marks p-6 space-y-4">
-              <h3 className="text-sm font-bold neon-text-cyan" style={{ fontFamily: "var(--font-heading)" }}>BACKUP & RESTORE</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-lg bg-cyan-500/5 border border-cyan-500/10 space-y-3">
-                  <h4 className="text-xs font-bold neon-text-green" style={{ fontFamily: "var(--font-heading)" }}>EXPORT DATA</h4>
-                  <p className="text-xs text-cyan-400/40">Download a complete backup of all system data as JSON.</p>
-                  <button className="btn-cyber text-xs w-full" onClick={() => {
-                    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a"); a.href = url; a.download = `almasfufa-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click();
-                    URL.revokeObjectURL(url);
-                  }}>💾 Download Backup</button>
-                </div>
-                <div className="p-4 rounded-lg bg-cyan-500/5 border border-cyan-500/10 space-y-3">
-                  <h4 className="text-xs font-bold neon-text-purple" style={{ fontFamily: "var(--font-heading)" }}>RESTORE DATA</h4>
-                  <p className="text-xs text-cyan-400/40">Upload a backup file to restore system data.</p>
-                  <button
-                    className="btn-ghost text-xs w-full"
-                    onClick={() => {
-                      const input = document.createElement("input");
-                      input.type = "file";
-                      input.accept = ".json";
-                      input.onchange = async () => {
-                        const file = input.files?.[0];
-                        if (!file) return;
-                        const text = await file.text();
-                        const data = JSON.parse(text);
-                        const requiredKeys = ["laptops","parts","wipJobs","sales","purchases","settings"];
-                        if (!requiredKeys.every((k) => k in data)) return;
-                        dispatch({ type: "RESTORE_STATE", payload: data });
-                      };
-                      input.click();
-                    }}
-                  >
-                    📂 Upload Backup File
-                  </button>
-                </div>
+              <BackupSettingsPanel
+                settings={backupState.settings}
+                history={backupState.backupHistory}
+                rollbackPoints={backupState.rollbackPoints}
+                onSettingsChange={(next) => backupDispatch({ type: "UPDATE_BACKUP_SETTINGS", payload: next })}
+                onFullBackup={async () => {
+                  const backup = await createFullBackup(state, { includeAudit: backupState.settings.includeAuditInBackup });
+                  downloadBackup(backup);
+                  backupDispatch({ type: "RECORD_BACKUP", payload: { id: backup.backupId, type: backup.backupType, checksum: backup.checksum, modules: backup.metadata.modules } });
+                }}
+                onIncrementalBackup={async () => {
+                  const backup = await createIncrementalBackup(state, backupState.changeTracker);
+                  downloadBackup(backup);
+                  backupDispatch({ type: "RECORD_BACKUP", payload: { id: backup.backupId, type: backup.backupType, checksum: backup.checksum, modules: backup.metadata.modules } });
+                }}
+                onRollback={(id) => backupDispatch({ type: "EXECUTE_ROLLBACK", payload: { rollbackId: id } })}
+                onDeleteRollback={(id) => backupDispatch({ type: "DELETE_ROLLBACK_POINT", payload: { rollbackId: id } })}
+              />
+              <div className="flex gap-2">
+                <button className="btn-cyber" onClick={() => setBackupModalMode("EXPORT")}>Open Export Modal</button>
+                <button className="btn-ghost" onClick={() => setBackupModalMode("IMPORT")}>Open Import Modal</button>
               </div>
+
+              <BackupRestoreModal
+                open={backupModalMode !== null}
+                mode={backupModalMode ?? "EXPORT"}
+                state={state}
+                onClose={() => setBackupModalMode(null)}
+                onRestore={(backup: BackupFile) => {
+                  if (typeof backup.data === "object" && backup.data && (backup.data as any).inventory?.laptops) {
+                    const payload = backup.data as any;
+                    dispatch({
+                      type: "RESTORE_STATE",
+                      payload: {
+                        ...state,
+                        laptops: payload.inventory?.laptops ?? state.laptops,
+                        parts: payload.inventory?.parts ?? state.parts,
+                        wipJobs: payload.wip?.records ?? state.wipJobs,
+                        sales: payload.sales?.sales ?? state.sales,
+                        receipts: payload.sales?.receipts ?? state.receipts,
+                        purchases: payload.purchases?.purchases ?? state.purchases,
+                        payments: payload.purchases?.payments ?? state.payments,
+                        cashEntries: payload.finance?.cashEntries ?? state.cashEntries,
+                        ownerEntries: payload.finance?.ownerEntries ?? state.ownerEntries,
+                        suppliers: payload.masterData?.suppliers ?? state.suppliers,
+                        lots: payload.masterData?.lots ?? state.lots,
+                        settings: payload.settings?.config ?? state.settings,
+                      },
+                    });
+                  }
+                }}
+              />
             </div>
           )}
 
