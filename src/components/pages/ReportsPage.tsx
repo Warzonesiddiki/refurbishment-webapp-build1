@@ -3,6 +3,7 @@ import { useAppState } from "@/context/StoreContext";
 import { useIdempotentAction } from "@/hooks/useIdempotentAction";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
 import { exportCsv, exportJson } from "@/utils/exporters";
+import { ProfitSummaryWidget } from "@/components/Dashboard/ProfitSummaryWidget";
 
 const reportCards = [
   { key: "inventory", title: "Inventory Valuation", desc: "Laptops unsold + parts valuation" },
@@ -138,6 +139,15 @@ export function ReportsPage() {
           <button className="btn-ghost" onClick={() => handleExport("json")}>JSON</button>
           <button className="btn-cyber" data-action="print" onClick={() => window.print()}>⎙ Print</button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ProfitSummaryWidget
+          revenue={data.profit.reduce((s, p) => s + p.total, 0)}
+          cogs={data.profit.reduce((s, p) => s + (p.total - p.profit), 0)}
+          grossProfit={data.profit.reduce((s, p) => s + p.profit, 0)}
+          netProfit={data.profit.reduce((s, p) => s + p.profit, 0)}
+        />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
