@@ -4,7 +4,7 @@ import { IndexedDBAdapter } from "@/store/persistence/IndexedDBAdapter";
 afterEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
-  (IndexedDBAdapter as unknown as { warnedOperations: Set<string> }).warnedOperations.clear();
+  IndexedDBAdapter.resetWarningStateForTests();
 });
 
 describe("IndexedDBAdapter", () => {

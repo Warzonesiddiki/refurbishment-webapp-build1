@@ -15,6 +15,10 @@ export class IndexedDBAdapter implements IStorageAdapter {
   private dbPromise: Promise<IDBDatabase> | null = null;
   private static warnedOperations = new Set<string>();
 
+  static resetWarningStateForTests() {
+    IndexedDBAdapter.warnedOperations.clear();
+  }
+
   private warnFallbackOnce(operation: string, error: unknown) {
     if (IndexedDBAdapter.warnedOperations.has(operation)) {
       return;
@@ -39,9 +43,18 @@ export class IndexedDBAdapter implements IStorageAdapter {
       const store = tx.objectStore(STORE_NAME);
       const req = fn(store);
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
+      req.onerror = () => {
+        this.dbPromise = null;
+        reject(req.error);
+      };
+      tx.onerror = () => {
+        this.dbPromise = null;
+        reject(tx.error);
+      };
+      tx.onabort = () => {
+        this.dbPromise = null;
+        reject(tx.error);
+      };
     });
   }
 
