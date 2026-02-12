@@ -31,6 +31,7 @@ import { clearAuthToken, fetchCurrentUser } from "@/utils/javaAuth";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useAnnouncer } from "@/hooks/useAnnouncer";
+import { PersistenceProvider } from "@/store/persistence/PersistenceProvider";
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -107,7 +108,8 @@ export function App() {
   }
 
   return (
-    <StoreProvider>
+    <PersistenceProvider>
+      <StoreProvider>
       <ActionFeedbackProvider>
         <ErrorBoundary>
           <div id="route-announcer" aria-live="polite" className="sr-only" />
@@ -126,6 +128,7 @@ export function App() {
           <ToastHost />
         </ErrorBoundary>
       </ActionFeedbackProvider>
-    </StoreProvider>
+      </StoreProvider>
+    </PersistenceProvider>
   );
 }
