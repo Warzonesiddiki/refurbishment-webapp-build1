@@ -26,6 +26,9 @@ docker compose up --build
 - PostgreSQL: `localhost:5432`
 - Adminer: `http://localhost:8080`
 
+### Startup reliability
+Compose health checks are configured so `web` waits for a healthy `java-api` before booting.
+
 ### Build images only
 ```bash
 docker build -t almasfufa-web -f Dockerfile .

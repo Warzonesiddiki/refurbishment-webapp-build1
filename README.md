@@ -52,6 +52,9 @@ Services:
 - Adminer: `http://localhost:8080`
 - PostgreSQL: `localhost:5432`
 
+### Compose health checks
+`web` now waits for `java-api` health before startup to reduce first-run race conditions.
+
 
 ## Project Structure
 - `src/` application source

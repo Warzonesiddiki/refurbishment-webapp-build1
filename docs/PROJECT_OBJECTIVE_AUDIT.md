@@ -13,7 +13,7 @@ The project now has a stable core: typecheck, build, and the complete Vitest sui
 ### 1) Stability and bug reduction
 - ✅ TypeScript typecheck passes.
 - ✅ Production build passes.
-- ✅ Unit/integration tests pass (175/175).
+- ✅ Unit/integration tests pass (181/181).
 - ✅ Auth network errors now return actionable messages instead of generic `Failed to fetch`.
 
 ### 2) Persistence and backup reliability
