@@ -70,4 +70,35 @@ describe("finance ledger recalculation", () => {
     expect(state.ownerEntries).toHaveLength(initialCount);
     expect(state.alerts[0]?.title).toBe("Owner drawing blocked");
   });
+
+  it("blocks backdated drawings that make historical capital negative", () => {
+    let state = createInitialState();
+
+    state = appReducer(state, {
+      type: "ADD_OWNER_ENTRY",
+      payload: {
+        date: "2024-02-20",
+        type: "Capital",
+        desc: "Owner top-up",
+        amount: 100,
+        balance: 0,
+      },
+    });
+
+    const countBefore = state.ownerEntries.length;
+    state = appReducer(state, {
+      type: "ADD_OWNER_ENTRY",
+      payload: {
+        date: "2024-01-01",
+        type: "Drawing",
+        desc: "Backdated draw",
+        amount: 999999999,
+        balance: 0,
+      },
+    });
+
+    expect(state.ownerEntries).toHaveLength(countBefore);
+    expect(state.alerts[0]?.title).toBe("Owner drawing blocked");
+  });
+
 });

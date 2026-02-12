@@ -1076,9 +1076,11 @@ export function appReducer(state: AppState, action: Action): AppState {
     }
 
     case "ADD_OWNER_ENTRY": {
-      const currentBalance = state.ownerEntries.length > 0 ? state.ownerEntries[state.ownerEntries.length - 1].balance : 0;
       const normalizedAmount = action.payload.type === "Drawing" ? -Math.abs(action.payload.amount) : Math.abs(action.payload.amount);
-      if (currentBalance + normalizedAmount < 0) {
+      const entry = { ...action.payload, amount: normalizedAmount, id: uid() };
+      const nextEntries = recalculateOwnerLedger([...state.ownerEntries, entry]);
+      const hasNegativeCapital = nextEntries.some((ownerEntry) => ownerEntry.balance < 0);
+      if (hasNegativeCapital) {
         return {
           ...state,
           alerts: [
@@ -1093,13 +1095,11 @@ export function appReducer(state: AppState, action: Action): AppState {
         };
       }
 
-      const entry = { ...action.payload, amount: normalizedAmount, id: uid() };
       const logs = appendLogs(
         state,
         { entityType: "settings", entityId: entry.id, ref: "owner", action: "owner_entry", note: entry.desc },
         { entityType: "settings", entityId: entry.id, ref: "owner", action: "owner_entry", payload: { ...action.payload } }
       );
-      const nextEntries = recalculateOwnerLedger([...state.ownerEntries, entry]);
       return { ...state, ...logs, ownerEntries: nextEntries };
     }
     case "DELETE_OWNER_ENTRY": {
