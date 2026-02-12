@@ -1,6 +1,26 @@
 version: "3.9"
 
 services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: almasfufa-web
+    restart: unless-stopped
+    ports:
+      - "4173:80"
+    depends_on:
+      - java-api
+
+  java-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.java
+    container_name: almasfufa-java-api
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+
   postgres:
     image: postgres:16-alpine
     container_name: almasfufa-postgres

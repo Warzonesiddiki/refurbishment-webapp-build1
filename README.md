@@ -40,6 +40,19 @@ npm run dev
 npm run build
 ```
 
+## Docker
+Build and run the full stack (frontend + Java auth API + Postgres + Adminer):
+```bash
+docker compose up --build
+```
+
+Services:
+- Web app: `http://localhost:4173`
+- Java API: `http://localhost:8085`
+- Adminer: `http://localhost:8080`
+- PostgreSQL: `localhost:5432`
+
+
 ## Project Structure
 - `src/` application source
 - `tests/` unit/integration tests
@@ -65,6 +78,9 @@ npm run build
 | `Ctrl+Shift+R` | Reports |
 | `Ctrl+B` | Backup |
 | `Ctrl+Shift+B` | Restore backup |
+
+## Stack Selection Guidance
+See `docs/STACK_RECOMMENDATIONS.md` for recommended choices from your tool list.
 
 ## API Documentation
 See `docs/API.md`.

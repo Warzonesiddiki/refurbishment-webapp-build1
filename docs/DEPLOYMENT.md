@@ -12,8 +12,26 @@ Output is generated in `dist/`.
 ## Static Hosting
 Deploy `dist/` to Netlify, Vercel, GitHub Pages, or S3+CloudFront.
 
+
 ## Docker Deployment
-Use a Node build stage and static server (nginx) runtime as needed.
+
+### Full stack with Docker Compose
+```bash
+docker compose up --build
+```
+
+### Services
+- Frontend web: `http://localhost:4173`
+- Java auth API: `http://localhost:8085`
+- PostgreSQL: `localhost:5432`
+- Adminer: `http://localhost:8080`
+
+### Build images only
+```bash
+docker build -t almasfufa-web -f Dockerfile .
+docker build -t almasfufa-java-api -f Dockerfile.java .
+```
+
 
 ## Backup/Restore Migration
 Use app backup (`Ctrl+B`) and restore (`Ctrl+Shift+B`) to move data between deployments.
