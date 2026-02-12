@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import { useAutoSave } from "@/store/persistence/useAutoSave";
 import { LocalStorageAdapter } from "@/store/persistence/LocalStorageAdapter";
 import { createInitialState } from "@/store/appState";
@@ -12,7 +12,11 @@ describe("useAutoSave", () => {
     const adapter = new LocalStorageAdapter();
     const state = createInitialState();
     renderHook(() => useAutoSave(state, adapter, { debounceMs: 500 }));
-    vi.advanceTimersByTime(550);
+
+    await act(async () => {
+      vi.advanceTimersByTime(550);
+    });
+
     const saved = await adapter.get(APP_STATE_KEY);
     expect(saved).not.toBeNull();
   });

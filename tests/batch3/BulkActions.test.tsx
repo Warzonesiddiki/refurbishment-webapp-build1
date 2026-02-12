@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, act } from "@testing-library/react";
 import { SelectableTable } from "@/components/ui/SelectableTable";
 
 describe("Bulk actions", () => {
@@ -15,7 +15,11 @@ describe("Bulk actions", () => {
       />
     );
     expect(screen.getByText("1/1 selected")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Do"));
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Do"));
+    });
+
     expect(action).toHaveBeenCalled();
   });
 });
