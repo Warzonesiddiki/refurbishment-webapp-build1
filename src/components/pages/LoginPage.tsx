@@ -15,6 +15,12 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
 
   const submit = async () => {
     setMessage(null);
+
+    if (!email || !password || (mode === "register" && !fullName)) {
+      setMessage("Please complete all required fields.");
+      return;
+    }
+
     setLoading(true);
     try {
       if (mode === "register") {
@@ -89,6 +95,10 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
           {message && (
             <div className="text-xs p-2 rounded border border-cyan-500/20 text-cyan-200/80 bg-cyan-500/5">{message}</div>
           )}
+
+          <p className="text-[11px] text-cyan-500/45" style={{ fontFamily: "Share Tech Mono" }}>
+            If you see a network error, start the Java API server (`npm run java:server`) and ensure VITE_JAVA_API_BASE is reachable.
+          </p>
         </div>
       </div>
     </div>
