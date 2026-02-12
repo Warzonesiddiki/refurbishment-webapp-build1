@@ -28,6 +28,9 @@ import { StoreProvider } from "@/context/StoreContext";
 import { ToastHost } from "@/components/ui/ToastHost";
 import { LoginPage } from "@/components/pages/LoginPage";
 import { clearAuthToken, fetchCurrentUser } from "@/utils/javaAuth";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useAnnouncer } from "@/hooks/useAnnouncer";
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -48,6 +51,9 @@ export function App() {
   const [theme, setTheme] = useState<"cyber" | "pro">(() => getInitialTheme());
   const [authReady, setAuthReady] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useDocumentTitle(activePage);
+  useAnnouncer(`Navigated to ${activePage.replace(/-/g, " ")}`);
 
   useEffect(() => {
     fetchCurrentUser().then((u) => {
@@ -103,7 +109,9 @@ export function App() {
   return (
     <StoreProvider>
       <ActionFeedbackProvider>
-        <Layout
+        <ErrorBoundary>
+          <div id="route-announcer" aria-live="polite" className="sr-only" />
+          <Layout
           activePage={activePage}
           onNavigate={setActivePage}
           onToggleTheme={() => setTheme((t: "cyber" | "pro") => (t === "cyber" ? "pro" : "cyber"))}
@@ -114,8 +122,9 @@ export function App() {
           }}
         >
           {renderPage()}
-        </Layout>
-        <ToastHost />
+          </Layout>
+          <ToastHost />
+        </ErrorBoundary>
       </ActionFeedbackProvider>
     </StoreProvider>
   );

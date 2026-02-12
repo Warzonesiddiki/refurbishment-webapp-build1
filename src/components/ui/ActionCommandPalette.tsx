@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { actionLabels, ActionKey, actionKeys } from "@/data/actionKeys";
 import { resolveActionRoute } from "@/utils/actionRouting";
 import { formatShortcut, getActionShortcutLabel } from "@/utils/actionShortcuts";
 import { cn } from "@/utils/cn";
+import { FocusTrap } from "@/components/ui/FocusTrap";
 
 type ActionCommandPaletteProps = {
   open: boolean;
@@ -22,17 +23,19 @@ const catalog = Object.values(actionKeys)
 
 export function ActionCommandPalette({ open, onClose, onNavigate, theme = "cyber" }: ActionCommandPaletteProps) {
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const listId = useId();
+  const liveRegionId = useId();
 
   useEffect(() => {
     if (!open) {
       setQuery("");
+      setActiveIndex(0);
       return;
     }
-
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
-
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
   }, [onClose, open]);
@@ -40,59 +43,82 @@ export function ActionCommandPalette({ open, onClose, onNavigate, theme = "cyber
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return catalog;
-    return catalog.filter((item) =>
-      [item.label, item.key, item.route, item.shortcut].join(" ").toLowerCase().includes(normalized)
-    );
+    return catalog.filter((item) => [item.label, item.key, item.route, item.shortcut].join(" ").toLowerCase().includes(normalized));
   }, [query]);
+
+  useEffect(() => {
+    setActiveIndex((curr) => Math.min(curr, Math.max(0, filtered.length - 1)));
+  }, [filtered.length]);
 
   if (!open) return null;
 
+  const activeId = filtered[activeIndex] ? `${listId}-option-${activeIndex}` : undefined;
+
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-24 bg-black/45" onClick={onClose}>
-      <div
-        className={cn(
-          "w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden",
-          theme === "pro" ? "bg-white border-slate-200" : "glass-panel border-cyan-500/30"
-        )}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className={cn("p-4 border-b", theme === "pro" ? "border-slate-200" : "border-cyan-500/20")}>
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search action, route, or key..."
-            className="w-full px-4 py-3 rounded-xl text-sm"
-            style={{ fontFamily: "var(--font-mono)" }}
-          />
-        </div>
-        <div className="max-h-[50vh] overflow-auto p-2">
-          {filtered.length === 0 && (
-            <p className={cn("p-4 text-sm", theme === "pro" ? "text-slate-500" : "text-cyan-300/60")}>No actions found.</p>
-          )}
-          {filtered.map((item) => (
-            <button
-              key={item.key}
-              onClick={() => {
-                onNavigate(item.route);
-                onClose();
+      <FocusTrap active={open}>
+        <div
+          className={cn("w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden", theme === "pro" ? "bg-white border-slate-200" : "glass-panel border-cyan-500/30")}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div id={liveRegionId} className="sr-only" aria-live="polite">
+            {filtered.length} actions found
+          </div>
+          <div className={cn("p-4 border-b", theme === "pro" ? "border-slate-200" : "border-cyan-500/20")}>
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setActiveIndex((i) => Math.min(i + 1, Math.max(0, filtered.length - 1)));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setActiveIndex((i) => Math.max(i - 1, 0));
+                } else if (e.key === "Enter" && filtered[activeIndex]) {
+                  e.preventDefault();
+                  onNavigate(filtered[activeIndex].route);
+                  onClose();
+                }
               }}
-              className={cn(
-                "w-full text-left px-3 py-2 rounded-lg flex items-center justify-between",
-                theme === "pro" ? "hover:bg-slate-50" : "hover:bg-cyan-500/10"
-              )}
-            >
-              <span className={cn("text-sm", theme === "pro" ? "text-slate-800" : "text-cyan-100")}>{item.label}</span>
-              <div className="flex items-center gap-2">
-                {item.shortcut && (
-                  <span className={cn("text-[11px] px-2 py-1 rounded", theme === "pro" ? "bg-slate-100 text-slate-600" : "bg-cyan-500/10 text-cyan-300")}>{item.shortcut}</span>
+              placeholder="Search action, route, or key..."
+              className="w-full px-4 py-3 rounded-xl text-sm"
+              style={{ fontFamily: "var(--font-mono)" }}
+              role="combobox"
+              aria-controls={listId}
+              aria-expanded="true"
+              aria-activedescendant={activeId}
+            />
+          </div>
+          <div id={listId} role="listbox" className="max-h-[50vh] overflow-auto p-2">
+            {filtered.length === 0 && <p className={cn("p-4 text-sm", theme === "pro" ? "text-slate-500" : "text-cyan-300/60")}>No actions found.</p>}
+            {filtered.map((item, idx) => (
+              <button
+                id={`${listId}-option-${idx}`}
+                role="option"
+                aria-selected={idx === activeIndex}
+                key={item.key}
+                onMouseEnter={() => setActiveIndex(idx)}
+                onClick={() => {
+                  onNavigate(item.route);
+                  onClose();
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-2 rounded-lg flex items-center justify-between",
+                  idx === activeIndex ? (theme === "pro" ? "bg-slate-100" : "bg-cyan-500/20") : theme === "pro" ? "hover:bg-slate-50" : "hover:bg-cyan-500/10"
                 )}
-                <span className={cn("text-[11px]", theme === "pro" ? "text-slate-500" : "text-cyan-400/70")}>{item.route}</span>
-              </div>
-            </button>
-          ))}
+              >
+                <span className={cn("text-sm", theme === "pro" ? "text-slate-800" : "text-cyan-100")}>{item.label}</span>
+                <div className="flex items-center gap-2">
+                  {item.shortcut && <span className={cn("text-[11px] px-2 py-1 rounded", theme === "pro" ? "bg-slate-100 text-slate-600" : "bg-cyan-500/10 text-cyan-300")}>{item.shortcut}</span>}
+                  <span className={cn("text-[11px]", theme === "pro" ? "text-slate-500" : "text-cyan-400/70")}>{item.route}</span>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      </FocusTrap>
     </div>
   );
 }

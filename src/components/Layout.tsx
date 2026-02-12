@@ -162,7 +162,7 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+        <nav className="flex-1 overflow-y-auto p-2 space-y-1" role="navigation" aria-label="Primary">
           {navigation.map((item) => (
             <NavGroup
               key={item.id}
@@ -436,6 +436,7 @@ function NavGroup({
           {item.children.map((child) => (
             <button
               key={child.id}
+              aria-current={child.id === activePage ? "page" : undefined}
               className={cn(
                 "w-full text-left px-3 py-1.5 rounded text-[13px] transition-all",
                 child.id === activePage
