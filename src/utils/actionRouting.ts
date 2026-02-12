@@ -4,6 +4,9 @@ export const ACTION_ROUTE_MAP: Partial<Record<ActionKey, string>> = {
   scan: "scanner",
   "new-sale": "sales-new",
   "import-lot": "receiving-import",
+  "import-lot-commit": "receiving-import",
+  "verification-complete": "receiving-verification",
+  "grading-save": "receiving-grading",
   grade: "receiving-grading",
   "add-laptop": "inventory-laptops",
   "add-part": "inventory-parts",
@@ -23,6 +26,13 @@ export const ACTION_ROUTE_MAP: Partial<Record<ActionKey, string>> = {
   "save-purchase-draft": "purchases-new",
   "add-sale-item": "sales-new",
   "complete-sale": "sales-new",
+  "open-day": "finance-cash",
+  "close-day": "finance-cash",
+  "add-cash-entry": "finance-cash",
+  "add-receipt": "sales-receipts",
+  "add-payment": "purchases-payments",
+  "add-supplier": "master-suppliers",
+  "add-lot": "master-lots",
 };
 
 export function resolveActionRoute(action: ActionKey): string | null {

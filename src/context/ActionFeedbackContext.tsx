@@ -1,5 +1,10 @@
-import { createContext, useContext, useMemo, useState } from "react";
-import type { UiFeedback } from "@/hooks/useUiActionFeedback";
+import { ToastProvider, useToastContext } from "@/components/Toast/ToastContext";
+
+export type UiFeedback = {
+  open: boolean;
+  tone: "success" | "error" | "warn" | "info";
+  message: string;
+};
 
 export type ActionFeedbackContextValue = {
   feedback: UiFeedback | null;
@@ -7,23 +12,17 @@ export type ActionFeedbackContextValue = {
   clear: () => void;
 };
 
-const ActionFeedbackContext = createContext<ActionFeedbackContextValue | null>(null);
-
 export function ActionFeedbackProvider({ children }: { children: React.ReactNode }) {
-  const [feedback, setFeedback] = useState<UiFeedback | null>(null);
-
-  const trigger = (tone: UiFeedback["tone"], message: string) => {
-    setFeedback({ open: true, tone, message });
-    setTimeout(() => setFeedback((curr) => (curr && curr.message === message ? null : curr)), 2500);
-  };
-
-  const clear = () => setFeedback(null);
-
-  const value = useMemo(() => ({ feedback, trigger, clear }), [feedback]);
-
-  return <ActionFeedbackContext.Provider value={value}>{children}</ActionFeedbackContext.Provider>;
+  return <ToastProvider>{children}</ToastProvider>;
 }
 
-export function useActionFeedbackContext() {
-  return useContext(ActionFeedbackContext);
+export function useActionFeedbackContext(): ActionFeedbackContextValue | null {
+  const ctx = useToastContext();
+  if (!ctx) return null;
+  const feedback = ctx.toasts[0] ? { open: true, tone: ctx.toasts[0].tone, message: ctx.toasts[0].message } : null;
+  return {
+    feedback,
+    trigger: (tone, message) => ctx.push(tone, message),
+    clear: () => ctx.clear(),
+  };
 }

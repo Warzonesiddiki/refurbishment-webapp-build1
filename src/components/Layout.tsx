@@ -7,8 +7,9 @@ import { useStore } from "@/context/StoreContext";
 import { exportJson } from "@/utils/exporters";
 import { toLocalDateStamp } from "@/utils/dateUtils";
 import { resolveActionRoute } from "@/utils/actionRouting";
-import { ActionKey } from "@/data/actionKeys";
 import { parseBackupJson } from "@/utils/backup";
+import { KEYBOARD_SHORTCUT_MAP, ShortcutAction } from "@/utils/actionShortcuts";
+import { ActionCommandPalette } from "@/components/ui/ActionCommandPalette";
 
 export type LayoutProps = {
   activePage: string;
@@ -21,6 +22,8 @@ export type LayoutProps = {
 
 export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber", children, onLogout }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [recentPages, setRecentPages] = useState<string[]>([activePage]);
   const { state, dispatch } = useStore();
 
   const createBackup = useCallback(() => {
@@ -53,21 +56,30 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
     input.click();
   }, [dispatch]);
 
-  const shortcutRoutes = useMemo<Record<string, ActionKey | "backup" | "restore-backup">>(
-    () => ({
-      "ctrl+/": "scan",
-      "ctrl+s": "new-sale",
-      "ctrl+l": "import-lot",
-      "ctrl+g": "grade",
-      "ctrl+shift+l": "add-laptop",
-      "ctrl+shift+p": "add-part",
-      "ctrl+shift+r": "export-reports",
-      "ctrl+shift+w": "add-wip-job",
-      "ctrl+b": "backup",
-      "ctrl+shift+b": "restore-backup",
-    }),
-    []
+  const runShortcutAction = useCallback(
+    (action: ShortcutAction) => {
+      if (action === "command-palette") {
+        setCommandPaletteOpen(true);
+        return;
+      }
+      if (action === "backup") {
+        createBackup();
+        return;
+      }
+      if (action === "restore-backup") {
+        restoreBackup();
+        return;
+      }
+
+      const route = resolveActionRoute(action);
+      if (route) onNavigate(route);
+    },
+    [createBackup, onNavigate, restoreBackup]
   );
+
+  useEffect(() => {
+    setRecentPages((prev) => [activePage, ...prev.filter((id) => id !== activePage)].slice(0, 6));
+  }, [activePage]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -77,36 +89,29 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
         if (target.isContentEditable || ["input", "textarea", "select"].includes(tagName)) return;
       }
 
-      const combo = [
-        event.ctrlKey ? "ctrl" : "",
-        event.shiftKey ? "shift" : "",
-        event.altKey ? "alt" : "",
-        event.key.toLowerCase(),
-      ]
+      const combo = [event.ctrlKey ? "ctrl" : "", event.shiftKey ? "shift" : "", event.altKey ? "alt" : "", event.key.toLowerCase()]
         .filter(Boolean)
         .join("+");
 
-      const action = shortcutRoutes[combo];
+      const action = KEYBOARD_SHORTCUT_MAP[combo];
       if (!action) return;
 
       event.preventDefault();
-      if (action === "backup") {
-        createBackup();
-        return;
-      }
-
-      if (action === "restore-backup") {
-        restoreBackup();
-        return;
-      }
-
-      const route = resolveActionRoute(action);
-      if (route) onNavigate(route);
+      runShortcutAction(action);
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [createBackup, onNavigate, restoreBackup, shortcutRoutes]);
+  }, [runShortcutAction]);
+
+  const kpis = useMemo(
+    () => [
+      { label: "Laptops", value: state.laptops.length },
+      { label: "WIP", value: state.wipJobs.length },
+      { label: "Alerts", value: state.alerts.length },
+    ],
+    [state.alerts.length, state.laptops.length, state.wipJobs.length]
+  );
 
   return (
     <div className="flex h-screen bg-grid">
@@ -120,7 +125,7 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
       >
         Skip to content
       </a>
-      {/* ═══ SIDEBAR ═══ */}
+
       <aside
         className={cn(
           "glass-panel hex-pattern transition-all duration-300 flex flex-col relative z-10",
@@ -128,7 +133,6 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
           sidebarOpen ? "w-72" : "w-16"
         )}
       >
-        {/* Logo */}
         <div className={cn("p-4 flex items-center justify-between", theme === "pro" ? "border-b border-slate-200" : "border-b border-cyan-500/10")}>
           <div className="flex items-center gap-3">
             <div
@@ -149,29 +153,22 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
                 >
                   ALMASFUFA
                 </p>
-                <p className={cn("text-[10px] tracking-widest uppercase", theme === "pro" ? "text-slate-500" : "text-cyan-500/50")}>
-                  Manager v2.0
-                </p>
+                <p className={cn("text-[10px] tracking-widest uppercase", theme === "pro" ? "text-slate-500" : "text-cyan-500/50")}>Manager v2.0</p>
               </div>
             )}
           </div>
-                      <button
-              aria-label="Toggle sidebar"
-              className={cn(
-                "transition-colors p-1",
-                theme === "pro" ? "text-slate-500 hover:text-slate-900" : "text-cyan-500/60 hover:text-cyan-300"
-              )}
-              onClick={() => setSidebarOpen((p) => !p)}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 12h18M3 6h18M3 18h18" />
-              </svg>
-            </button>
-
+          <button
+            aria-label="Toggle sidebar"
+            className={cn("transition-colors p-1", theme === "pro" ? "text-slate-500 hover:text-slate-900" : "text-cyan-500/60 hover:text-cyan-300")}
+            onClick={() => setSidebarOpen((p) => !p)}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 12h18M3 6h18M3 18h18" />
+            </svg>
+          </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+        <nav className="flex-1 overflow-y-auto p-2 space-y-1" role="navigation" aria-label="Primary">
           {navigation.map((item) => (
             <NavGroup
               key={item.id}
@@ -185,66 +182,40 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
           ))}
         </nav>
 
-        {/* Sidebar Footer */}
         {sidebarOpen && (
           <div className={cn("p-4 space-y-2", theme === "pro" ? "border-t border-slate-200" : "border-t border-cyan-500/10")}>
             <div className="flex items-center justify-between text-xs">
-              <span
-                className={cn("uppercase tracking-wider", theme === "pro" ? "text-slate-500" : "text-cyan-500/40")}
-                style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono", fontSize: "10px" }}
-              >
+              <span className={cn("uppercase tracking-wider", theme === "pro" ? "text-slate-500" : "text-cyan-500/40")} style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono", fontSize: "10px" }}>
                 System
               </span>
               <span className="status-dot status-dot-online" />
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className={theme === "pro" ? "text-slate-500" : "text-cyan-500/40"}>Backup</span>
-              <span
-                className={cn("text-[11px]", theme === "pro" ? "text-emerald-600" : "neon-text-green")}
-                style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}
-              >
+              <span className={cn("text-[11px]", theme === "pro" ? "text-emerald-600" : "neon-text-green")} style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}>
                 READY
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className={theme === "pro" ? "text-slate-500" : "text-cyan-500/40"}>Alerts</span>
-              <span
-                className={cn(
-                  "px-2 py-0.5 rounded text-[11px] font-bold",
-                  theme === "pro" ? "bg-red-50 text-red-600" : "cyber-badge-red"
-                )}
-                style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}
-              >
+              <span className={cn("px-2 py-0.5 rounded text-[11px] font-bold", theme === "pro" ? "bg-red-50 text-red-600" : "cyber-badge-red")} style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}>
                 {state.alerts.length}
               </span>
             </div>
             <div className="divider-cyber mt-2" />
-            <div
-              className={cn("text-[10px] text-center", theme === "pro" ? "text-slate-400" : "text-cyan-500/20")}
-              style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}
-            >
-              v2.0.0 • {new Date().getFullYear()}
+            <div className={cn("text-[10px] text-center", theme === "pro" ? "text-slate-400" : "text-cyan-500/20")} style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}>
+              v2.1.0 • {new Date().getFullYear()}
             </div>
           </div>
         )}
       </aside>
 
-      {/* ═══ MAIN ═══ */}
       <div className="flex-1 flex flex-col overflow-hidden relative z-10">
-        {/* Header */}
-        <header
-          className={cn(
-            "glass-panel px-6 py-4 flex items-center justify-between",
-            theme === "pro" ? "erp-header" : "border-b border-cyan-500/10"
-          )}
-        >
+        <header className={cn("glass-panel px-6 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between", theme === "pro" ? "erp-header" : "border-b border-cyan-500/10")}>
           <div className="flex items-center gap-4">
             <button
               aria-label="Toggle sidebar"
-              className={cn(
-                "p-2 rounded-xl transition-all lg:hidden",
-                theme === "pro" ? "text-slate-500 hover:bg-slate-100" : "hover:bg-cyan-500/5 text-cyan-500/50 hover:text-cyan-300"
-              )}
+              className={cn("p-2 rounded-xl transition-all lg:hidden", theme === "pro" ? "text-slate-500 hover:bg-slate-100" : "hover:bg-cyan-500/5 text-cyan-500/50 hover:text-cyan-300")}
               onClick={() => setSidebarOpen((p) => !p)}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -252,30 +223,33 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
               </svg>
             </button>
             <div>
-              <p
-                className={cn("text-[10px] uppercase tracking-[0.2em]", theme === "pro" ? "text-slate-400" : "text-cyan-500/40")}
-                style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}
-              >
+              <p className={cn("text-[10px] uppercase tracking-[0.2em]", theme === "pro" ? "text-slate-400" : "text-cyan-500/40")} style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}>
                 {activePage.replace(/-/g, " / ")}
               </p>
-              <h1
-                className={cn("text-base font-bold capitalize", theme === "pro" ? "text-slate-900" : "text-cyan-100 tracking-wide")}
-                style={{ fontFamily: theme === "pro" ? "Inter" : "Orbitron" }}
-              >
+              <h1 className={cn("text-base font-bold capitalize", theme === "pro" ? "text-slate-900" : "text-cyan-100 tracking-wide")} style={{ fontFamily: theme === "pro" ? "Inter" : "Orbitron" }}>
                 {activePage.replace(/-/g, " ")}
               </h1>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {/* Search */}
+
+          <div className="flex flex-wrap items-center gap-2">
+            {kpis.map((item) => (
+              <span
+                key={item.label}
+                className={cn(
+                  "px-2.5 py-1 rounded-md text-[11px] border",
+                  theme === "pro" ? "bg-white border-slate-200 text-slate-700" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-200"
+                )}
+              >
+                <span className={cn(theme === "pro" ? "text-slate-400" : "text-cyan-400/70")}>{item.label}:</span> {item.value}
+              </span>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 md:gap-3">
             <GlobalSearch theme={theme} onNavigate={onNavigate} />
 
-            {/* Quick Scan */}
-            <button
-              className={cn("btn-cyber flex items-center gap-2", theme === "pro" && "shadow-none")}
-              data-action="scan"
-              onClick={() => onNavigate("scanner")}
-            >
+            <button className={cn("btn-cyber flex items-center gap-2", theme === "pro" && "shadow-none")} data-action="scan" onClick={() => onNavigate("scanner")}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2" />
                 <line x1="7" y1="12" x2="17" y2="12" />
@@ -283,21 +257,23 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
               <span className="hidden sm:inline">SCAN</span>
             </button>
 
-            {/* Alerts */}
+            <button
+              className={cn("btn-ghost hidden md:flex items-center gap-2", theme === "pro" && "text-slate-600")}
+              onClick={() => setCommandPaletteOpen(true)}
+              data-action="command-palette"
+            >
+              ⌘ Palette
+            </button>
+
             <NotificationPanel
               alerts={state.alerts}
               theme={theme}
               onClear={(id) => dispatch({ type: "CLEAR_ALERT", id })}
-              onClearAll={() => state.alerts.forEach(a => dispatch({ type: "CLEAR_ALERT", id: a.id }))}
+              onClearAll={() => state.alerts.forEach((a) => dispatch({ type: "CLEAR_ALERT", id: a.id }))}
             />
 
-            {/* Backup */}
             {onLogout && (
-              <button
-                className={cn("btn-ghost hidden md:flex items-center gap-2", theme === "pro" && "text-slate-600")}
-                onClick={onLogout}
-                data-action="logout"
-              >
+              <button className={cn("btn-ghost hidden md:flex items-center gap-2", theme === "pro" && "text-slate-600")} onClick={onLogout} data-action="logout">
                 Logout
               </button>
             )}
@@ -311,24 +287,11 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
             <button className={cn("btn-ghost hidden md:flex items-center gap-2", theme === "pro" && "text-slate-600")} data-action="restore-backup" onClick={restoreBackup}>
               Restore
             </button>
-            <div
-              className={cn(
-                "hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl",
-                theme === "pro" ? "border border-slate-200 bg-white theme-switch" : "border border-cyan-500/15 bg-cyan-500/5"
-              )}
-            >
-              <span
-                className={cn("text-[10px] uppercase tracking-[0.14em]", theme === "pro" ? "text-slate-400" : "text-cyan-500/50")}
-                style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}
-              >
+            <div className={cn("hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl", theme === "pro" ? "border border-slate-200 bg-white theme-switch" : "border border-cyan-500/15 bg-cyan-500/5")}>
+              <span className={cn("text-[10px] uppercase tracking-[0.14em]", theme === "pro" ? "text-slate-400" : "text-cyan-500/50")} style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}>
                 Theme
               </span>
-              <button
-                className={cn("btn-ghost flex items-center gap-2 px-3 py-1", theme === "pro" && "text-slate-600")}
-                data-action="toggle-theme"
-                onClick={onToggleTheme}
-                aria-label="Toggle theme"
-              >
+              <button className={cn("btn-ghost flex items-center gap-2 px-3 py-1", theme === "pro" && "text-slate-600")} data-action="toggle-theme" onClick={onToggleTheme} aria-label="Toggle theme">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364 6.364l-1.414-1.414M8.05 8.05 6.636 6.636m0 10.728 1.414-1.414m10.314-8.314-1.414 1.414" />
                 </svg>
@@ -341,16 +304,23 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
           </div>
         </header>
 
-        {/* Content */}
         <main id="main-content" className="flex-1 overflow-auto p-6 animate-slide-up">
           {children}
         </main>
       </div>
+
+      <ActionCommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onNavigate={onNavigate}
+        onAction={runShortcutAction}
+        recentPages={recentPages.filter((p) => p !== activePage)}
+        theme={theme}
+      />
     </div>
   );
 }
 
-/* ── NavGroup ── */
 function NavGroup({
   item,
   isActive,
@@ -369,9 +339,17 @@ function NavGroup({
   const [open, setOpen] = useState(isActive);
 
   const navIcons: Record<string, string> = {
-    dashboard: "◆", scanner: "⊞", inventory: "⬢", receiving: "⇊",
-    processing: "⚙", sales: "◈", purchases: "⬡", finance: "◇",
-    master: "▣", reports: "◉", settings: "⚙",
+    dashboard: "◆",
+    scanner: "⊞",
+    inventory: "⬢",
+    receiving: "⇊",
+    processing: "⚙",
+    sales: "◈",
+    purchases: "⬡",
+    finance: "◇",
+    master: "▣",
+    reports: "◉",
+    settings: "⚙",
   };
 
   return (
@@ -399,22 +377,14 @@ function NavGroup({
           <div
             className={cn(
               "absolute left-0 top-0 bottom-0 w-[2px]",
-              theme === "pro"
-                ? "bg-gradient-to-b from-blue-500 to-indigo-500"
-                : "bg-gradient-to-b from-cyan-400 to-purple-500 shadow-[0_0_8px_rgba(0,240,255,0.6)]"
+              theme === "pro" ? "bg-gradient-to-b from-blue-500 to-indigo-500" : "bg-gradient-to-b from-cyan-400 to-purple-500 shadow-[0_0_8px_rgba(0,240,255,0.6)]"
             )}
           />
         )}
         <span
           className={cn(
             "text-base w-6 text-center",
-            isActive
-              ? theme === "pro"
-                ? "text-blue-600"
-                : "neon-text-cyan"
-              : theme === "pro"
-                ? "text-slate-400"
-                : "text-cyan-500/40"
+            isActive ? (theme === "pro" ? "text-blue-600" : "neon-text-cyan") : theme === "pro" ? "text-slate-400" : "text-cyan-500/40"
           )}
           style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}
         >
@@ -422,12 +392,11 @@ function NavGroup({
         </span>
         {sidebarOpen && (
           <>
-            <span className="flex-1 tracking-wide" style={{ fontFamily: theme === "pro" ? "Inter" : "Rajdhani", fontSize: '14px' }}>{item.label}</span>
+            <span className="flex-1 tracking-wide" style={{ fontFamily: theme === "pro" ? "Inter" : "Rajdhani", fontSize: "14px" }}>
+              {item.label}
+            </span>
             {item.children && (
-              <svg
-                className={cn("w-3.5 h-3.5 transition-transform", theme === "pro" ? "text-slate-400" : "text-cyan-500/30", open && "rotate-90")}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
-              >
+              <svg className={cn("w-3.5 h-3.5 transition-transform", theme === "pro" ? "text-slate-400" : "text-cyan-500/30", open && "rotate-90")} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path d="M9 5l7 7-7 7" />
               </svg>
             )}
@@ -439,6 +408,7 @@ function NavGroup({
           {item.children.map((child) => (
             <button
               key={child.id}
+              aria-current={child.id === activePage ? "page" : undefined}
               className={cn(
                 "w-full text-left px-3 py-1.5 rounded text-[13px] transition-all",
                 child.id === activePage
