@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { KpiCard } from "@/components/cards/KpiCard";
+import { nextWipNumber } from "@/utils/dateUtils";
 
 const priorityColors: Record<string, string> = { High: "cyber-badge-red", Normal: "cyber-badge-yellow", Low: "cyber-badge-green" };
 const statusColors: Record<string, string> = { "In Progress": "cyber-badge-purple", Active: "cyber-badge-cyan", "Awaiting Parts": "cyber-badge-yellow", Completed: "cyber-badge-green" };
@@ -41,7 +42,7 @@ export function WipJobs() {
     dispatch({
       type: "ADD_WIP",
       payload: {
-        wip: `ALM-WIP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${String(state.wipJobs.length + 1).padStart(4, "0")}`,
+        wip: nextWipNumber(state.wipJobs.map((w) => w.wip)),
         laptop: newWip.laptop,
         brand: laptop ? `${laptop.brand} ${laptop.model}` : newWip.laptop,
         track: newWip.track,
