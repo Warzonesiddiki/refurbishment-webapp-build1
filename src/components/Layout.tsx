@@ -1,9 +1,14 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { navigation, NavItem } from "@/data/mockData";
 import { cn } from "@/utils/cn";
 import { GlobalSearch } from "@/components/ui/GlobalSearch";
 import { NotificationPanel } from "@/components/ui/NotificationPanel";
 import { useStore } from "@/context/StoreContext";
+import { exportJson } from "@/utils/exporters";
+import { toLocalDateStamp } from "@/utils/dateUtils";
+import { resolveActionRoute } from "@/utils/actionRouting";
+import { ActionKey } from "@/data/actionKeys";
+import { parseBackupJson } from "@/utils/backup";
 
 export type LayoutProps = {
   activePage: string;
@@ -17,6 +22,91 @@ export type LayoutProps = {
 export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber", children, onLogout }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { state, dispatch } = useStore();
+
+  const createBackup = useCallback(() => {
+    const filename = `almasfufa-backup-${toLocalDateStamp()}.json`;
+    exportJson(filename, state);
+  }, [state]);
+
+  const restoreBackup = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      const proceed = window.confirm("Restore backup and replace current app state?");
+      if (!proceed) return;
+
+      try {
+        const content = await file.text();
+        const payload = parseBackupJson(content);
+        dispatch({ type: "RESTORE_STATE", payload });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "Unknown restore error";
+        window.alert(`Backup restore failed: ${reason}`);
+      }
+    };
+
+    input.click();
+  }, [dispatch]);
+
+  const shortcutRoutes = useMemo<Record<string, ActionKey | "backup" | "restore-backup">>(
+    () => ({
+      "ctrl+/": "scan",
+      "ctrl+s": "new-sale",
+      "ctrl+l": "import-lot",
+      "ctrl+g": "grade",
+      "ctrl+shift+l": "add-laptop",
+      "ctrl+shift+p": "add-part",
+      "ctrl+shift+r": "export-reports",
+      "ctrl+shift+w": "add-wip-job",
+      "ctrl+b": "backup",
+      "ctrl+shift+b": "restore-backup",
+    }),
+    []
+  );
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tagName = target.tagName.toLowerCase();
+        if (target.isContentEditable || ["input", "textarea", "select"].includes(tagName)) return;
+      }
+
+      const combo = [
+        event.ctrlKey ? "ctrl" : "",
+        event.shiftKey ? "shift" : "",
+        event.altKey ? "alt" : "",
+        event.key.toLowerCase(),
+      ]
+        .filter(Boolean)
+        .join("+");
+
+      const action = shortcutRoutes[combo];
+      if (!action) return;
+
+      event.preventDefault();
+      if (action === "backup") {
+        createBackup();
+        return;
+      }
+
+      if (action === "restore-backup") {
+        restoreBackup();
+        return;
+      }
+
+      const route = resolveActionRoute(action);
+      if (route) onNavigate(route);
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [createBackup, onNavigate, restoreBackup, shortcutRoutes]);
 
   return (
     <div className="flex h-screen bg-grid">
@@ -212,11 +302,14 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
               </button>
             )}
 
-            <button className={cn("btn-ghost hidden md:flex items-center gap-2", theme === "pro" && "text-slate-600")} data-action="backup">
+            <button className={cn("btn-ghost hidden md:flex items-center gap-2", theme === "pro" && "text-slate-600")} data-action="backup" onClick={createBackup}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
               </svg>
               Backup
+            </button>
+            <button className={cn("btn-ghost hidden md:flex items-center gap-2", theme === "pro" && "text-slate-600")} data-action="restore-backup" onClick={restoreBackup}>
+              Restore
             </button>
             <div
               className={cn(

@@ -18,8 +18,9 @@ Unit, integration, and E2E coverage for Inventory, Receiving, Processing/WIP, Sa
 
 ## Running tests
 ```bash
-npm run test        # vitest
-npm run test -- --runInBand
+npm test            # vitest run
+npm run test:watch
+npm run test:legacy-config
 ```
 
 ## Data/Idempotency
