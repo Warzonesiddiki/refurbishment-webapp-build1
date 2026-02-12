@@ -34,13 +34,13 @@ describe("javaAuth network and API handling", () => {
     expect(localStorage.getItem("alm_auth_token")).toBeNull();
   });
 
-  it("clears token when current user endpoint throws", async () => {
+  it("keeps token when current user endpoint throws transient network error", async () => {
     localStorage.setItem("alm_auth_token", "stale-token");
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
 
     const user = await fetchCurrentUser();
     expect(user).toBeNull();
-    expect(localStorage.getItem("alm_auth_token")).toBeNull();
+    expect(localStorage.getItem("alm_auth_token")).toBe("stale-token");
   });
 
   it("surfaces backend response message on login failure", async () => {

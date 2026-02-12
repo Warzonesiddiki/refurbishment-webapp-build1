@@ -100,7 +100,7 @@ export async function fetchCurrentUser() {
 
     return (await res.json()) as AuthUser;
   } catch {
-    clearAuthToken();
+    // Keep token on transient network failure; only clear on explicit unauthorized responses.
     return null;
   }
 }

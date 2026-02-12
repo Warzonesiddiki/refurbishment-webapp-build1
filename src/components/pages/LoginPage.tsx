@@ -14,9 +14,13 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [message, setMessage] = useState<string | null>(null);
 
   const submit = async () => {
+    if (loading) return;
     setMessage(null);
 
-    if (!email || !password || (mode === "register" && !fullName)) {
+    const normalizedEmail = email.trim();
+    const normalizedFullName = fullName.trim();
+
+    if (!normalizedEmail || !password || (mode === "register" && !normalizedFullName)) {
       setMessage("Please complete all required fields.");
       return;
     }
@@ -24,11 +28,11 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
     setLoading(true);
     try {
       if (mode === "register") {
-        await registerUser({ email, fullName, password });
+        await registerUser({ email: normalizedEmail, fullName: normalizedFullName, password });
         setMessage("Registration successful. You can now log in.");
         setMode("login");
       } else {
-        await loginUser({ email, password });
+        await loginUser({ email: normalizedEmail, password });
         onAuthenticated();
       }
     } catch (err) {
