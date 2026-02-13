@@ -10,4 +10,4 @@ mkdir -p "$OUT_DIR"
 find "$OUT_DIR" -type f -name '*.class' -delete
 
 javac -d "$OUT_DIR" $(find "$SRC_DIR" -type f -name '*.java')
-java -cp "$OUT_DIR" com.almasfufa.server.Main "$PORT"
+java -cp "$OUT_DIR" com.tahir.server.Main "$PORT"

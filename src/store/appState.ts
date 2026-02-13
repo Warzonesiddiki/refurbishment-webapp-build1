@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════
-// ALMASFUFA — Centralized App State Store
+// TAHIR ERP — Centralized App State Store
 // Client-side state management for all modules
 //
 // NOTE: This is an in-browser store used for the demo build.
@@ -656,7 +656,7 @@ export function createInitialState(): AppState {
     movementLog,
     auditLog,
     settings: {
-      companyName: "Almasfufa Refurbishment",
+      companyName: "Tahir ERP",
       trn: "100200300400005",
       address: "Dubai, UAE",
       currency: "AED",

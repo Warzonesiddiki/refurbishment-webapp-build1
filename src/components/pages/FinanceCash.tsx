@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { KpiCard } from "@/components/cards/KpiCard";
 import { exportCsv } from "@/utils/exporters";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 
 export function FinanceCash() {
   const state = useAppState();
@@ -86,6 +88,8 @@ export function FinanceCash() {
           {state.cashDayOpen && <button className="btn-cyber" onClick={() => setShowAdjust(true)}>+ Add Entry</button>}
         </div>
       </div>
+
+      <SectionHelpHint hint={getPageSectionHint("financeCash")} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="Opening Balance" value={`AED ${openingBalance.toLocaleString()}`} tone="cyan" icon="🏦" />

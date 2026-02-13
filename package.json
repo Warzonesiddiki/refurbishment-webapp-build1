@@ -1,5 +1,5 @@
 {
-  "name": "react-vite-tailwind",
+  "name": "tahir-erp",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -31,7 +31,7 @@
     "release": "standard-version",
     "release:dry": "standard-version --dry-run",
     "start:local": "npm run build && npm run preview",
-    "serve:java": "java -jar server/almasfufa-server.jar"
+    "serve:java": "java -jar server/tahir-erp-server.jar"
   },
   "dependencies": {
     "clsx": "2.1.1",
@@ -64,6 +64,7 @@
     "eslint": "^9.20.0",
     "@eslint/js": "^9.20.0",
     "typescript-eslint": "^8.24.0",
-    "prettier": "^3.5.0"
+    "prettier": "^3.5.0",
+    "@vitest/coverage-v8": "^4.0.18"
   }
 }

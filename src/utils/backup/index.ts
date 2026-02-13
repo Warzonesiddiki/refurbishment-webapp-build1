@@ -6,3 +6,4 @@ export * from "@/utils/backup/restoreEngine";
 export * from "@/utils/backup/encryption";
 export * from "@/utils/backup/incrementalTracker";
 export * from "@/utils/backup/cloudBackup";
+export * from "@/utils/backup/restoreRehearsal";

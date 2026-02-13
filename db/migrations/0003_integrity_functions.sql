@@ -1,4 +1,4 @@
--- ALMASFUFA ERP: data-integrity and concurrency helper functions
+-- TAHIR ERP: data-integrity and concurrency helper functions
 
 -- Keep updated_at fresh for mutable tables.
 CREATE OR REPLACE FUNCTION touch_updated_at() RETURNS TRIGGER AS $$

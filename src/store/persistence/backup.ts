@@ -24,7 +24,7 @@ export async function createBackup(state: AppState): Promise<BackupFile> {
 export function generateFilename() {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `almasfufa-backup-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.json`;
+  return `tahir-erp-backup-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.json`;
 }
 
 export function downloadBackup(backup: BackupFile) {

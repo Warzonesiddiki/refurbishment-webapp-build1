@@ -31,8 +31,8 @@ Compose health checks are configured so `web` waits for a healthy `java-api` bef
 
 ### Build images only
 ```bash
-docker build -t almasfufa-web -f Dockerfile .
-docker build -t almasfufa-java-api -f Dockerfile.java .
+docker build -t tahir-erp-web -f Dockerfile .
+docker build -t tahir-erp-java-api -f Dockerfile.java .
 ```
 
 

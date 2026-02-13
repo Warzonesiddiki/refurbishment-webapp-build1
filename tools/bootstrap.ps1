@@ -13,7 +13,7 @@ function Write-ErrMsg($msg) { Write-Host "[bootstrap:error] $msg" -ForegroundCol
 
 function Show-Usage {
 @"
-One-click setup for ALMASFUFA Manager (Windows 11).
+One-click setup for Tahir ERP (Windows 11).
 
 Usage:
   powershell -ExecutionPolicy Bypass -File tools/bootstrap.ps1 [options]
@@ -98,7 +98,7 @@ function Validate-Setup {
   Invoke-Step "npm run typecheck"
 }
 
-Write-Info "Starting Windows bootstrap for ALMASFUFA Manager"
+Write-Info "Starting Windows bootstrap for Tahir ERP"
 
 if (-not $SkipSystem) {
   Install-SystemDependencies

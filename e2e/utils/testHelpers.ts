@@ -29,7 +29,7 @@ export async function mockDate(page: Page, date: Date): Promise<void> {
 
 export async function injectState<T extends object>(page: Page, state: Partial<T>): Promise<void> {
   await page.evaluate((nextState) => {
-    const key = "almasfufa:app-state";
+    const key = "tahir-erp:app-state";
     const existing = localStorage.getItem(key);
     const parsed = existing ? JSON.parse(existing) : { version: 3, timestamp: Date.now(), data: {} };
     parsed.data = { ...(parsed.data ?? {}), ...nextState };
@@ -40,7 +40,7 @@ export async function injectState<T extends object>(page: Page, state: Partial<T
 
 export async function extractState<T>(page: Page): Promise<T | null> {
   return page.evaluate(() => {
-    const raw = localStorage.getItem("almasfufa:app-state");
+    const raw = localStorage.getItem("tahir-erp:app-state");
     if (!raw) return null;
     return JSON.parse(raw).data;
   });

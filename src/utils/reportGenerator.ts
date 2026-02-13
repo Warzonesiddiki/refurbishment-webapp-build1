@@ -24,6 +24,38 @@ export type ManagementAccountingSnapshot = {
   breakEvenRevenue: number;
 };
 
+
+export type AgedBucketSummary = {
+  bucket: "0-30" | "31-60" | "61-90" | "90+";
+  amount: number;
+  count: number;
+};
+
+export type AgedBalanceSnapshot = {
+  asOfDate: string;
+  receivables: AgedBucketSummary[];
+  payables: AgedBucketSummary[];
+  totalReceivablesDue: number;
+  totalPayablesDue: number;
+};
+
+export type CashFlowStatement = {
+  periodStart: string;
+  periodEnd: string;
+  direct: {
+    cashReceivedFromCustomers: number;
+    cashPaidToSuppliers: number;
+    ownerContributions: number;
+    ownerDrawings: number;
+    netCashFromOperations: number;
+  };
+  indirect: {
+    netProfit: number;
+    workingCapitalAdjustments: number;
+    netCashFromOperations: number;
+  };
+};
+
 export type TaxationSummary = {
   periodStart: string;
   periodEnd: string;
@@ -169,6 +201,54 @@ export function generateBalanceSheet(state: AppState, asOfDate: Date): BalanceSh
   };
 }
 
+export function generateCashFlowStatement(state: AppState, periodStart: Date, periodEnd: Date): CashFlowStatement {
+  const cashReceivedFromCustomers = round2(
+    state.receipts.filter((receipt) => inRange(receipt.date, periodStart, periodEnd)).reduce((sum, receipt) => sum + receipt.amount, 0)
+  );
+  const cashPaidToSuppliers = round2(
+    state.payments.filter((payment) => inRange(payment.date, periodStart, periodEnd)).reduce((sum, payment) => sum + payment.amount, 0)
+  );
+  const ownerContributions = round2(
+    state.ownerEntries
+      .filter((entry) => inRange(entry.date, periodStart, periodEnd) && entry.type.toLowerCase().includes("invest"))
+      .reduce((sum, entry) => sum + entry.amount, 0)
+  );
+  const ownerDrawings = round2(
+    state.ownerEntries
+      .filter((entry) => inRange(entry.date, periodStart, periodEnd) && entry.type.toLowerCase().includes("draw"))
+      .reduce((sum, entry) => sum + Math.abs(entry.amount), 0)
+  );
+
+  const directOperations = round2(cashReceivedFromCustomers - cashPaidToSuppliers + ownerContributions - ownerDrawings);
+
+  const profitLoss = generateProfitLossReport(state, periodStart, periodEnd);
+  const receivablesDelta = round2(
+    state.sales.filter((sale) => inRange(sale.date, periodStart, periodEnd)).reduce((sum, sale) => sum + sale.total, 0) - cashReceivedFromCustomers
+  );
+  const payablesDelta = round2(
+    state.purchases.filter((purchase) => inRange(purchase.date, periodStart, periodEnd)).reduce((sum, purchase) => sum + purchase.total, 0) - cashPaidToSuppliers
+  );
+  const workingCapitalAdjustments = round2(payablesDelta - receivablesDelta);
+  const indirectOperations = round2(profitLoss.netProfit + workingCapitalAdjustments);
+
+  return {
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+    direct: {
+      cashReceivedFromCustomers,
+      cashPaidToSuppliers,
+      ownerContributions,
+      ownerDrawings,
+      netCashFromOperations: directOperations,
+    },
+    indirect: {
+      netProfit: profitLoss.netProfit,
+      workingCapitalAdjustments,
+      netCashFromOperations: indirectOperations,
+    },
+  };
+}
+
 export function generateManagementAccountingSnapshot(state: AppState, periodStart: Date, periodEnd: Date): ManagementAccountingSnapshot {
   const pl = generateProfitLossReport(state, periodStart, periodEnd);
   const salesInPeriod = state.sales.filter((s) => inRange(s.date, periodStart, periodEnd));
@@ -202,6 +282,65 @@ export function generateManagementAccountingSnapshot(state: AppState, periodStar
     payablesDays: cogs ? round2((avgPayables / cogs) * periodDays) : 0,
     inventoryTurnover: inventoryValue ? round2(cogs / inventoryValue) : 0,
     breakEvenRevenue: contributionMargin > 0 ? round2((pl.expenses.totalExpenses / contributionMargin) * pl.revenue.totalRevenue) : 0,
+  };
+}
+
+
+function buildAgingBuckets() {
+  return [
+    { bucket: "0-30" as const, amount: 0, count: 0 },
+    { bucket: "31-60" as const, amount: 0, count: 0 },
+    { bucket: "61-90" as const, amount: 0, count: 0 },
+    { bucket: "90+" as const, amount: 0, count: 0 },
+  ];
+}
+
+function agingBucketForDays(daysOverdue: number): AgedBucketSummary["bucket"] {
+  if (daysOverdue <= 30) return "0-30";
+  if (daysOverdue <= 60) return "31-60";
+  if (daysOverdue <= 90) return "61-90";
+  return "90+";
+}
+
+export function generateAgedBalanceSnapshot(state: AppState, asOfDate: Date): AgedBalanceSnapshot {
+  const bucketIndex: Record<AgedBucketSummary["bucket"], number> = { "0-30": 0, "31-60": 1, "61-90": 2, "90+": 3 };
+  const receivableBuckets = buildAgingBuckets();
+  const payableBuckets = buildAgingBuckets();
+
+  for (const sale of state.sales) {
+    if (+new Date(sale.date) > +asOfDate) continue;
+    const paidAmount = state.receipts
+      .filter((receipt) => receipt.invoice === sale.invoice && +new Date(receipt.date) <= +asOfDate)
+      .reduce((sum, receipt) => sum + receipt.amount, 0);
+    const dueAmount = round2(Math.max(0, sale.total - paidAmount));
+    if (dueAmount <= 0) continue;
+    const days = Math.max(0, Math.floor((+asOfDate - +new Date(sale.date)) / (1000 * 60 * 60 * 24)));
+    const bucket = agingBucketForDays(days);
+    const idx = bucketIndex[bucket];
+    receivableBuckets[idx].amount = round2(receivableBuckets[idx].amount + dueAmount);
+    receivableBuckets[idx].count += 1;
+  }
+
+  for (const purchase of state.purchases) {
+    if (+new Date(purchase.date) > +asOfDate) continue;
+    const paidAmount = state.payments
+      .filter((payment) => payment.purchase === purchase.purchase && +new Date(payment.date) <= +asOfDate)
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    const dueAmount = round2(Math.max(0, purchase.total - paidAmount));
+    if (dueAmount <= 0) continue;
+    const days = Math.max(0, Math.floor((+asOfDate - +new Date(purchase.date)) / (1000 * 60 * 60 * 24)));
+    const bucket = agingBucketForDays(days);
+    const idx = bucketIndex[bucket];
+    payableBuckets[idx].amount = round2(payableBuckets[idx].amount + dueAmount);
+    payableBuckets[idx].count += 1;
+  }
+
+  return {
+    asOfDate: asOfDate.toISOString(),
+    receivables: receivableBuckets,
+    payables: payableBuckets,
+    totalReceivablesDue: round2(receivableBuckets.reduce((sum, b) => sum + b.amount, 0)),
+    totalPayablesDue: round2(payableBuckets.reduce((sum, b) => sum + b.amount, 0)),
   };
 }
 

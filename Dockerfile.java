@@ -7,4 +7,4 @@ RUN mkdir -p /app/java_server/out \
   && javac -d /app/java_server/out $(find /app/java_server/src -type f -name '*.java')
 
 EXPOSE 8085
-CMD ["java", "-cp", "/app/java_server/out", "com.almasfufa.server.Main", "8085"]
+CMD ["java", "-cp", "/app/java_server/out", "com.tahir.server.Main", "8085"]

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 
 const paidColors: Record<string, string> = { Paid: "cyber-badge-green", Due: "cyber-badge-red", Partial: "cyber-badge-yellow" };
 const statusColors: Record<string, string> = { Closed: "cyber-badge-purple", Open: "cyber-badge-green" };
@@ -56,6 +58,8 @@ export function PurchasesAll() {
         </div>
         <button className="btn-ghost" data-action="export-purchases">↗ Export</button>
       </div>
+
+      <SectionHelpHint hint={getPageSectionHint("purchasesAll")} />
 
       <div className="glass-card p-4">
         <div className="flex flex-wrap gap-3 items-center">

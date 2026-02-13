@@ -3,6 +3,8 @@ import { useAppState, useDispatch } from "@/context/StoreContext";
 import { printLabel } from "@/utils/print";
 import { HistoryPanel } from "@/components/ui/HistoryPanel";
 import type { LaptopRecord, PartRecord } from "@/store/appState";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 
 type ScanResult = { type: "laptop"; data: LaptopRecord } | { type: "part"; data: PartRecord } | null;
 
@@ -39,7 +41,7 @@ export function ScannerPage({ onNavigate }: { onNavigate?: (page: string) => voi
         grade: result.data.grade || "B",
         status: result.data.status || "Pending Verification",
         track: result.data.track || "-",
-        cost: typeof (result.data as any).cost === "number" ? (result.data as any).cost : 0,
+        cost: result.data.cost,
       });
     }
   }, [result]);
@@ -103,6 +105,8 @@ export function ScannerPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <button className="btn-ghost" onClick={() => setHistory([])}>✕ Clear History</button>
         </div>
       </div>
+
+      <SectionHelpHint hint={getPageSectionHint("scanner")} />
 
       {/* Scan Input */}
       <div className="glass-card corner-marks p-6">

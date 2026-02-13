@@ -9,13 +9,13 @@ describe("store persistence", () => {
 
   it("persists and loads app state from localStorage", () => {
     const state = createInitialState();
-    state.settings.companyName = "ALMASFUFA QA";
+    state.settings.companyName = "TAHIR ERP QA";
 
     persistState(state);
 
     const loaded = loadPersistedState();
     expect(loaded).not.toBeNull();
-    expect(loaded?.settings.companyName).toBe("ALMASFUFA QA");
+    expect(loaded?.settings.companyName).toBe("TAHIR ERP QA");
   });
 
   it("returns null when persisted payload is invalid", () => {

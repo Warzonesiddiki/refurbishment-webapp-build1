@@ -1,7 +1,11 @@
 import { useState, useMemo, useRef } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { KpiCard } from "@/components/cards/KpiCard";
-import type { PartRecord } from "@/store/appState";
+import type { Action, PartRecord } from "@/store/appState";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
+
+type AddPartPayload = Extract<Action, { type: "ADD_PART" }>['payload'];
 
 export function InventoryParts() {
   const state = useAppState();
@@ -20,7 +24,7 @@ export function InventoryParts() {
   const [adjustType, setAdjustType] = useState<"add" | "remove">("add");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [newPart, setNewPart] = useState({ barcode: "", name: "", category: "", spec: "", condition: "New", onHand: 0, available: 0, reorder: 5, cost: 0, location: "" });
+  const [newPart, setNewPart] = useState<AddPartPayload>({ barcode: "", name: "", category: "", spec: "", condition: "New", onHand: 0, available: 0, reorder: 5, cost: 0, location: "" });
   const [historyPart, setHistoryPart] = useState<PartRecord | null>(null);
   const pageSize = 10;
 
@@ -59,7 +63,7 @@ export function InventoryParts() {
 
   const addPart = () => {
     if (!newPart.barcode || !newPart.name) return;
-    dispatch({ type: "ADD_PART", payload: { ...newPart, available: newPart.onHand } as any });
+    dispatch({ type: "ADD_PART", payload: { ...newPart, available: newPart.onHand } });
     dispatch({ type: "ADD_ACTIVITY", payload: { action: `Added part ${newPart.barcode}`, time: "just now" } });
     setNewPart({ barcode: "", name: "", category: "", spec: "", condition: "New", onHand: 0, available: 0, reorder: 5, cost: 0, location: "" });
     setShowAdd(false);
@@ -76,6 +80,7 @@ export function InventoryParts() {
           </div>
           <p className="text-sm text-cyan-500/40 card-subtitle" style={{ fontFamily: "var(--font-mono)" }}>Parts inventory • Stock tracking • Reorder alerts</p>
         </div>
+
         <div className="flex gap-3">
           <button
             className="btn-ghost"
@@ -118,6 +123,8 @@ export function InventoryParts() {
           <button className="btn-cyber" onClick={() => setShowAdd(true)}>+ Add Part</button>
         </div>
       </div>
+
+      <SectionHelpHint hint={getPageSectionHint("inventoryParts")} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">

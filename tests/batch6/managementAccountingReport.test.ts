@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createInitialState } from "@/store/appState";
-import { generateManagementAccountingSnapshot, generateTaxationSummary } from "@/utils/reportGenerator";
+import { generateCashFlowStatement, generateManagementAccountingSnapshot, generateTaxationSummary } from "@/utils/reportGenerator";
 
 describe("management/tax reports", () => {
   it("generates management accounting KPIs", () => {
@@ -24,4 +24,16 @@ describe("management/tax reports", () => {
     expect(tax.netVATPayable).toBeCloseTo(tax.outputVAT - tax.inputVAT, 2);
     expect(tax.effectiveTaxRatePercent).toBeGreaterThanOrEqual(0);
   });
+
+
+  it("generates cash flow statement direct and indirect views", () => {
+    const state = createInitialState();
+    const end = new Date();
+    const start = new Date(end.getFullYear(), end.getMonth(), 1);
+    const cashFlow = generateCashFlowStatement(state, start, end);
+
+    expect(typeof cashFlow.direct.netCashFromOperations).toBe("number");
+    expect(typeof cashFlow.indirect.netCashFromOperations).toBe("number");
+  });
+
 });

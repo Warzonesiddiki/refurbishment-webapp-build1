@@ -3,6 +3,8 @@ import { useAppState, useDispatch } from "@/context/StoreContext";
 import { KpiCard } from "@/components/cards/KpiCard";
 import { nextWipNumber } from "@/utils/dateUtils";
 import { trackStages } from "@/domain";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 
 const priorityColors: Record<string, string> = { High: "cyber-badge-red", Normal: "cyber-badge-yellow", Low: "cyber-badge-green" };
 const statusColors: Record<string, string> = { "In Progress": "cyber-badge-purple", Active: "cyber-badge-cyan", "Awaiting Parts": "cyber-badge-yellow", Completed: "cyber-badge-green" };
@@ -117,6 +119,8 @@ export function WipJobs() {
         </div>
         <button className="btn-cyber" onClick={() => setShowCreate(true)}>+ New WIP Job</button>
       </div>
+
+      <SectionHelpHint hint={getPageSectionHint("wipJobs")} />
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard label="Active Jobs" value={activeCount} tone="cyan" icon="⬢" />

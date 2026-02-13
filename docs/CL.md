@@ -73,7 +73,7 @@
 - Updated `docs/DEPLOYMENT.md` to include the GUI-based local launcher workflow.
 
 ## Phase 18 — Java LAN API Starter + Launcher Integration
-- Added `java_server/src/com/almasfufa/server/Main.java` implementing a local-network Java API starter with user registration/login and token-based `/api/auth/me` endpoint.
+- Added `java_server/src/com/tahir/server/Main.java` implementing a local-network Java API starter with user registration/login and token-based `/api/auth/me` endpoint.
 - Added `tools/run_java_server.sh` and `npm run java:server` for simple compile-and-run workflow.
 - Updated `tools/local_launcher_gui.py` to support Java API start/stop and one-click flow now boots Java API + web app.
 - Added `docs/JAVA_LOCAL_SERVER.md` and updated deployment/launcher docs for LAN multi-user setup guidance.

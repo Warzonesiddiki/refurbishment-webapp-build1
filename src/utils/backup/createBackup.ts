@@ -40,7 +40,7 @@ function recordCounts(data: BackupData) {
 export function generateBackupFilename(type: "FULL" | "INCREMENTAL", encrypted: boolean) {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `almasfufa-${type.toLowerCase()}-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${encrypted?"-encrypted":""}.json`;
+  return `tahir-erp-${type.toLowerCase()}-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${encrypted?"-encrypted":""}.json`;
 }
 
 export async function createFullBackup(state: AppState, options: BackupOptions = {}): Promise<BackupFile> {

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Local GUI launcher for ALMASFUFA ERP demo stack.
+Local GUI launcher for TAHIR ERP demo stack.
 - One-click setup (install + test + build + launch)
 - Optional Docker Postgres/Adminer start
 - Live log console in a simple Tkinter GUI
@@ -30,7 +30,7 @@ ENV_EXAMPLE_PATH = ROOT / ".env.example"
 class LauncherApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("ALMASFUFA ERP — Local Setup & Launch")
+        self.root.title("TAHIR ERP — Local Setup & Launch")
         self.root.geometry("1080x760")
 
         self.log_queue: queue.Queue[str] = queue.Queue()

@@ -1,4 +1,4 @@
--- ALMASFUFA ERP: multi-tenant row-level security baseline
+-- TAHIR ERP: multi-tenant row-level security baseline
 
 -- The app should set this at transaction/session start:
 --   SET app.current_company_id = '<company-uuid>';

@@ -8,6 +8,22 @@
 - Next iterations should expand schemas/response errors and keep the frontend
   API client generated from this contract.
 
+## Local Java Auth API (implemented)
+- `GET /api/health`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+- `POST /api/auth/change-password`
+
+Behavior notes:
+- `X-Request-Id` is accepted and echoed (or generated if missing).
+- Login lockout returns `429 too_many_attempts` after repeated failed attempts and includes `Retry-After` seconds.
+- Request bodies beyond the configured size limit return `413 payload_too_large`.
+- JSON endpoints require `Content-Type: application/json`; otherwise they return `415 unsupported_media_type`.
+- `GET /api/health` returns `version`, `uptimeSec`, `activeSessions`, `registeredUsers`, `loginRateLimitedPrincipals`, plus `metrics`, `housekeeping`, and a `config` object for runtime telemetry.
+- Auth handlers are wrapped in a server-side safety boundary: unexpected runtime exceptions emit structured error events and return `500 internal_server_error` without crashing the process.
+
 ## Inventory
 - GET/POST /api/laptops
 - GET/PUT/DELETE /api/laptops/:id

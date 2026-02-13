@@ -6,7 +6,7 @@ export class DbFixture {
   constructor(private readonly page: Page) {}
 
   async clear() {
-    await this.page.evaluate(() => localStorage.removeItem("almasfufa:app-state"));
+    await this.page.evaluate(() => localStorage.removeItem("tahir-erp:app-state"));
   }
 
   async seed(data: Record<string, unknown>) {

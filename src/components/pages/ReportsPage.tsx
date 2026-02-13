@@ -9,9 +9,14 @@ import {
   generateBalanceSheet,
   generateManagementAccountingSnapshot,
   generateProfitLossReport,
+  generateAgedBalanceSnapshot,
+  generateCashFlowStatement,
   generateTaxationSummary,
   generateVATReport,
 } from "@/utils/reportGenerator";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
+import { buildCompletionRoadmap } from "@/utils/completionRoadmap";
 
 const reportCards = [
   { key: "inventory", title: "Inventory Valuation", desc: "Laptops unsold + parts valuation" },
@@ -23,6 +28,7 @@ const reportCards = [
   { key: "payables", title: "Payables Overview", desc: "Outstanding supplier balances" },
   { key: "receivables", title: "Receivables Overview", desc: "Outstanding sales balances" },
   { key: "accounting", title: "Accounting Statements", desc: "P&L + Balance sheet + VAT" },
+  { key: "cashflow", title: "Cash Flow Statement", desc: "Direct + indirect operating cashflow" },
   { key: "management", title: "Management Accounting", desc: "Margins, cashflow, turnover and BEP" },
   { key: "tax", title: "Taxation Summary", desc: "Output/input VAT and effective tax rate" },
 ] as const;
@@ -42,6 +48,7 @@ type ReportDataKey =
   | "payables"
   | "receivables"
   | "accounting"
+  | "cashflow"
   | "management"
   | "tax";
 
@@ -55,6 +62,7 @@ const dataKeyByReport: Record<ReportKey, ReportDataKey> = {
   payables: "payables",
   receivables: "receivables",
   accounting: "accounting",
+  cashflow: "cashflow",
   management: "management",
   tax: "tax",
 };
@@ -64,6 +72,8 @@ export function ReportsPage() {
   const { run: logExport } = useIdempotentAction("export-reports", "report");
   const { trigger } = useUiActionFeedback();
   const [selected, setSelected] = useState<ReportKey>("inventory");
+
+  const completionRoadmap = useMemo(() => buildCompletionRoadmap(state), [state]);
 
   const data = useMemo(() => {
     const inventory = state.laptops
@@ -138,8 +148,10 @@ export function ReportsPage() {
       balanceSheet: generateBalanceSheet(state, periodEnd),
       vat: generateVATReport(state, periodStart, periodEnd),
     };
+    const cashflow = generateCashFlowStatement(state, periodStart, periodEnd);
     const management = generateManagementAccountingSnapshot(state, periodStart, periodEnd);
     const tax = generateTaxationSummary(state, periodStart, periodEnd);
+    const agedBalances = generateAgedBalanceSnapshot(state, periodEnd);
 
     const summary = {
       inventoryValue: inventory.reduce((sum, row) => sum + row.value, 0) + parts.reduce((sum, row) => sum + row.value, 0),
@@ -148,7 +160,7 @@ export function ReportsPage() {
       wipCost: wip.reduce((sum, row) => sum + row.total, 0),
     };
 
-    return { inventory: [...inventory, ...parts], lowStock, aging, track, wip, profit, payables, receivables, accounting, management, tax, summary };
+    return { inventory: [...inventory, ...parts], lowStock, aging, track, wip, profit, payables, receivables, accounting, cashflow, management, tax, agedBalances, summary };
   }, [state]);
 
   const handleExport = (format: "excel" | "csv" | "json") => {
@@ -188,11 +200,62 @@ export function ReportsPage() {
         </div>
       </div>
 
+      <SectionHelpHint hint={getPageSectionHint("reports")} />
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">Inventory Value</p><p className="text-lg neon-text-green">{formatMoney(data.summary.inventoryValue)}</p></div>
         <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">Receivable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.receivableDue)}</p></div>
         <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">Payable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.payableDue)}</p></div>
         <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">WIP Cost</p><p className="text-lg neon-text-cyan">{formatMoney(data.summary.wipCost)}</p></div>
+      </div>
+
+
+      <div className="glass-card p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm tracking-wider text-cyan-300/70" style={{ fontFamily: "Orbitron" }}>
+            PROJECT COMPLETION READINESS
+          </h2>
+          <span className="cyber-chip">TARGET 95%</span>
+        </div>
+        <div className="grid md:grid-cols-3 gap-3 text-sm">
+          <div className="glass-card p-3">
+            <p className="text-xs text-cyan-500/40">Overall Completion</p>
+            <p className="text-xl neon-text-cyan">{completionRoadmap.overallPercent.toFixed(2)}%</p>
+          </div>
+          <div className="glass-card p-3">
+            <p className="text-xs text-cyan-500/40">Finance Readiness</p>
+            <p className="text-xl neon-text-green">{completionRoadmap.financePercent.toFixed(2)}%</p>
+          </div>
+          <div className="glass-card p-3">
+            <p className="text-xs text-cyan-500/40">Forecast to 95%</p>
+            <p className="text-xl text-yellow-300">
+              {completionRoadmap.forecastToTarget.estimatedSprintsRemaining} sprint(s)
+            </p>
+          </div>
+        </div>
+
+        <div className="overflow-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                <th className="py-2 px-3 text-left">Priority</th>
+                <th className="py-2 px-3 text-left">Action</th>
+                <th className="py-2 px-3 text-left">Area</th>
+                <th className="py-2 px-3 text-left">Impact</th>
+              </tr>
+            </thead>
+            <tbody>
+              {completionRoadmap.recommendedActions.slice(0, 4).map((item) => (
+                <tr key={item.id}>
+                  <td className="py-2 px-3 text-cyan-300/70">{item.priority}</td>
+                  <td className="py-2 px-3 text-cyan-100/80">{item.title}</td>
+                  <td className="py-2 px-3 text-cyan-300/50">{item.area}</td>
+                  <td className="py-2 px-3 neon-text-green">+{item.impactPoints}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <ProfitSummaryWidget
@@ -251,12 +314,56 @@ export function ReportsPage() {
             <tbody>{data.profit.map((p) => (<tr key={p.invoice}><td className="py-2 px-4 neon-text-cyan" style={{ fontFamily: "Share Tech Mono", fontSize: "11px" }}>{p.invoice}</td><td className="py-2 px-4 neon-text-green">{formatMoney(p.profit)}</td><td className="py-2 px-4 text-cyan-300/40">{formatMoney(p.total)}</td></tr>))}</tbody></table>
           )}
           {selected === "payables" && (
+            <>
             <table className="w-full text-sm"><thead><tr><th className="py-3 px-4 text-left">Purchase</th><th className="py-3 px-4 text-left">Supplier</th><th className="py-3 px-4 text-left">Total</th><th className="py-3 px-4 text-left">Due</th><th className="py-3 px-4 text-left">Status</th></tr></thead>
             <tbody>{data.payables.map((p) => (<tr key={p.purchase}><td className="py-2 px-4 neon-text-cyan" style={{ fontFamily: "Share Tech Mono", fontSize: "11px" }}>{p.purchase}</td><td className="py-2 px-4 text-cyan-100/60">{p.supplier}</td><td className="py-2 px-4 text-cyan-300/40">{formatMoney(p.total)}</td><td className="py-2 px-4 text-yellow-300">{formatMoney(p.dueAmount)}</td><td className="py-2 px-4 text-cyan-300/40">{p.paidStatus}</td></tr>))}</tbody></table>
+            <div className="mt-4 glass-card p-3">
+              <p className="text-xs text-cyan-500/40 mb-2">Aged Payables (days overdue)</p>
+              <table className="w-full text-xs">
+                <thead><tr><th className="py-2 px-2 text-left">Bucket</th><th className="py-2 px-2 text-left">Purchases</th><th className="py-2 px-2 text-left">Due Amount</th></tr></thead>
+                <tbody>
+                  {data.agedBalances.payables.map((bucket) => (
+                    <tr key={bucket.bucket}>
+                      <td className="py-1 px-2 text-cyan-300/70">{bucket.bucket}</td>
+                      <td className="py-1 px-2 text-cyan-100/70">{bucket.count}</td>
+                      <td className="py-1 px-2 text-yellow-300">{formatMoney(bucket.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td className="py-2 px-2 text-cyan-100">Total</td>
+                    <td className="py-2 px-2"></td>
+                    <td className="py-2 px-2 neon-text-green">{formatMoney(data.agedBalances.totalPayablesDue)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            </>
           )}
-          {selected === "receivables" && (
+                    {selected === "receivables" && (
+            <>
             <table className="w-full text-sm"><thead><tr><th className="py-3 px-4 text-left">Invoice</th><th className="py-3 px-4 text-left">Customer</th><th className="py-3 px-4 text-left">Total</th><th className="py-3 px-4 text-left">Paid</th><th className="py-3 px-4 text-left">Due</th><th className="py-3 px-4 text-left">Status</th></tr></thead>
             <tbody>{data.receivables.map((r) => (<tr key={r.invoice}><td className="py-2 px-4 neon-text-cyan" style={{ fontFamily: "Share Tech Mono", fontSize: "11px" }}>{r.invoice}</td><td className="py-2 px-4 text-cyan-100/60">{r.customer}</td><td className="py-2 px-4 text-cyan-300/40">{formatMoney(r.total)}</td><td className="py-2 px-4 text-green-300">{formatMoney(r.paidAmount)}</td><td className="py-2 px-4 text-yellow-300">{formatMoney(r.dueAmount)}</td><td className="py-2 px-4 text-cyan-300/40">{r.paidStatus}</td></tr>))}</tbody></table>
+            <div className="mt-4 glass-card p-3">
+              <p className="text-xs text-cyan-500/40 mb-2">Aged Receivables (days overdue)</p>
+              <table className="w-full text-xs">
+                <thead><tr><th className="py-2 px-2 text-left">Bucket</th><th className="py-2 px-2 text-left">Invoices</th><th className="py-2 px-2 text-left">Due Amount</th></tr></thead>
+                <tbody>
+                  {data.agedBalances.receivables.map((bucket) => (
+                    <tr key={bucket.bucket}>
+                      <td className="py-1 px-2 text-cyan-300/70">{bucket.bucket}</td>
+                      <td className="py-1 px-2 text-cyan-100/70">{bucket.count}</td>
+                      <td className="py-1 px-2 text-yellow-300">{formatMoney(bucket.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td className="py-2 px-2 text-cyan-100">Total</td>
+                    <td className="py-2 px-2"></td>
+                    <td className="py-2 px-2 neon-text-green">{formatMoney(data.agedBalances.totalReceivablesDue)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            </>
           )}
 
           {selected === "accounting" && (
@@ -265,6 +372,32 @@ export function ReportsPage() {
                 <div className="glass-card p-3"><p className="text-xs text-cyan-500/40">P&L Net Profit</p><p className="neon-text-green">{formatMoney(data.accounting.profitLoss.netProfit)}</p></div>
                 <div className="glass-card p-3"><p className="text-xs text-cyan-500/40">Balance Check</p><p className={data.accounting.balanceSheet.balanceCheck ? "text-green-300" : "text-red-400"}>{data.accounting.balanceSheet.balanceCheck ? "Balanced" : "Unbalanced"}</p></div>
                 <div className="glass-card p-3"><p className="text-xs text-cyan-500/40">VAT Net</p><p className="text-yellow-300">{formatMoney(data.accounting.vat.netVAT)}</p></div>
+              </div>
+            </div>
+          )}
+
+
+          {selected === "cashflow" && (
+            <div className="space-y-4 text-sm">
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="glass-card p-3">
+                  <p className="text-xs text-cyan-500/40 mb-2">Direct Method</p>
+                  <div className="space-y-1">
+                    <p>Cash received from customers: <span className="neon-text-cyan">{formatMoney(data.cashflow.direct.cashReceivedFromCustomers)}</span></p>
+                    <p>Cash paid to suppliers: <span className="text-yellow-300">{formatMoney(data.cashflow.direct.cashPaidToSuppliers)}</span></p>
+                    <p>Owner contributions: <span className="text-cyan-200">{formatMoney(data.cashflow.direct.ownerContributions)}</span></p>
+                    <p>Owner drawings: <span className="text-cyan-200">{formatMoney(data.cashflow.direct.ownerDrawings)}</span></p>
+                    <p className="pt-2">Net cash from operations: <span className="neon-text-green">{formatMoney(data.cashflow.direct.netCashFromOperations)}</span></p>
+                  </div>
+                </div>
+                <div className="glass-card p-3">
+                  <p className="text-xs text-cyan-500/40 mb-2">Indirect Method</p>
+                  <div className="space-y-1">
+                    <p>Net profit: <span className="neon-text-cyan">{formatMoney(data.cashflow.indirect.netProfit)}</span></p>
+                    <p>Working capital adjustments: <span className="text-yellow-300">{formatMoney(data.cashflow.indirect.workingCapitalAdjustments)}</span></p>
+                    <p className="pt-2">Net cash from operations: <span className="neon-text-green">{formatMoney(data.cashflow.indirect.netCashFromOperations)}</span></p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
