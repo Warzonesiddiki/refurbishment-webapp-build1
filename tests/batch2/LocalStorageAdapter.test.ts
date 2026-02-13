@@ -18,22 +18,22 @@ describe("LocalStorageAdapter", () => {
   });
 
   it("get returns null for missing key", async () => {
-    await expect(adapter.get("almasfufa:missing")).resolves.toBeNull();
+    await expect(adapter.get("tahir-erp:missing")).resolves.toBeNull();
   });
 
   it("clear removes only prefixed keys", async () => {
     window.localStorage.setItem("external", "1");
-    await adapter.set("almasfufa:test", { x: true });
+    await adapter.set("tahir-erp:test", { x: true });
     await adapter.clear();
     expect(window.localStorage.getItem("external")).toBe("1");
-    expect(await adapter.get("almasfufa:test")).toBeNull();
+    expect(await adapter.get("tahir-erp:test")).toBeNull();
   });
 
   it("throws StorageQuotaError on quota exceeded", async () => {
     const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new DOMException("Quota exceeded", "QuotaExceededError");
     });
-    await expect(adapter.set("almasfufa:test", { x: true })).rejects.toBeInstanceOf(StorageQuotaError);
+    await expect(adapter.set("tahir-erp:test", { x: true })).rejects.toBeInstanceOf(StorageQuotaError);
     spy.mockRestore();
   });
 });

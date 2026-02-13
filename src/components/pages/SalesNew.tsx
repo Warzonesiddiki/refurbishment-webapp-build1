@@ -2,6 +2,8 @@ import { useState, useMemo } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { computeVat } from "@/store/appState";
 import { printInvoice, printReceipt } from "@/utils/print";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 
 type CartItem = { id: string; barcode: string; name: string; price: number; cost: number };
 
@@ -155,6 +157,8 @@ export function SalesNew() {
           <p className="text-sm text-cyan-500/40 card-subtitle" style={{ fontFamily: "var(--font-mono)" }}>Scan items • Calculate totals • Process payment</p>
         </div>
       </div>
+
+      <SectionHelpHint hint={getPageSectionHint("salesNew")} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Cart */}

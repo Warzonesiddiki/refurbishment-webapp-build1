@@ -3,7 +3,11 @@ import { useAppState, useDispatch } from "@/context/StoreContext";
 import { BackupRestoreModal, BackupSettings as BackupSettingsPanel } from "@/components/Backup";
 import { backupReducer, createInitialBackupState } from "@/store/reducers/backupReducer";
 import { createFullBackup, createIncrementalBackup, downloadBackup } from "@/utils/backup/createBackup";
-import type { BackupFile } from "@/store/types/BackupTypes";
+import type { BackupData, BackupFile } from "@/store/types/BackupTypes";
+import { isRestorableBackupData, restoreStateFromBackupData, selectBackupDataModules, shouldApplyRestore } from "@/utils/backup/restoreState";
+import { runRestoreRehearsal } from "@/utils/backup/restoreRehearsal";
+import { getSettingsSectionHint } from "@/components/pages/settingsHints";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
 
 export function SettingsPage() {
   const state = useAppState();
@@ -31,6 +35,8 @@ export function SettingsPage() {
     { key: "diagnostics", label: "Diagnostics", icon: "🔧" },
     { key: "danger", label: "Danger Zone", icon: "⚠️" },
   ];
+
+  const sectionHint = getSettingsSectionHint(activeSection);
 
   return (
     <div className="space-y-6">
@@ -73,6 +79,8 @@ export function SettingsPage() {
 
         {/* Content */}
         <div className="lg:col-span-3 space-y-6">
+          <SectionHelpHint hint={sectionHint} />
+
           {activeSection === "company" && (
             <div className="glass-card corner-marks p-6 space-y-4">
               <h3 className="text-sm font-bold neon-text-cyan" style={{ fontFamily: "var(--font-heading)" }}>COMPANY INFORMATION</h3>
@@ -190,25 +198,80 @@ export function SettingsPage() {
                 mode={backupModalMode ?? "EXPORT"}
                 state={state}
                 onClose={() => setBackupModalMode(null)}
-                onRestore={(backup: BackupFile) => {
-                  if (typeof backup.data === "object" && backup.data && (backup.data as any).inventory?.laptops) {
-                    const payload = backup.data as any;
+                onRestore={(backup: BackupFile, options) => {
+                  if (typeof backup.data === "string") {
+                    dispatch({
+                      type: "ADD_ACTIVITY",
+                      payload: {
+                        action: "Restore skipped: encrypted backup payload requires successful decrypt/import first",
+                        time: "just now",
+                      },
+                    });
+                    return;
+                  }
+
+                  if (typeof backup.data === "object" && backup.data !== null) {
+                    const payload = backup.data as BackupData;
+                    const scopedPayload = selectBackupDataModules(payload, options.modules);
+                    if (!isRestorableBackupData(scopedPayload)) {
+                      dispatch({
+                        type: "ADD_ACTIVITY",
+                        payload: { action: "Restore skipped: backup contained no restorable modules", time: "just now" },
+                      });
+                      return;
+                    }
+
+                    const rehearsal = runRestoreRehearsal(state, scopedPayload, options.modules);
+                    if (!rehearsal.passed) {
+                      const failedChecks = rehearsal.checks.filter((check) => !check.passed).map((check) => check.id).join(", ");
+                      dispatch({
+                        type: "ADD_ACTIVITY",
+                        payload: {
+                          action: `Restore rehearsal failed for backup ${backup.backupId}: ${failedChecks || "unknown checks"}`,
+                          time: "just now",
+                        },
+                      });
+                      return;
+                    }
+
+                    if (options.dryRun) {
+                      dispatch({
+                        type: "ADD_ACTIVITY",
+                        payload: {
+                          action: `Restore dry-run passed for backup ${backup.backupId} modules: ${options.modules.join(", ") || "none"}`,
+                          time: "just now",
+                        },
+                      });
+                      return;
+                    }
+
+                    if (!shouldApplyRestore(options)) {
+                      dispatch({
+                        type: "ADD_ACTIVITY",
+                        payload: {
+                          action: `Restore skipped by conflict policy KEEP_CURRENT for backup ${backup.backupId}`,
+                          time: "just now",
+                        },
+                      });
+                      return;
+                    }
+
+                    if (options.createRollbackPoint) {
+                      backupDispatch({
+                        type: "CREATE_ROLLBACK_POINT",
+                        payload: { reason: `Before restore ${backup.backupId}`, snapshot: state },
+                      });
+                    }
+
                     dispatch({
                       type: "RESTORE_STATE",
+                      payload: restoreStateFromBackupData(state, scopedPayload),
+                    });
+                    dispatch({
+                      type: "ADD_ACTIVITY",
                       payload: {
-                        ...state,
-                        laptops: payload.inventory?.laptops ?? state.laptops,
-                        parts: payload.inventory?.parts ?? state.parts,
-                        wipJobs: payload.wip?.records ?? state.wipJobs,
-                        sales: payload.sales?.sales ?? state.sales,
-                        receipts: payload.sales?.receipts ?? state.receipts,
-                        purchases: payload.purchases?.purchases ?? state.purchases,
-                        payments: payload.purchases?.payments ?? state.payments,
-                        cashEntries: payload.finance?.cashEntries ?? state.cashEntries,
-                        ownerEntries: payload.finance?.ownerEntries ?? state.ownerEntries,
-                        suppliers: payload.masterData?.suppliers ?? state.suppliers,
-                        lots: payload.masterData?.lots ?? state.lots,
-                        settings: payload.settings?.config ?? state.settings,
+                        action: `Restored backup ${backup.backupId} modules: ${options.modules.join(", ") || "none"} (${options.conflictResolution})`,
+                        time: "just now",
                       },
                     });
                   }

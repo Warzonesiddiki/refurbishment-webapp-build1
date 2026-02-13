@@ -47,7 +47,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       <div className="glass-card neon-border max-w-md w-full p-6 space-y-4">
         <div>
           <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-500/40" style={{ fontFamily: "Share Tech Mono" }}>
-            ALMASFUFA ERP
+            TAHIR ERP
           </p>
           <h1 className="text-2xl font-bold neon-text-cyan tracking-wider" style={{ fontFamily: "Orbitron" }}>
             {mode === "login" ? "Employee Login" : "Register Employee"}

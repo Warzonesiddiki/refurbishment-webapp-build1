@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { AppState, Action } from "@/store/appState";
 
-const CHANNEL_NAME = "almasfufa-sync";
+const CHANNEL_NAME = "tahir-erp-sync";
 
 type SyncMessage =
   | { type: "STATE_UPDATED"; payload: { timestamp: number; state: AppState } }

@@ -9,7 +9,7 @@ export interface IStorageAdapter {
   has(key: string): Promise<boolean>;
 }
 
-export const STORAGE_PREFIX = "almasfufa:";
+export const STORAGE_PREFIX = "tahir-erp:";
 export const APP_STATE_KEY = `${STORAGE_PREFIX}app-state`;
 
 export function wrapStorageError(error: unknown, fallbackMessage: string): StorageError {

@@ -1,4 +1,4 @@
--- ALMASFUFA ERP: core schema bootstrap (PostgreSQL)
+-- TAHIR ERP: core schema bootstrap (PostgreSQL)
 -- Phase 13 foundational backend/database completion
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

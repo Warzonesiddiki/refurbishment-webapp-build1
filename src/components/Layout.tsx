@@ -27,7 +27,7 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
   const { state, dispatch } = useStore();
 
   const createBackup = useCallback(() => {
-    const filename = `almasfufa-backup-${toLocalDateStamp()}.json`;
+    const filename = `tahir-erp-backup-${toLocalDateStamp()}.json`;
     exportJson(filename, state);
   }, [state]);
 
@@ -151,7 +151,7 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
                   className={cn("text-sm font-bold tracking-wider", theme === "pro" ? "text-slate-900" : "text-cyan-300")}
                   style={{ fontFamily: theme === "pro" ? "Inter" : "Orbitron" }}
                 >
-                  ALMASFUFA
+                  TAHIR ERP
                 </p>
                 <p className={cn("text-[10px] tracking-widest uppercase", theme === "pro" ? "text-slate-500" : "text-cyan-500/50")}>Manager v2.0</p>
               </div>

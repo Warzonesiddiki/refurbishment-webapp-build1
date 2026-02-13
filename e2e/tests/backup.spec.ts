@@ -6,5 +6,5 @@ test("should trigger backup via keyboard shortcut", async ({ app, page }) => {
     page.waitForEvent("download"),
     app.pressShortcut("Control+B"),
   ]);
-  expect(download.suggestedFilename()).toContain("almasfufa-backup-");
+  expect(download.suggestedFilename()).toContain("tahir-erp-backup-");
 });

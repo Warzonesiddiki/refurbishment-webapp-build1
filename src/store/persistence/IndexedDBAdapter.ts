@@ -2,7 +2,7 @@ import { IStorageAdapter, STORAGE_PREFIX } from "@/store/persistence/IStorageAda
 import { LocalStorageAdapter } from "@/store/persistence/LocalStorageAdapter";
 import { StorageUnavailableError } from "@/store/persistence/errors";
 
-const DB_NAME = "AlmasfufaDB";
+const DB_NAME = "TahirERPDB";
 const STORE_NAME = "appState";
 const DB_VERSION = 1;
 

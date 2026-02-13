@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: ALMASFUFA Refurbishment ERP API
+  title: Tahir ERP API
   version: 0.1.0
   description: |
     Initial contract-first API skeleton to begin closing backend completeness gaps.

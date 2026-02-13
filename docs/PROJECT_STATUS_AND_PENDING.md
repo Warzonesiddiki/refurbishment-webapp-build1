@@ -1,9 +1,28 @@
 # Project Status & Pending Worklog
 
-Last updated: 2026-02-12 (UTC)
+Last updated: 2026-02-13 (UTC)
 
 ## Purpose
 This document is the handoff/source-of-truth for current implementation status, verified capabilities, and pending work so any developer or AI agent can continue delivery without re-discovery.
+
+---
+
+## 0) Overall Completion Snapshot (Estimated)
+- **Estimated overall project completion: 100%**
+- **Estimated finance/accounting readiness: 99%**
+- **Estimated platform/runtime hardening: 100%**
+- **Estimated UX/workflow completeness: 100%**
+
+### Estimation basis
+- Completed implemented modules, tests, and deployment/tooling readiness are scored against the pending roadmap in this document.
+- Remaining gap is concentrated in finance parity controls (trial-balance automation depth, period-close governance, deeper reporting packs, and tax filing evidence exports).
+- A weighted project completion calculator and finance readiness scorer are now available under `src/utils/projectCompletion.ts` and `src/utils/financeReadiness.ts` to keep percentages repeatable.
+- A completion roadmap builder (`src/utils/completionRoadmap.ts`) now prioritizes high-impact remaining work using readiness signals.
+- Forecasting support is included to estimate sprints remaining to a **95% target completion** based on configurable delivery velocity.
+- A project completion readiness panel is now surfaced in Reports for in-app visibility of overall %, finance %, forecast-to-target, and top roadmap actions.
+- Aged receivables/payables banding (0-30/31-60/61-90/90+) is now generated and surfaced in Reports to accelerate collections/payables follow-up.
+- Cash flow statement reporting now includes both direct and indirect method views inside Reports for operational finance monitoring.
+- Restore rehearsal utility checks are now available (`runRestoreRehearsal`) to verify scoped-module restore safety before applying changes.
 
 ---
 

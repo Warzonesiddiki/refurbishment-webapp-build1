@@ -3,6 +3,8 @@ import { KpiCard } from "@/components/cards/KpiCard";
 import { useAppState } from "@/context/StoreContext";
 import { useIdempotentAction } from "@/hooks/useIdempotentAction";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 
 export function FinanceVat() {
   const state = useAppState();
@@ -57,6 +59,8 @@ export function FinanceVat() {
           <button className="btn-ghost" data-action="print" onClick={handlePrint}>⎙ Print</button>
         </div>
       </div>
+
+      <SectionHelpHint hint={getPageSectionHint("financeVat")} />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <KpiCard label="Output VAT (Sales)" value={`AED ${totals.outputVat.toFixed(2)}`} tone="cyan" icon="↑" />

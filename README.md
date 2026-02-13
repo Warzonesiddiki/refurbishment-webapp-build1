@@ -1,10 +1,10 @@
-# ALMASFUFA Manager v2.0
+# Tahir ERP v2.0
 
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions-blue)
 ![Coverage](https://img.shields.io/badge/coverage-80%25%2B-brightgreen)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6)
 
-ALMASFUFA Manager is a React + TypeScript ERP workflow application for laptop refurbishment operations (receiving, WIP, parts, sales, finance, reporting, backup/restore).
+Tahir ERP is a React + TypeScript ERP workflow application for laptop refurbishment operations (receiving, WIP, parts, sales, finance, reporting, backup/restore).
 
 ## Features
 - Inventory and parts management

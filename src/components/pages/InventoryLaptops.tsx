@@ -1,7 +1,11 @@
 import { useState, useMemo } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { KpiCard } from "@/components/cards/KpiCard";
-import type { LaptopRecord } from "@/store/appState";
+import type { Action, LaptopRecord } from "@/store/appState";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
+
+type AddLaptopPayload = Extract<Action, { type: "ADD_LAPTOP" }>['payload'];
 
 const gradeColors: Record<string, string> = { A: "cyber-badge-green", B: "cyber-badge-yellow", C: "cyber-badge-red" };
 const statusColors: Record<string, string> = {
@@ -21,7 +25,7 @@ export function InventoryLaptops() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<LaptopRecord>>({});
   const [showAdd, setShowAdd] = useState(false);
-  const [newLaptop, setNewLaptop] = useState({ barcode: "", brand: "", model: "", specs: "", grade: "B", status: "Pending Verification", track: "-", cost: 0, date: new Date().toISOString().slice(0, 10) });
+  const [newLaptop, setNewLaptop] = useState<AddLaptopPayload>({ barcode: "", brand: "", model: "", specs: "", grade: "B", status: "Pending Verification", track: "-", cost: 0, date: new Date().toISOString().slice(0, 10) });
   const [bulkTrack, setBulkTrack] = useState("Track A");
   const pageSize = 10;
 
@@ -72,7 +76,7 @@ export function InventoryLaptops() {
 
   const addLaptop = () => {
     if (!newLaptop.barcode || !newLaptop.brand) return;
-    dispatch({ type: "ADD_LAPTOP", payload: newLaptop as any });
+    dispatch({ type: "ADD_LAPTOP", payload: newLaptop });
     dispatch({ type: "ADD_ACTIVITY", payload: { action: `Added laptop ${newLaptop.barcode}`, time: "just now" } });
     setNewLaptop({ barcode: "", brand: "", model: "", specs: "", grade: "B", status: "Pending Verification", track: "-", cost: 0, date: new Date().toISOString().slice(0, 10) });
     setShowAdd(false);
@@ -110,6 +114,7 @@ export function InventoryLaptops() {
           </div>
           <p className="text-sm text-cyan-500/40 card-subtitle" style={{ fontFamily: "var(--font-mono)" }}>Inventory management • Filters • Bulk actions</p>
         </div>
+
         <div className="flex gap-3">
           <button
             className="btn-ghost"
@@ -150,6 +155,8 @@ export function InventoryLaptops() {
           <button className="btn-cyber" onClick={() => setShowAdd(true)}>+ Add Laptop</button>
         </div>
       </div>
+
+      <SectionHelpHint hint={getPageSectionHint("inventoryLaptops")} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

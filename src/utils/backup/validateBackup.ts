@@ -110,11 +110,18 @@ export async function validateBackupFile(file: File, password?: string): Promise
     warnings.push({ code: "CHECKSUM_SOFT_FAIL", message: "Checksum mismatch detected (soft fail in compatibility mode)", severity: "high" });
   }
 
+  const normalizedBackup = parsed
+    ? {
+      ...parsed,
+      data: rawData,
+    }
+    : null;
+
   return {
-    valid: shape.valid && compatibility.compatible,
+    valid: shape.valid && compatibility.compatible && blockingErrors.length === 0,
     errors: blockingErrors,
     warnings,
-    backup: parsed,
+    backup: normalizedBackup,
     compatibility,
     preview,
   };

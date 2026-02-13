@@ -20,7 +20,7 @@ run_cmd() {
 
 usage() {
   cat <<USAGE
-One-click setup for ALMASFUFA Manager.
+One-click setup for Tahir ERP.
 
 Usage:
   bash tools/bootstrap.sh [options]
@@ -142,7 +142,7 @@ validate_installation() {
 }
 
 main() {
-  log "Starting one-click bootstrap for ALMASFUFA Manager"
+  log "Starting one-click bootstrap for Tahir ERP"
 
   if [[ "$SKIP_SYSTEM" != "true" ]]; then
     install_system_deps
