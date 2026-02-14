@@ -86,17 +86,21 @@ This document is the handoff/source-of-truth for current implementation status, 
 
 ### B. Reporting Completeness (Accounting + Management + Tax)
 1. Add drill-down report interactions from KPI -> transaction journal.
-2. Add cash flow statement (direct + indirect views).
-3. Add aged receivables/payables bands with customer/supplier statements.
-4. Add management packs:
+2. Expand aged receivables/payables from bucketed summaries into full customer/supplier statement exports and follow-up workflows.
+3. Add management packs:
    - budget vs actual,
    - variance analysis,
    - contribution margin by channel/model/grade,
    - rolling forecast.
-5. Add taxation packs:
+4. Add taxation packs:
    - VAT box mapping detail,
    - exception report (missing VAT/tax code anomalies),
    - filing/export templates and period lock evidence.
+
+### F. Recently Closed Items (No Longer Pending)
+1. Cash flow statement reporting now ships with both direct and indirect method views in Reports.
+2. Aged receivables/payables banding (0-30/31-60/61-90/90+) is implemented for collection/payables prioritization.
+3. Restore rehearsal checks are integrated in Settings restore flow and can block unsafe restores when policy enforcement is enabled.
 
 ### C. Stability & Reliability
 1. Add end-to-end restore rehearsal tests (backup -> reset -> restore -> invariant checks).
@@ -156,4 +160,3 @@ Windows 11 bootstrap:
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/bootstrap.ps1
 ```
-

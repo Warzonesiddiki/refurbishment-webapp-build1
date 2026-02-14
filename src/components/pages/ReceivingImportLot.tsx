@@ -10,56 +10,202 @@ const steps = [
   { num: 4, label: "Preview & Import", icon: "✓" },
 ];
 
+type ImportRow = Record<string, string>;
+
+type ImportUnit = {
+  source: ImportRow;
+  serial: string;
+  unitIndex: number;
+  unitsInRow: number;
+};
+
+type ImportPreviewRow = {
+  barcode: string;
+  brand: string;
+  model: string;
+  cost: number;
+  ramType: string;
+  ramCapacityGb: number;
+  ssdType: string;
+  ssdCapacityGb: number;
+  graphicsType: "GPU" | "iGPU";
+  importMeta: Record<string, string>;
+  error: string;
+};
+
+function parseCsv(text: string): ImportRow[] {
+  const rows: string[][] = [];
+  let current: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (ch === "," && !inQuotes) {
+      current.push(cell.trim());
+      cell = "";
+      continue;
+    }
+
+    if ((ch === "\n" || ch === "\r") && !inQuotes) {
+      if (ch === "\r" && next === "\n") i += 1;
+      current.push(cell.trim());
+      cell = "";
+      if (current.some((v) => v.length > 0)) rows.push(current);
+      current = [];
+      continue;
+    }
+
+    cell += ch;
+  }
+
+  if (cell.length > 0 || current.length > 0) {
+    current.push(cell.trim());
+    if (current.some((v) => v.length > 0)) rows.push(current);
+  }
+
+  if (rows.length === 0) return [];
+
+  const headers = rows[0];
+  return rows.slice(1).map((cols) =>
+    headers.reduce<Record<string, string>>((acc, h, i) => {
+      acc[h] = (cols[i] ?? "").trim();
+      return acc;
+    }, {})
+  );
+}
+
+function parseCapacityGb(input: string) {
+  const match = input.match(/(\d+)\s*\/?\s*(gb|tb)/i);
+  if (!match) return 0;
+  const value = Number(match[1]);
+  return match[2].toLowerCase() === "tb" ? value * 1024 : value;
+}
+
+function inferRamType(text: string) {
+  if (/lpddr5/i.test(text)) return "LPDDR5";
+  if (/lpddr4/i.test(text)) return "LPDDR4";
+  if (/ddr5/i.test(text)) return "DDR5";
+  if (/ddr4/i.test(text)) return "DDR4";
+  if (/ddr3/i.test(text)) return "DDR3";
+  return "Unknown";
+}
+
+function inferSsdType(text: string) {
+  if (/nvme/i.test(text)) return "NVMe";
+  if (/m\.2/i.test(text)) return "M.2";
+  if (/sata/i.test(text)) return "SATA";
+  return "Unknown";
+}
+
+function splitSerials(value: string) {
+  return value
+    .split(/\r?\n|,|;/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function buildImportUnits(rows: ImportRow[], mapping: Record<string, string>) {
+  return rows.flatMap<ImportUnit>((row) => {
+    const qty = Number(row.qty || row.accepted_qty || row.received_qty || 1);
+    const normalizedQty = Number.isFinite(qty) && qty > 0 ? Math.floor(qty) : 1;
+    const serialField = row[mapping.barcode] || row.serial_no || row.barcode || row.item_code || "";
+    const serials = splitSerials(serialField);
+
+    return Array.from({ length: normalizedQty }, (_, idx) => ({
+      source: row,
+      serial: serials[idx] || "",
+      unitIndex: idx + 1,
+      unitsInRow: normalizedQty,
+    }));
+  });
+}
+
 export function ReceivingImportLot() {
   const state = useAppState();
   const dispatch = useDispatch();
   const [activeStep, setActiveStep] = useState(1);
-  const [rawRows, setRawRows] = useState<Record<string, string>[]>([]);
+  const [rawRows, setRawRows] = useState<ImportRow[]>([]);
   const [fileName, setFileName] = useState<string>("");
   const [supplier, setSupplier] = useState(state.suppliers[0]?.name || "");
   const [lotNumber, setLotNumber] = useState(`ALM-LOT-${new Date().toISOString().slice(0, 7).replace("-", "")}-01`);
   const [totalCost, setTotalCost] = useState(0);
-  const [mapping, setMapping] = useState({ barcode: "barcode", brand: "brand", model: "model", cost: "cost" });
+  const [mapping, setMapping] = useState({ barcode: "serial_no", brand: "brand", model: "item_name", cost: "valuation_rate" });
+  const [defaultRamType, setDefaultRamType] = useState("DDR4");
+  const [defaultRamCapacityGb, setDefaultRamCapacityGb] = useState(16);
+  const [defaultSsdType, setDefaultSsdType] = useState("NVMe");
+  const [defaultSsdCapacityGb, setDefaultSsdCapacityGb] = useState(256);
+  const [defaultGraphicsType, setDefaultGraphicsType] = useState<"GPU" | "iGPU">("iGPU");
   const requiredMapped = Object.values(mapping).every((v) => v && v.trim().length > 0);
 
   const { run: logCommit } = useIdempotentAction("import-lot-commit", "lot");
   const { trigger } = useUiActionFeedback();
 
-  const previewRows = useMemo(() => {
+  const previewRows = useMemo<ImportPreviewRow[]>(() => {
     const seen = new Set<string>();
     const existing = new Set(state.laptops.map((l) => l.barcode.toUpperCase()));
+    const units = buildImportUnits(rawRows, mapping);
 
-    return rawRows.map((r) => {
-      const barcode = (r[mapping.barcode] || "").trim();
+    return units.map((unit) => {
+      const r = unit.source;
+      const itemName = (r[mapping.model] || r.item_name || r.model || r.description || "").trim();
+      const desc = (r.description || "").trim();
+      const itemCode = (r.item_code || itemName || "ITEM").replace(/\s+/g, "-");
+      const generated = `${itemCode}-${String(unit.unitIndex).padStart(4, "0")}`;
+      const barcode = (unit.serial || generated).trim();
       const normalized = barcode.toUpperCase();
-      const brand = (r[mapping.brand] || "").trim();
-      const model = (r[mapping.model] || "").trim();
-      const cost = Number(r[mapping.cost] || 0);
-      let error = "";
+      const brand = (r[mapping.brand] || itemName.split(/[-\s]/)[0] || "").trim();
+      const model = itemName || (r[mapping.model] || "").trim();
+      const cost = Number(r[mapping.cost] || r.rate || r.net_rate || r.cost || 0);
+      const searchable = `${itemName} ${desc}`;
+      const ramCapacityGb = parseCapacityGb(searchable.match(/(\d+\s*(?:gb|tb))\s*ram/i)?.[1] || "") || defaultRamCapacityGb;
+      const ssdCapacityGb = parseCapacityGb(searchable.match(/(\d+\s*(?:gb|tb))\s*ssd/i)?.[1] || "") || defaultSsdCapacityGb;
+      const inferredRam = inferRamType(searchable);
+      const inferredSsd = inferSsdType(searchable);
+      const ramType = inferredRam !== "Unknown" ? inferredRam : defaultRamType;
+      const ssdType = inferredSsd !== "Unknown" ? inferredSsd : defaultSsdType;
+      const graphicsType: "GPU" | "iGPU" = /\bgpu\b|nvidia|radeon|rtx|gtx/i.test(searchable) ? "GPU" : defaultGraphicsType;
 
+      let error = "";
       if (!barcode || !brand || !model) error = "Missing required fields";
       else if (existing.has(normalized)) error = "Barcode already exists";
       else if (seen.has(normalized)) error = "Duplicate barcode in file";
 
       seen.add(normalized);
-      return { barcode, brand, model, cost, error };
+      return {
+        barcode,
+        brand,
+        model,
+        cost,
+        ramType,
+        ramCapacityGb,
+        ssdType,
+        ssdCapacityGb,
+        graphicsType,
+        importMeta: {
+          ...r,
+          _unitIndex: String(unit.unitIndex),
+          _unitsInRow: String(unit.unitsInRow),
+          _serialUsed: unit.serial,
+        },
+        error,
+      };
     });
-  }, [rawRows, mapping, state.laptops]);
+  }, [rawRows, mapping, state.laptops, defaultRamType, defaultRamCapacityGb, defaultSsdType, defaultSsdCapacityGb, defaultGraphicsType]);
 
   const validRows = previewRows.filter((r) => !r.error);
-
-  const parseCsv = (text: string) => {
-    const lines = text.split(/\r?\n/).filter(Boolean);
-    if (lines.length === 0) return [];
-    const headers = lines[0].split(",").map(h => h.trim());
-    return lines.slice(1).map(line => {
-      const cols = line.split(",");
-      return headers.reduce<Record<string, string>>((acc, h, i) => {
-        acc[h] = (cols[i] ?? "").trim();
-        return acc;
-      }, {});
-    });
-  };
 
   const handleFile = (file: File) => {
     setFileName(file.name);
@@ -83,7 +229,28 @@ export function ReceivingImportLot() {
     logCommit(lotNumber, { validRows: validRows.length, totalRows: previewRows.length });
     dispatch({ type: "ADD_LOT", payload: { lot: lotNumber, supplier, received: new Date().toISOString().slice(0, 10), status: "Pending", items: validRows.length, verified: 0, graded: 0, cost: totalCost } });
     validRows.forEach((r) => {
-      dispatch({ type: "ADD_LAPTOP", payload: { barcode: r.barcode, brand: r.brand, model: r.model, specs: "", grade: "B", status: "Pending Verification", track: "-", cost: r.cost, date: new Date().toISOString().slice(0, 10), lot: lotNumber } });
+      const specs = `${r.ramCapacityGb}GB ${r.ramType} / ${r.ssdCapacityGb}GB ${r.ssdType} / ${r.graphicsType}`;
+      dispatch({
+        type: "ADD_LAPTOP",
+        payload: {
+          barcode: r.barcode,
+          brand: r.brand,
+          model: r.model,
+          specs,
+          grade: "B",
+          status: "Pending Verification",
+          track: "-",
+          cost: r.cost,
+          date: new Date().toISOString().slice(0, 10),
+          lot: lotNumber,
+          ramType: r.ramType,
+          ramCapacityGb: r.ramCapacityGb,
+          ssdType: r.ssdType,
+          ssdCapacityGb: r.ssdCapacityGb,
+          graphicsType: r.graphicsType,
+          importMeta: r.importMeta,
+        },
+      });
     });
     trigger("success", `Imported ${validRows.length} laptops`);
   };
@@ -124,10 +291,37 @@ export function ReceivingImportLot() {
               </select>
               <label className="block text-[11px] text-cyan-500/40" style={{ fontFamily: "Orbitron" }}>Lot Number</label>
               <input className="w-full px-3 py-2 rounded-lg text-sm" value={lotNumber} onChange={e => setLotNumber(e.target.value)} />
+              <label className="block text-[11px] text-cyan-500/40" style={{ fontFamily: "Orbitron" }}>Default Graphics</label>
+              <select className="w-full px-3 py-2 rounded-lg text-sm" value={defaultGraphicsType} onChange={(e) => setDefaultGraphicsType(e.target.value as "GPU" | "iGPU") }>
+                <option value="iGPU">Integrated GPU (iGPU)</option>
+                <option value="GPU">Dedicated GPU</option>
+              </select>
             </div>
             <div className="space-y-3">
               <label className="block text-[11px] text-cyan-500/40" style={{ fontFamily: "Orbitron" }}>Total Cost</label>
               <input type="number" className="w-full px-3 py-2 rounded-lg text-sm" value={totalCost || ""} onChange={e => setTotalCost(Number(e.target.value))} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-cyan-500/40 mb-1" style={{ fontFamily: "Orbitron" }}>Default RAM Type</label>
+                  <select className="w-full px-3 py-2 rounded-lg text-sm" value={defaultRamType} onChange={(e) => setDefaultRamType(e.target.value)}>
+                    <option>DDR3</option><option>DDR4</option><option>DDR5</option><option>LPDDR4</option><option>LPDDR5</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-cyan-500/40 mb-1" style={{ fontFamily: "Orbitron" }}>Default RAM (GB)</label>
+                  <input type="number" className="w-full px-3 py-2 rounded-lg text-sm" value={defaultRamCapacityGb} onChange={(e) => setDefaultRamCapacityGb(Number(e.target.value) || 0)} />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-cyan-500/40 mb-1" style={{ fontFamily: "Orbitron" }}>Default SSD Type</label>
+                  <select className="w-full px-3 py-2 rounded-lg text-sm" value={defaultSsdType} onChange={(e) => setDefaultSsdType(e.target.value)}>
+                    <option>NVMe</option><option>M.2</option><option>SATA</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-cyan-500/40 mb-1" style={{ fontFamily: "Orbitron" }}>Default SSD (GB)</label>
+                  <input type="number" className="w-full px-3 py-2 rounded-lg text-sm" value={defaultSsdCapacityGb} onChange={(e) => setDefaultSsdCapacityGb(Number(e.target.value) || 0)} />
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex justify-end mt-6"><button className="btn-cyber" onClick={() => setActiveStep(2)}>Next → Upload</button></div>
@@ -137,7 +331,7 @@ export function ReceivingImportLot() {
       {activeStep === 2 && (
         <div className="glass-card corner-marks p-6">
           <input type="file" accept=".csv" onChange={e => e.target.files && handleFile(e.target.files[0])} />
-          {fileName && <p className="text-xs text-cyan-300/40 mt-2">Loaded: {fileName}</p>}
+          {fileName && <p className="text-xs text-cyan-300/40 mt-2">Loaded: {fileName} ({rawRows.length} source rows, {previewRows.length} unit rows)</p>}
           <div className="flex justify-between mt-6"><button className="btn-ghost" onClick={() => setActiveStep(1)}>← Back</button><button className="btn-cyber" onClick={() => setActiveStep(3)}>Next → Map</button></div>
         </div>
       )}
@@ -159,9 +353,9 @@ export function ReceivingImportLot() {
       {activeStep === 4 && (
         <div className="glass-card corner-marks p-6">
           <table className="w-full text-sm">
-            <thead><tr><th className="py-2 px-3">Barcode</th><th className="py-2 px-3">Brand</th><th className="py-2 px-3">Model</th><th className="py-2 px-3">Cost</th><th className="py-2 px-3">Status</th></tr></thead>
+            <thead><tr><th className="py-2 px-3">Barcode</th><th className="py-2 px-3">Brand</th><th className="py-2 px-3">Model</th><th className="py-2 px-3">Specs</th><th className="py-2 px-3">Cost</th><th className="py-2 px-3">Status</th></tr></thead>
             <tbody>{previewRows.map((r, i) => (
-              <tr key={i}><td className="py-2 px-3 neon-text-cyan" style={{ fontFamily: "Share Tech Mono" }}>{r.barcode || "—"}</td><td className="py-2 px-3">{r.brand}</td><td className="py-2 px-3">{r.model}</td><td className="py-2 px-3">AED {r.cost}</td><td className="py-2 px-3">{r.error || "Valid"}</td></tr>
+              <tr key={i}><td className="py-2 px-3 neon-text-cyan" style={{ fontFamily: "Share Tech Mono" }}>{r.barcode || "—"}</td><td className="py-2 px-3">{r.brand}</td><td className="py-2 px-3">{r.model}</td><td className="py-2 px-3">{r.ramCapacityGb}GB {r.ramType} / {r.ssdCapacityGb}GB {r.ssdType} / {r.graphicsType}</td><td className="py-2 px-3">AED {r.cost}</td><td className="py-2 px-3">{r.error || "Valid"}</td></tr>
             ))}</tbody>
           </table>
           <p className="text-xs text-cyan-400/50 mt-3">
