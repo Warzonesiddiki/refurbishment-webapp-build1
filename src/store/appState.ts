@@ -9,6 +9,7 @@
 
 import { laptopTable, partTable, activityFeed, alertList } from "@/data/mockData";
 import { makeSequenceGenerator, computeVat, canAdvance, trackStages } from "@/domain";
+import { canTransitionLaptopStatus, canTransitionLotStatus } from "@/domain/statusTransitions";
 
 // ── Sequence Generators ──
 const seqLaptop = makeSequenceGenerator("laptop");
@@ -37,6 +38,12 @@ export type LaptopRecord = typeof laptopTable[0] & {
   selected?: boolean;
   lot?: string;
   testResult?: string;
+  ramType?: string;
+  ramCapacityGb?: number;
+  ssdType?: string;
+  ssdCapacityGb?: number;
+  graphicsType?: "GPU" | "iGPU";
+  importMeta?: Record<string, string>;
 };
 
 export type PartRecord = typeof partTable[0] & {
@@ -297,6 +304,24 @@ function isGradedStatus(status: string) {
   return !["Pending Verification", "Pending Grading"].includes(status);
 }
 
+
+function deriveLotLifecycleStatus(lotLaptops: LaptopRecord[]) {
+  const items = lotLaptops.length;
+  if (items === 0) return "Pending";
+
+  const verified = lotLaptops.filter((l) => isVerifiedStatus(l.status)).length;
+  const graded = lotLaptops.filter((l) => isGradedStatus(l.status)).length;
+
+  if (verified === 0) return "Pending";
+  if (verified < items) return "Partially Verified";
+  if (graded === 0) return "Verified";
+  if (graded < items) return "Partially Graded";
+
+  const settledStatuses = new Set(["Ready for Sale", "Sold", "Scrapped", "Missing", "Disposed"]);
+  const completed = lotLaptops.every((l) => settledStatuses.has(l.status));
+  return completed ? "Completed" : "Fully Graded";
+}
+
 function recalculateLotCounters(lotNumber: string, laptops: LaptopRecord[], currentLot: LotRecord) {
   const lotLaptops = laptops.filter((l) => l.lot === lotNumber);
   if (lotLaptops.length === 0) return currentLot;
@@ -304,7 +329,7 @@ function recalculateLotCounters(lotNumber: string, laptops: LaptopRecord[], curr
   const items = lotLaptops.length;
   const verified = lotLaptops.filter((l) => isVerifiedStatus(l.status)).length;
   const graded = lotLaptops.filter((l) => isGradedStatus(l.status)).length;
-  const status = verified >= items ? "Verified" : "Pending";
+  const status = deriveLotLifecycleStatus(lotLaptops);
 
   return {
     ...currentLot,
@@ -750,6 +775,15 @@ export function appReducer(state: AppState, action: Action): AppState {
     }
     case "UPDATE_LAPTOP": {
       const before = state.laptops.find((l) => l.id === action.id);
+      if (before && action.payload.status && !canTransitionLaptopStatus(before.status, action.payload.status)) {
+        return {
+          ...state,
+          alerts: [
+            { id: uid(), title: "Invalid laptop transition", description: `${before.status} → ${action.payload.status} is not allowed`, tone: "red" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
       const nextLaptops = state.laptops.map((l) => (l.id === action.id ? { ...l, ...action.payload } : l));
       const after = nextLaptops.find((l) => l.id === action.id);
       const impactedLots = new Set([before?.lot, after?.lot].filter(Boolean));
@@ -1177,15 +1211,38 @@ export function appReducer(state: AppState, action: Action): AppState {
       return { ...state, ...logs, lots: nextLots, suppliers: nextSuppliers };
     }
     case "UPDATE_LOT": {
+      const currentLot = state.lots.find((l) => l.id === action.id);
+      const invalidStatusTransition = Boolean(
+        currentLot && action.payload.status && !canTransitionLotStatus(currentLot.status, action.payload.status)
+      );
+
       const nextLots = state.lots.map((l) => {
         if (l.id !== action.id) return l;
-        const merged = { ...l, ...action.payload };
+        const merged = {
+          ...l,
+          ...action.payload,
+          status: invalidStatusTransition ? l.status : (action.payload.status ?? l.status),
+        };
         const items = Math.max(0, merged.items);
         const verified = Math.max(0, Math.min(merged.verified, items));
         const graded = Math.max(0, Math.min(merged.graded, verified));
         const status = verified >= items && items > 0 ? "Verified" : merged.status;
-        return { ...merged, items, verified, graded, status };
+        const lifecycleStatus = action.payload.status ? status : deriveLotLifecycleStatus(state.laptops.filter((lp) => lp.lot === l.lot));
+        return { ...merged, items, verified, graded, status: lifecycleStatus };
       });
+
+      if (invalidStatusTransition && currentLot && action.payload.status) {
+        return {
+          ...state,
+          lots: nextLots,
+          suppliers: syncSupplierLotsFromLots(state.suppliers, nextLots),
+          alerts: [
+            { id: uid(), title: "Invalid lot transition", description: `${currentLot.status} → ${action.payload.status} is not allowed`, tone: "red" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
       return { ...state, lots: nextLots, suppliers: syncSupplierLotsFromLots(state.suppliers, nextLots) };
     }
     case "DELETE_LOT": {
@@ -1622,20 +1679,30 @@ export function appReducer(state: AppState, action: Action): AppState {
 }
 
 // ── Selectors ──
-export const selectKpis = (s: AppState) => ({
-  totalLaptops: s.laptops.length,
-  inProcessing: s.laptops.filter((l) => l.status === "In Processing").length,
-  readyForSale: s.laptops.filter((l) => l.status === "Ready for Sale").length,
-  todaysSales: s.sales.filter((sl) => sl.date === isoDate()).reduce((a, sl) => a + sl.total, 0),
-  pendingVerification: s.lots.filter((l) => l.status === "Pending").reduce((a, l) => a + (l.items - l.verified), 0),
-  pendingGrading: s.laptops.filter((l) => l.status === "Pending Grading").length,
-  lowStockParts: s.parts.filter((p) => p.onHand <= p.reorder && p.onHand > 0).length,
-  monthProfit: s.sales.reduce((a, sl) => a + sl.profit, 0),
-  totalPartValue: s.parts.reduce((a, p) => a + p.onHand * p.cost, 0),
-  activeWip: s.wipJobs.filter((w) => w.status !== "Completed").length,
-  cashBalance: s.cashEntries.length > 0 ? s.cashEntries[s.cashEntries.length - 1].balance : 0,
-  ownerCapital: s.ownerEntries.length > 0 ? s.ownerEntries[s.ownerEntries.length - 1].balance : 0,
-});
+export const selectKpis = (s: AppState) => {
+  const totalLaptops = s.laptops.length;
+  const pendingVerification = s.laptops.filter((l) => l.status === "Pending Verification").length;
+  const pendingGrading = s.laptops.filter((l) => l.status === "Pending Grading").length;
+  const verifiedUnits = totalLaptops - pendingVerification;
+  const gradedUnits = totalLaptops - pendingVerification - pendingGrading;
+
+  return {
+    totalLaptops,
+    inProcessing: s.laptops.filter((l) => l.status === "In Processing").length,
+    readyForSale: s.laptops.filter((l) => l.status === "Ready for Sale").length,
+    todaysSales: s.sales.filter((sl) => sl.date === isoDate()).reduce((a, sl) => a + sl.total, 0),
+    pendingVerification,
+    verificationProgressPct: totalLaptops > 0 ? Math.round((verifiedUnits / totalLaptops) * 100) : 0,
+    pendingGrading,
+    gradingProgressPct: totalLaptops > 0 ? Math.round((gradedUnits / totalLaptops) * 100) : 0,
+    lowStockParts: s.parts.filter((p) => p.onHand <= p.reorder && p.onHand > 0).length,
+    monthProfit: s.sales.reduce((a, sl) => a + sl.profit, 0),
+    totalPartValue: s.parts.reduce((a, p) => a + p.onHand * p.cost, 0),
+    activeWip: s.wipJobs.filter((w) => w.status !== "Completed").length,
+    cashBalance: s.cashEntries.length > 0 ? s.cashEntries[s.cashEntries.length - 1].balance : 0,
+    ownerCapital: s.ownerEntries.length > 0 ? s.ownerEntries[s.ownerEntries.length - 1].balance : 0,
+  };
+};
 
 export const selectVatSummary = (s: AppState) => {
   const outputVat = s.sales.reduce((a, sl) => a + sl.vat, 0);

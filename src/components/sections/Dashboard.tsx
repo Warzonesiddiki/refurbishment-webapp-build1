@@ -64,11 +64,12 @@ export function DashboardSection({ onNavigate }: { onNavigate?: (page: string) =
       </div>
 
       {/* ── KPI Row 2 ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard label="Pending Verification" value={kpis.pendingVerification} tone="yellow" icon="⊘" />
+        <KpiCard label="Verification Progress" value={`${kpis.verificationProgressPct}%`} tone="cyan" icon="◔" />
         <KpiCard label="Pending Grading" value={kpis.pendingGrading} tone="yellow" icon="★" />
+        <KpiCard label="Grading Progress" value={`${kpis.gradingProgressPct}%`} tone="purple" icon="◑" />
         <KpiCard label="Low Stock Parts" value={kpis.lowStockParts} tone="red" icon="⚠" />
-        <KpiCard label="This Month Profit" value={`AED ${kpis.monthProfit.toLocaleString()}`} trend="+22%" tone="green" icon="▲" />
       </div>
 
       {/* ── Processing Tracks ── */}
