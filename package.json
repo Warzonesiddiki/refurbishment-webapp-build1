@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0 --strictPort",
     "build": "tsc && vite build",
-    "preview": "vite preview",
+    "preview": "vite preview --host 0.0.0.0 --strictPort",
     "launcher": "python3 tools/local_launcher_gui.py",
     "java:server": "bash tools/run_java_server.sh 8085",
     "test": "vitest",
@@ -31,7 +31,16 @@
     "release": "standard-version",
     "release:dry": "standard-version --dry-run",
     "start:local": "npm run build && npm run preview",
-    "serve:java": "java -jar server/tahir-erp-server.jar"
+    "serve:java": "java -jar server/tahir-erp-server.jar",
+    "dev:lan": "vite --host 0.0.0.0 --port 5173 --strictPort",
+    "preview:lan": "vite preview --host 0.0.0.0 --port 4173 --strictPort",
+    "serve:lan": "npm run dev:lan",
+    "build:pwa": "npm run build && npm run preview:lan",
+    "check:mobile": "npm run typecheck && npx vitest run tests/pwaUtils.test.ts tests/networkUtils.test.ts",
+    "check:ops": "npx vitest run tests/wipPartReplacement.test.ts tests/integration/wipFlow.test.ts",
+    "check:offline-queue": "vitest run tests/offlineQueueUtils.test.ts tests/useOfflineQueue.test.ts tests/offlineQueueBanner.test.tsx",
+    "check:labor-flow": "vitest run tests/wipLaborApproval.test.ts tests/wipQualityGate.test.ts tests/laborTimerUtils.test.ts tests/useLaborTimer.test.ts",
+    "check:replay-analytics": "vitest run tests/browserStorage.test.ts tests/offlineReplayAuditUtils.test.ts tests/offlineReplayAuditPanel.test.tsx tests/wipQualityAnalytics.test.ts tests/wipLaborEfficiency.test.ts tests/wipProductivity.test.ts tests/wipLaborDrilldown.test.ts tests/offlineConflictPolicy.test.ts tests/wipTrackTrend.test.ts tests/offlineEscalation.test.ts tests/useOfflineEscalation.test.ts"
   },
   "dependencies": {
     "clsx": "2.1.1",

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
+  <rect width="180" height="180" rx="36" fill="#0b1221"/>
+  <polygon points="90,26 140,55 140,113 90,142 40,113 40,55" fill="none" stroke="#00f0ff" stroke-width="9"/>
+  <text x="90" y="99" text-anchor="middle" font-size="28" fill="#00f0ff" font-family="Arial, sans-serif">ERP</text>
+</svg>

@@ -11,6 +11,7 @@ import { loadPersistedState } from "@/store/persistence";
 import { LocalStorageAdapter } from "@/store/persistence/LocalStorageAdapter";
 import { useAutoSave } from "@/store/persistence/useAutoSave";
 import { useTabSync } from "@/store/persistence/tabSync";
+import { useRemoteStateSync } from "@/store/persistence/useRemoteStateSync";
 import { useStorageQuota } from "@/store/persistence/quota";
 
 type StoreContextValue = {
@@ -29,6 +30,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   useAutoSave(state, adapter, { debounceMs: 500 });
   useTabSync(state, dispatch);
+  useRemoteStateSync(state, dispatch);
   const quota = useStorageQuota();
 
   const kpis = useMemo(() => selectKpis(state), [state]);
