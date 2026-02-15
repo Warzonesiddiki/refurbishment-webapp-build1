@@ -1,14 +1,9 @@
+import { buildJournalRowsViaV3Pipeline, type JournalRow } from "@/v3/finance/journalProjection";
+
 export type JournalDrilldownScope = "all" | "sales" | "purchases" | "receipts" | "payments";
 export type JournalWindow = "all-time" | "this-month" | "last-30-days";
 
-export type JournalDrilldownRow = {
-  id: string;
-  date: string;
-  source: Exclude<JournalDrilldownScope, "all">;
-  reference: string;
-  counterparty: string;
-  amount: number;
-};
+export type JournalDrilldownRow = JournalRow;
 
 type JournalStateSlice = {
   sales: { id: string; invoice: string; date: string; customer: string; total: number }[];
@@ -18,42 +13,13 @@ type JournalStateSlice = {
 };
 
 export function buildJournalDrilldownRows(state: JournalStateSlice): JournalDrilldownRow[] {
-  const invoiceToCustomer = new Map(state.sales.map((sale) => [sale.invoice, sale.customer]));
-
-  return [
-    ...state.sales.map((sale) => ({
-      id: `sale-${sale.id}`,
-      date: sale.date,
-      source: "sales" as const,
-      reference: sale.invoice,
-      counterparty: sale.customer,
-      amount: sale.total,
-    })),
-    ...state.purchases.map((purchase) => ({
-      id: `purchase-${purchase.id}`,
-      date: purchase.date,
-      source: "purchases" as const,
-      reference: purchase.purchase,
-      counterparty: purchase.supplier,
-      amount: purchase.total,
-    })),
-    ...state.receipts.map((receipt) => ({
-      id: `receipt-${receipt.id}`,
-      date: receipt.date,
-      source: "receipts" as const,
-      reference: receipt.receipt,
-      counterparty: invoiceToCustomer.get(receipt.invoice) ?? "Unknown",
-      amount: receipt.amount,
-    })),
-    ...state.payments.map((payment) => ({
-      id: `payment-${payment.id}`,
-      date: payment.date,
-      source: "payments" as const,
-      reference: payment.payment,
-      counterparty: payment.supplier,
-      amount: payment.amount,
-    })),
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return buildJournalRowsViaV3Pipeline({
+    tenantId: "default",
+    sales: state.sales,
+    purchases: state.purchases,
+    receipts: state.receipts,
+    payments: state.payments,
+  }).rows;
 }
 
 export function filterJournalDrilldownRows(rows: JournalDrilldownRow[], scope: JournalDrilldownScope, window: JournalWindow, now = new Date()) {
