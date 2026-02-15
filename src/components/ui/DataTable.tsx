@@ -43,7 +43,7 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   if (data.length === 0) {
     return (
-      <div className={cn("glass-card corner-marks p-12 text-center", className)}>
+      <div data-component="ui-DataTable" data-testid="component-ui-DataTable" className={cn("glass-card corner-marks p-12 text-center", className)}>
         <div className="text-5xl mb-4 opacity-20">{emptyIcon}</div>
         <h3
           className="text-lg font-bold tracking-wider text-cyan-200/50 mb-2"

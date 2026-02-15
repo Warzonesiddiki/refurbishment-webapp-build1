@@ -9,7 +9,7 @@ type HydrationScreenProps = {
 
 export function HydrationScreen({ state, error, onRetry, onReset }: HydrationScreenProps) {
   return (
-    <div className="min-h-screen bg-grid flex items-center justify-center p-6">
+    <div data-component="Loading-HydrationScreen" data-testid="component-Loading-HydrationScreen" className="min-h-screen bg-grid flex items-center justify-center p-6">
       <div className="glass-card p-8 w-full max-w-lg text-center space-y-4">
         <div className="text-3xl neon-text-cyan animate-pulse">⬡</div>
         {state === "loading" && <p className="text-cyan-200">Loading your data...</p>}

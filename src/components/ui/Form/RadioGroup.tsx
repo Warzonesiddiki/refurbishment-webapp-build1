@@ -19,7 +19,7 @@ export function RadioGroup({
 }) {
   return (
     <FormField name={name} label={label} error={error} touched={touched}>
-      <div className="flex gap-3">
+      <div data-component="ui-Form-RadioGroup" data-testid="component-ui-Form-RadioGroup" className="flex gap-3">
         {options.map((o) => (
           <label key={o.value}>
             <input type="radio" name={name} checked={value === o.value} onChange={() => onChange(o.value)} /> {o.label}

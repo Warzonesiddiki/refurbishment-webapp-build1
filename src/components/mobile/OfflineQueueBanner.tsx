@@ -25,7 +25,7 @@ export function OfflineQueueBanner({ theme = "cyber" }: OfflineQueueBannerProps)
       role="status"
       aria-live="polite"
     >
-      <div className="min-w-0 flex-1">
+      <div data-component="mobile-OfflineQueueBanner" data-testid="component-mobile-OfflineQueueBanner" className="min-w-0 flex-1">
         <p className="font-semibold">Offline queue: {queue.length} pending actions</p>
         <p className="opacity-80">
           {isOnline ? "Connection restored — replay or clear queued actions." : "You are offline — actions are being recorded."}

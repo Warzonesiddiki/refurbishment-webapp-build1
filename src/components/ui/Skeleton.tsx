@@ -6,7 +6,7 @@ export function SkeletonRow({ className }: { className?: string }) {
 
 export function SkeletonCard({ className }: { className?: string }) {
   return (
-    <div className={cn("glass-card p-4 space-y-3", className)}>
+    <div data-component="ui-Skeleton" data-testid="component-ui-Skeleton" className={cn("glass-card p-4 space-y-3", className)}>
       <SkeletonRow className="w-1/3" />
       <SkeletonRow className="w-full" />
       <SkeletonRow className="w-2/3" />

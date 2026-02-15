@@ -9,7 +9,7 @@ export function AuditLogViewer({ logs }: { logs: AuditLogRecord[] }) {
   const filtered = useMemo(() => logs.filter((l) => `${l.action} ${l.entityType} ${l.entityRef ?? ""}`.toLowerCase().includes(search.toLowerCase())), [logs, search]);
 
   return (
-    <div className="glass-card p-4 space-y-3">
+    <div data-component="Audit-AuditLogViewer" data-testid="component-Audit-AuditLogViewer" className="glass-card p-4 space-y-3">
       <h2 className="text-lg font-bold">Audit Log Viewer</h2>
       <AuditSearch value={search} onChange={setSearch} />
       <div className="max-h-[300px] overflow-auto">

@@ -21,7 +21,7 @@ export function SectionHelpHint({ hint }: { hint: SectionHelpHintData }) {
   const tone = hint.tone ?? "cyan";
 
   return (
-    <div className={`glass-card p-4 border space-y-2 ${toneStyles[tone]}`}>
+    <div data-component="ui-SectionHelpHint" data-testid="component-ui-SectionHelpHint" className={`glass-card p-4 border space-y-2 ${toneStyles[tone]}`}>
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-bold" style={{ fontFamily: "var(--font-heading)" }}>
           HELP • {hint.title.toUpperCase()}

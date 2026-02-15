@@ -9,7 +9,7 @@ export function RestorePreview({ backup, preview, onConfirm, onCancel }: { backu
   const [confirmText, setConfirmText] = useState("");
 
   return (
-    <div className="space-y-4">
+    <div data-component="Backup-RestorePreview" data-testid="component-Backup-RestorePreview" className="space-y-4">
       <h3 className="text-lg font-bold">Restore Preview</h3>
       <div className="text-sm">Backup: {backup.backupType} • v{backup.version} • {new Date(backup.exportedAt).toLocaleString()} • {backup.encrypted ? "Encrypted" : "Unencrypted"}</div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">

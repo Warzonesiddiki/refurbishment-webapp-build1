@@ -20,7 +20,7 @@ export function BulkActionBar({ selectedCount, totalCount, selectedIds, actions,
   if (selectedCount === 0) return null;
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 glass-card p-3 flex items-center gap-2">
+    <div data-component="ui-BulkActionBar" data-testid="component-ui-BulkActionBar" className="fixed bottom-4 left-1/2 -translate-x-1/2 glass-card p-3 flex items-center gap-2">
       <span>{selectedCount}/{totalCount} selected</span>
       {actions.map((a) => (
         <button key={a.id} disabled={!!busy} onClick={async () => { setBusy(a.id); await a.onExecute(selectedIds); setBusy(null); }}>

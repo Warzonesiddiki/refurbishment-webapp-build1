@@ -12,7 +12,7 @@ export function ClearDataModal({ onBackupFirst, onConfirm, onCancel }: ClearData
   const canClear = ack && typed === "DELETE";
 
   return (
-    <div className="space-y-4">
+    <div data-component="Settings-ClearDataModal" data-testid="component-Settings-ClearDataModal" className="space-y-4">
       <p className="text-sm text-red-300">This action permanently deletes all data.</p>
       <label className="flex gap-2 text-sm">
         <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />

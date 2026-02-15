@@ -52,7 +52,7 @@ export function Modal({ open, onClose, title, subtitle, badge, badgeTone = "cyan
         if (e.target === overlayRef.current) onClose();
       }}
     >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div data-component="ui-Modal" data-testid="component-ui-Modal" className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <FocusTrap active={open}>
         <div
           className={cn(

@@ -30,7 +30,7 @@ export function NotificationPanel({ alerts, theme, onClear, onClearAll }: Props)
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="relative">
+    <div data-component="ui-NotificationPanel" data-testid="component-ui-NotificationPanel" className="relative">
       <button
         className={cn(
           "relative p-2 rounded-xl transition-all group",

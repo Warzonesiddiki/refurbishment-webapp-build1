@@ -127,7 +127,7 @@ export function BackupRestoreModal({ open, mode, state, onClose, onRestore }: { 
 
   return (
     <Modal open={open} onClose={onClose} title={mode === "EXPORT" ? "Backup Export" : "Backup Import"}>
-      <div className="space-y-3">
+      <div data-component="Backup-BackupRestoreModal" data-testid="component-Backup-BackupRestoreModal" className="space-y-3">
         <PasswordInput value={password} onChange={setPassword} label="Optional backup password" />
         {busy && <BackupProgress progress={progress} label={mode === "EXPORT" ? "Creating backup" : "Validating backup"} />}
         {validationError && <div className="text-red-400 text-sm">{validationError}</div>}

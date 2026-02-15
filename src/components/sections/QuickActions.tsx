@@ -23,7 +23,7 @@ export function QuickActions({ onAction }: { onAction?: (action: ActionKey) => v
   const { trigger } = useUiActionFeedback();
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div data-component="sections-QuickActions" data-testid="component-sections-QuickActions" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {quickActionList.map((item) => (
         <button
           key={item.key}

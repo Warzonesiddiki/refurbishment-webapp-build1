@@ -17,7 +17,7 @@ export function BarChart({ data, height = 160, tone = "cyan" }: Props) {
   const max = Math.max(1, ...data.map((d) => d.value));
 
   return (
-    <div className="w-full" style={{ height }}>
+    <div data-component="ui-BarChart" data-testid="component-ui-BarChart" className="w-full" style={{ height }}>
       <div className="h-full flex items-end gap-2">
         {data.map((d) => {
           const pct = Math.round((d.value / max) * 100);

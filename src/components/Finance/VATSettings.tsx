@@ -8,7 +8,7 @@ export function VATSettings({ config, rates, onConfigChange, onAddRate }: Props)
   const [draft, setDraft] = useState({ code: "STANDARD", name: "Standard", rate: 15, effectiveFrom: new Date().toISOString().slice(0, 10) });
   const validNumber = useMemo(() => validateVATNumber(config.registrationNumber || ""), [config.registrationNumber]);
   return (
-    <div className="space-y-4">
+    <div data-component="Finance-VATSettings" data-testid="component-Finance-VATSettings" className="space-y-4">
       <h2 className="text-xl font-bold">VAT Settings</h2>
       <section className="glass-card p-4 space-y-2">
         <h3 className="font-semibold">Registration Details</h3>

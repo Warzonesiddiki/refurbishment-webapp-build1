@@ -2,7 +2,7 @@ import type { AuditLogRecord } from "@/store/types/AuditTypes";
 
 export function AuditTimeline({ logs }: { logs: AuditLogRecord[] }) {
   return (
-    <div className="glass-card p-4">
+    <div data-component="Audit-AuditTimeline" data-testid="component-Audit-AuditTimeline" className="glass-card p-4">
       <h3 className="font-bold mb-2">Audit Timeline</h3>
       <div className="space-y-2">
         {logs.map((l) => (

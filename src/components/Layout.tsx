@@ -134,7 +134,7 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
   );
 
   return (
-    <div className="flex h-screen bg-grid">
+    <div data-component="Layout" data-testid="component-Layout" className="flex h-screen bg-grid">
       <a
         href="#main-content"
         className={cn(

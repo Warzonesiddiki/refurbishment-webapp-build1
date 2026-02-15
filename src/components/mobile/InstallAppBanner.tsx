@@ -68,7 +68,7 @@ export function InstallAppBanner({ theme }: InstallAppBannerProps) {
           : "rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3"
       }
     >
-      <div className="space-y-2">
+      <div data-component="mobile-InstallAppBanner" data-testid="component-mobile-InstallAppBanner" className="space-y-2">
         {showAndroidInstall ? (
           <p className={theme === "pro" ? "text-xs text-blue-900" : "text-xs text-cyan-200"}>
             Install Tahir ERP on Android for app-like offline access.

@@ -13,7 +13,7 @@ const categories: { title: string; keys: ActionKey[] }[] = [
 
 export function ActionKeyLegend() {
   return (
-    <div className="glass-card corner-marks p-6 space-y-4">
+    <div data-component="sections-ActionKeyLegend" data-testid="component-sections-ActionKeyLegend" className="glass-card corner-marks p-6 space-y-4">
       <div className="flex items-center gap-3">
         <h3 className="text-sm font-bold tracking-[0.15em] text-cyan-300" style={{ fontFamily: 'Orbitron' }}>
           ACTION KEY LEGEND

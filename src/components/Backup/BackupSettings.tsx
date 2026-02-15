@@ -13,7 +13,7 @@ export function BackupSettings({ settings, history, rollbackPoints, onSettingsCh
   onDeleteRollback: (id: string) => void;
 }) {
   return (
-    <div className="space-y-4">
+    <div data-component="Backup-BackupSettings" data-testid="component-Backup-BackupSettings" className="space-y-4">
       <h3 className="text-sm font-bold neon-text-cyan">BACKUP SETTINGS</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
         <label><input type="checkbox" checked={settings.autoReminder} onChange={(e) => onSettingsChange({ autoReminder: e.target.checked })} /> Auto reminder</label>

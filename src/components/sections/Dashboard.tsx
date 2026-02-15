@@ -35,7 +35,7 @@ export function DashboardSection({ onNavigate }: { onNavigate?: (page: string) =
   ];
 
   return (
-    <div className="space-y-6">
+    <div data-component="sections-Dashboard" data-testid="component-sections-Dashboard" className="space-y-6">
       {/* ── Header ── */}
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>

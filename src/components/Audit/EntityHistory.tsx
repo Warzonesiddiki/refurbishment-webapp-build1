@@ -14,7 +14,7 @@ export function EntityHistory({ entityType, entityId, snapshots }: { entityType:
   }, [left, right, snapshots]);
 
   return (
-    <div className="glass-card p-4 space-y-2">
+    <div data-component="Audit-EntityHistory" data-testid="component-Audit-EntityHistory" className="glass-card p-4 space-y-2">
       <h3 className="font-bold">Entity History: {entityType} / {entityId}</h3>
       <div className="flex gap-2">
         <select value={left} onChange={(e) => setLeft(Number(e.target.value))}>{snapshots.map((s, i) => <option key={s.id} value={i}>v{s.version}</option>)}</select>

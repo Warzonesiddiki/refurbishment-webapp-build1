@@ -11,7 +11,7 @@ export function PartSearch({ parts, onSelect }: PartSearchProps) {
   }, [parts, query]);
 
   return (
-    <div className="space-y-2">
+    <div data-component="Parts-PartSearch" data-testid="component-Parts-PartSearch" className="space-y-2">
       <input aria-label="Part Search" value={query} onChange={(e) => setQuery(e.target.value)} />
       {result.map((p) => <button key={p.id} onClick={() => onSelect?.(p)}>{p.sku} | {p.name} | {p.quantity}</button>)}
       {query.length >= 2 && result.length === 0 && <p>No parts found</p>}
