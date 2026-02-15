@@ -61,7 +61,6 @@ type JournalDrilldownRow = {
   reference: string;
   counterparty: string;
   amount: number;
-  note: string;
 };
 
 const dataKeyByReport: Record<ReportKey, ReportDataKey> = {
@@ -165,6 +164,8 @@ export function ReportsPage() {
     const management = generateManagementAccountingSnapshot(state, periodStart, periodEnd);
     const tax = generateTaxationSummary(state, periodStart, periodEnd);
     const agedBalances = generateAgedBalanceSnapshot(state, periodEnd);
+    const invoiceToCustomer = new Map(state.sales.map((sale) => [sale.invoice, sale.customer]));
+
     const journalDrilldown: JournalDrilldownRow[] = [
       ...state.sales.map((sale) => ({
         id: `sale-${sale.id}`,
@@ -173,7 +174,6 @@ export function ReportsPage() {
         reference: sale.invoice,
         counterparty: sale.customer,
         amount: sale.total,
-        note: "Sales invoice posted",
       })),
       ...state.purchases.map((purchase) => ({
         id: `purchase-${purchase.id}`,
@@ -182,16 +182,14 @@ export function ReportsPage() {
         reference: purchase.purchase,
         counterparty: purchase.supplier,
         amount: purchase.total,
-        note: "Supplier purchase booked",
       })),
       ...state.receipts.map((receipt) => ({
         id: `receipt-${receipt.id}`,
         date: receipt.date,
         source: "receipts" as const,
         reference: receipt.receipt,
-        counterparty: state.sales.find((sale) => sale.invoice === receipt.invoice)?.customer ?? "Unknown",
+        counterparty: invoiceToCustomer.get(receipt.invoice) ?? "Unknown",
         amount: receipt.amount,
-        note: `Receipt for ${receipt.invoice}`,
       })),
       ...state.payments.map((payment) => ({
         id: `payment-${payment.id}`,
@@ -200,7 +198,6 @@ export function ReportsPage() {
         reference: payment.payment,
         counterparty: payment.supplier,
         amount: payment.amount,
-        note: `Payment for ${payment.purchase}`,
       })),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -281,8 +278,8 @@ export function ReportsPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <button type="button" onClick={() => setSelected("inventory")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Inventory Value</p><p className="text-lg neon-text-green">{formatMoney(data.summary.inventoryValue)}</p></button>
-        <button type="button" onClick={() => openAccountingDrilldown("receipts")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Receivable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.receivableDue)}</p></button>
-        <button type="button" onClick={() => openAccountingDrilldown("payments")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Payable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.payableDue)}</p></button>
+        <button type="button" onClick={() => openAccountingDrilldown("sales")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Receivable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.receivableDue)}</p></button>
+        <button type="button" onClick={() => openAccountingDrilldown("purchases")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Payable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.payableDue)}</p></button>
         <button type="button" onClick={() => setSelected("wip")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">WIP Cost</p><p className="text-lg neon-text-cyan">{formatMoney(data.summary.wipCost)}</p></button>
       </div>
 
@@ -459,7 +456,7 @@ export function ReportsPage() {
                       onClick={() => setJournalScope(scope)}
                       className={cn("btn-ghost text-xs", journalScope === scope && "border-cyan-400/50 bg-cyan-500/10")}
                     >
-                      {scope === "all" ? "All entries" : scope}
+                      {scope === "all" ? "All entries" : scope.charAt(0).toUpperCase() + scope.slice(1)}
                     </button>
                   ))}
                 </div>

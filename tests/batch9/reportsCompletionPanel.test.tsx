@@ -50,7 +50,7 @@ describe("ReportsPage completion readiness panel", () => {
 
 
 
-  it("allows KPI to open accounting journal drilldown", async () => {
+  it("opens accounting drilldown with sales filter from receivable KPI", async () => {
     await act(async () => {
       render(
         <StoreProvider>
@@ -64,9 +64,27 @@ describe("ReportsPage completion readiness panel", () => {
     });
 
     expect(screen.getByText(/Journal drill-down/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /receipts/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Sales$/i }).className).toContain("bg-cyan-500/10");
   });
 
+
+
+  it("opens accounting drilldown with purchases filter from payable KPI", async () => {
+    await act(async () => {
+      render(
+        <StoreProvider>
+          <ReportsPage />
+        </StoreProvider>
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Payable Due/i }));
+    });
+
+    expect(screen.getByText(/Journal drill-down/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Purchases$/i }).className).toContain("bg-cyan-500/10");
+  });
   it("shows cash flow statement section in reports", async () => {
     await act(async () => {
       render(
