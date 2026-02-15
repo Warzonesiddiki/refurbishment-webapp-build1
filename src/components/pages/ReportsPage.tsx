@@ -53,6 +53,7 @@ type ReportDataKey =
   | "tax";
 
 type JournalDrilldownScope = "all" | "sales" | "purchases" | "receipts" | "payments";
+type JournalWindow = "all-time" | "this-month" | "last-30-days";
 
 type JournalDrilldownRow = {
   id: string;
@@ -64,6 +65,11 @@ type JournalDrilldownRow = {
 };
 
 const journalScopes: JournalDrilldownScope[] = ["all", "sales", "purchases", "receipts", "payments"];
+const journalWindows: { key: JournalWindow; label: string }[] = [
+  { key: "all-time", label: "All time" },
+  { key: "this-month", label: "This month" },
+  { key: "last-30-days", label: "Last 30 days" },
+];
 
 const dataKeyByReport: Record<ReportKey, ReportDataKey> = {
   inventory: "inventory",
@@ -86,6 +92,7 @@ export function ReportsPage() {
   const { trigger } = useUiActionFeedback();
   const [selected, setSelected] = useState<ReportKey>("inventory");
   const [journalScope, setJournalScope] = useState<JournalDrilldownScope>("all");
+  const [journalWindow, setJournalWindow] = useState<JournalWindow>("all-time");
 
   const completionRoadmap = useMemo(() => buildCompletionRoadmap(state), [state]);
 
@@ -229,21 +236,46 @@ export function ReportsPage() {
     };
   }, [state]);
 
-  const filteredJournalRows = useMemo(
-    () => data.journalDrilldown.filter((row) => journalScope === "all" || row.source === journalScope),
-    [data.journalDrilldown, journalScope]
-  );
+  const filteredJournalRows = useMemo(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last30 = new Date(now);
+    last30.setDate(now.getDate() - 30);
+
+    return data.journalDrilldown.filter((row) => {
+      const matchesScope = journalScope === "all" || row.source === journalScope;
+      if (!matchesScope) return false;
+
+      if (journalWindow === "all-time") return true;
+      const rowDate = new Date(row.date);
+      if (Number.isNaN(rowDate.getTime())) return false;
+      if (journalWindow === "this-month") return rowDate >= monthStart;
+      return rowDate >= last30;
+    });
+  }, [data.journalDrilldown, journalScope, journalWindow]);
+
+  const journalTotals = useMemo(() => {
+    const totalAmount = filteredJournalRows.reduce((sum, row) => sum + row.amount, 0);
+    const bySource = filteredJournalRows.reduce<Record<JournalDrilldownScope, number>>(
+      (acc, row) => ({ ...acc, [row.source]: acc[row.source] + row.amount }),
+      { all: 0, sales: 0, purchases: 0, receipts: 0, payments: 0 }
+    );
+    bySource.all = totalAmount;
+    return { totalAmount, bySource };
+  }, [filteredJournalRows]);
 
   const handleSelectReport = (report: ReportKey) => {
     setSelected(report);
     if (report !== "accounting") {
       setJournalScope("all");
+      setJournalWindow("all-time");
     }
   };
 
   const openAccountingDrilldown = (scope: JournalDrilldownScope) => {
     setSelected("accounting");
     setJournalScope(scope);
+    setJournalWindow("all-time");
   };
 
   const exportJournalDrilldownCsv = () => {
@@ -251,8 +283,13 @@ export function ReportsPage() {
       ["Date", "Source", "Reference", "Counterparty", "Amount"],
       ...filteredJournalRows.map((row) => [row.date, row.source, row.reference, row.counterparty, row.amount.toFixed(2)]),
     ];
-    exportCsv(`report-accounting-journal-${journalScope}-${new Date().toISOString().slice(0, 10)}.csv`, rows);
-    trigger("info", `Exported accounting journal (${journalScope})`);
+    exportCsv(`report-accounting-journal-${journalScope}-${journalWindow}-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    trigger("info", `Exported accounting journal CSV (${journalScope}, ${journalWindow})`);
+  };
+
+  const exportJournalDrilldownJson = () => {
+    exportJson(`report-accounting-journal-${journalScope}-${journalWindow}-${new Date().toISOString().slice(0, 10)}.json`, filteredJournalRows);
+    trigger("info", `Exported accounting journal JSON (${journalScope}, ${journalWindow})`);
   };
 
   const handleExport = (format: "excel" | "csv" | "json") => {
@@ -479,9 +516,30 @@ export function ReportsPage() {
                     </button>
                   ))}
                 </div>
-                <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs text-cyan-500/50">Journal drill-down ({filteredJournalRows.length} entries)</p>
-                  <button type="button" className="btn-ghost text-xs" onClick={exportJournalDrilldownCsv}>Export journal CSV</button>
+                  <div className="flex gap-2">
+                    <button type="button" className="btn-ghost text-xs" onClick={exportJournalDrilldownCsv}>Export journal CSV</button>
+                    <button type="button" className="btn-ghost text-xs" onClick={exportJournalDrilldownJson}>Export journal JSON</button>
+                  </div>
+                </div>
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {journalWindows.map((windowOption) => (
+                    <button
+                      key={windowOption.key}
+                      type="button"
+                      onClick={() => setJournalWindow(windowOption.key)}
+                      aria-pressed={journalWindow === windowOption.key}
+                      className={cn("btn-ghost text-xs", journalWindow === windowOption.key && "border-cyan-400/50 bg-cyan-500/10")}
+                    >
+                      {windowOption.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mb-2 grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px]">
+                  <div className="glass-card p-2"><span className="text-cyan-500/50">Total</span><p className="neon-text-green">{formatMoney(journalTotals.totalAmount)}</p></div>
+                  <div className="glass-card p-2"><span className="text-cyan-500/50">Sales</span><p>{formatMoney(journalTotals.bySource.sales)}</p></div>
+                  <div className="glass-card p-2"><span className="text-cyan-500/50">Purchases</span><p>{formatMoney(journalTotals.bySource.purchases)}</p></div>
                 </div>
                 <p className="text-[11px] text-cyan-500/40 mb-2">Showing latest {Math.min(12, filteredJournalRows.length)} row(s)</p>
                 <table className="w-full text-xs">

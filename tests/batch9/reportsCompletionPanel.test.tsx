@@ -4,6 +4,7 @@ import { StoreProvider } from "@/context/StoreContext";
 import { ReportsPage } from "@/components/pages/ReportsPage";
 
 const exportCsvMock = vi.fn();
+const exportJsonMock = vi.fn();
 
 vi.mock("@/hooks/useUiActionFeedback", () => ({
   useUiActionFeedback: () => ({ trigger: vi.fn(), feedback: null }),
@@ -15,7 +16,7 @@ vi.mock("@/hooks/useIdempotentAction", () => ({
 
 vi.mock("@/utils/exporters", () => ({
   exportCsv: (...args: unknown[]) => exportCsvMock(...args),
-  exportJson: vi.fn(),
+  exportJson: (...args: unknown[]) => exportJsonMock(...args),
 }));
 
 describe("ReportsPage completion readiness panel", () => {
@@ -137,9 +138,41 @@ describe("ReportsPage completion readiness panel", () => {
     });
 
     expect(exportCsvMock).toHaveBeenCalledTimes(1);
+    const fileName = exportCsvMock.mock.calls[0][0] as string;
     const rows = exportCsvMock.mock.calls[0][1] as string[][];
+    expect(fileName).toContain("report-accounting-journal-sales-all-time-");
     expect(rows[0]).toEqual(["Date", "Source", "Reference", "Counterparty", "Amount"]);
     expect(rows.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("exports scoped accounting journal as json for selected window", async () => {
+    exportJsonMock.mockClear();
+
+    await act(async () => {
+      render(
+        <StoreProvider>
+          <ReportsPage />
+        </StoreProvider>
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Receivable Due/i }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Last 30 days/i }));
+    });
+
+    const exportJsonButton = await screen.findByRole("button", { name: /Export journal JSON/i });
+
+    await act(async () => {
+      fireEvent.click(exportJsonButton);
+    });
+
+    expect(exportJsonMock).toHaveBeenCalledTimes(1);
+    const jsonFileName = exportJsonMock.mock.calls[0][0] as string;
+    expect(jsonFileName).toContain("report-accounting-journal-sales-last-30-days-");
   });
 
   it("shows cash flow statement section in reports", async () => {
