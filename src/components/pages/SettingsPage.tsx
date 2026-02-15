@@ -39,7 +39,7 @@ export function SettingsPage() {
   const sectionHint = getSettingsSectionHint(activeSection);
 
   return (
-    <div className="space-y-6">
+    <div data-page="settings-page" data-testid="page-settings-page" className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>

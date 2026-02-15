@@ -222,7 +222,7 @@ export function WipJobs() {
   const completionGate = selectedJob ? evaluateWipCompletionGate(selectedJob) : null;
 
   return (
-    <div className="space-y-6">
+    <div data-page="wip-jobs" data-testid="page-wip-jobs" className="space-y-6">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">

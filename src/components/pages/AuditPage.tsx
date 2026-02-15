@@ -29,7 +29,7 @@ export function AuditPage() {
   }, [state.auditLog]);
 
   return (
-    <div className="space-y-6">
+    <div data-page="audit-page" data-testid="page-audit-page" className="space-y-6">
       <h1 className="text-2xl font-bold neon-text-cyan" style={{ fontFamily: "Orbitron" }}>AUDIT & SECURITY</h1>
       <AuditLogViewer logs={logs} />
       <AuditTimeline logs={logs.slice(0, 20)} />

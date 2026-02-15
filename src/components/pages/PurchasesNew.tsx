@@ -25,7 +25,7 @@ export function PurchasesNew() {
   const total = vatData.total;
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div data-page="purchases-new" data-testid="page-purchases-new" className="space-y-6 max-w-5xl">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">

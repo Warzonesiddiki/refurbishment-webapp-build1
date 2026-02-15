@@ -47,7 +47,7 @@ export function PurchasesAll() {
   };
 
   return (
-    <div className="space-y-6">
+    <div data-page="purchases-all" data-testid="page-purchases-all" className="space-y-6">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">

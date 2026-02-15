@@ -44,7 +44,7 @@ export function FinanceVat() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div data-page="finance-vat" data-testid="page-finance-vat" className="space-y-6 max-w-7xl">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">

@@ -43,7 +43,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-grid flex items-center justify-center p-4">
+    <div data-page="login-page" data-testid="page-login-page" className="min-h-screen bg-grid flex items-center justify-center p-4">
       <div className="glass-card neon-border max-w-md w-full p-6 space-y-4">
         <div>
           <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-500/40" style={{ fontFamily: "Share Tech Mono" }}>

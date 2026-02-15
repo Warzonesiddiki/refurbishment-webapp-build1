@@ -108,7 +108,7 @@ export function InventoryLaptops() {
   const totalValue = state.laptops.reduce((a, l) => a + l.cost, 0);
 
   return (
-    <div className="space-y-6">
+    <div data-page="inventory-laptops" data-testid="page-inventory-laptops" className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>

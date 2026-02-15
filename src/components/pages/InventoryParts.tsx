@@ -70,7 +70,7 @@ export function InventoryParts() {
   };
 
   return (
-    <div className="space-y-6">
+    <div data-page="inventory-parts" data-testid="page-inventory-parts" className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
