@@ -49,6 +49,24 @@ describe("ReportsPage completion readiness panel", () => {
 
 
 
+
+  it("allows KPI to open accounting journal drilldown", async () => {
+    await act(async () => {
+      render(
+        <StoreProvider>
+          <ReportsPage />
+        </StoreProvider>
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Receivable Due/i }));
+    });
+
+    expect(screen.getByText(/Journal drill-down/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /receipts/i })).toBeInTheDocument();
+  });
+
   it("shows cash flow statement section in reports", async () => {
     await act(async () => {
       render(

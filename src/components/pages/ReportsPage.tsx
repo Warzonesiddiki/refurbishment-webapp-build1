@@ -52,6 +52,18 @@ type ReportDataKey =
   | "management"
   | "tax";
 
+type JournalDrilldownScope = "all" | "sales" | "purchases" | "receipts" | "payments";
+
+type JournalDrilldownRow = {
+  id: string;
+  date: string;
+  source: Exclude<JournalDrilldownScope, "all">;
+  reference: string;
+  counterparty: string;
+  amount: number;
+  note: string;
+};
+
 const dataKeyByReport: Record<ReportKey, ReportDataKey> = {
   inventory: "inventory",
   "low-stock": "lowStock",
@@ -72,6 +84,7 @@ export function ReportsPage() {
   const { run: logExport } = useIdempotentAction("export-reports", "report");
   const { trigger } = useUiActionFeedback();
   const [selected, setSelected] = useState<ReportKey>("inventory");
+  const [journalScope, setJournalScope] = useState<JournalDrilldownScope>("all");
 
   const completionRoadmap = useMemo(() => buildCompletionRoadmap(state), [state]);
 
@@ -152,6 +165,44 @@ export function ReportsPage() {
     const management = generateManagementAccountingSnapshot(state, periodStart, periodEnd);
     const tax = generateTaxationSummary(state, periodStart, periodEnd);
     const agedBalances = generateAgedBalanceSnapshot(state, periodEnd);
+    const journalDrilldown: JournalDrilldownRow[] = [
+      ...state.sales.map((sale) => ({
+        id: `sale-${sale.id}`,
+        date: sale.date,
+        source: "sales" as const,
+        reference: sale.invoice,
+        counterparty: sale.customer,
+        amount: sale.total,
+        note: "Sales invoice posted",
+      })),
+      ...state.purchases.map((purchase) => ({
+        id: `purchase-${purchase.id}`,
+        date: purchase.date,
+        source: "purchases" as const,
+        reference: purchase.purchase,
+        counterparty: purchase.supplier,
+        amount: purchase.total,
+        note: "Supplier purchase booked",
+      })),
+      ...state.receipts.map((receipt) => ({
+        id: `receipt-${receipt.id}`,
+        date: receipt.date,
+        source: "receipts" as const,
+        reference: receipt.receipt,
+        counterparty: state.sales.find((sale) => sale.invoice === receipt.invoice)?.customer ?? "Unknown",
+        amount: receipt.amount,
+        note: `Receipt for ${receipt.invoice}`,
+      })),
+      ...state.payments.map((payment) => ({
+        id: `payment-${payment.id}`,
+        date: payment.date,
+        source: "payments" as const,
+        reference: payment.payment,
+        counterparty: payment.supplier,
+        amount: payment.amount,
+        note: `Payment for ${payment.purchase}`,
+      })),
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const summary = {
       inventoryValue: inventory.reduce((sum, row) => sum + row.value, 0) + parts.reduce((sum, row) => sum + row.value, 0),
@@ -160,8 +211,34 @@ export function ReportsPage() {
       wipCost: wip.reduce((sum, row) => sum + row.total, 0),
     };
 
-    return { inventory: [...inventory, ...parts], lowStock, aging, track, wip, profit, payables, receivables, accounting, cashflow, management, tax, agedBalances, summary };
+    return {
+      inventory: [...inventory, ...parts],
+      lowStock,
+      aging,
+      track,
+      wip,
+      profit,
+      payables,
+      receivables,
+      accounting,
+      cashflow,
+      management,
+      tax,
+      agedBalances,
+      summary,
+      journalDrilldown,
+    };
   }, [state]);
+
+  const filteredJournalRows = useMemo(
+    () => data.journalDrilldown.filter((row) => journalScope === "all" || row.source === journalScope),
+    [data.journalDrilldown, journalScope]
+  );
+
+  const openAccountingDrilldown = (scope: JournalDrilldownScope) => {
+    setSelected("accounting");
+    setJournalScope(scope);
+  };
 
   const handleExport = (format: "excel" | "csv" | "json") => {
     logExport(`report-${format}`, { format, report: selected });
@@ -203,10 +280,10 @@ export function ReportsPage() {
       <SectionHelpHint hint={getPageSectionHint("reports")} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">Inventory Value</p><p className="text-lg neon-text-green">{formatMoney(data.summary.inventoryValue)}</p></div>
-        <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">Receivable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.receivableDue)}</p></div>
-        <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">Payable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.payableDue)}</p></div>
-        <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">WIP Cost</p><p className="text-lg neon-text-cyan">{formatMoney(data.summary.wipCost)}</p></div>
+        <button type="button" onClick={() => setSelected("inventory")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Inventory Value</p><p className="text-lg neon-text-green">{formatMoney(data.summary.inventoryValue)}</p></button>
+        <button type="button" onClick={() => openAccountingDrilldown("receipts")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Receivable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.receivableDue)}</p></button>
+        <button type="button" onClick={() => openAccountingDrilldown("payments")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Payable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.payableDue)}</p></button>
+        <button type="button" onClick={() => setSelected("wip")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">WIP Cost</p><p className="text-lg neon-text-cyan">{formatMoney(data.summary.wipCost)}</p></button>
       </div>
 
 
@@ -369,9 +446,46 @@ export function ReportsPage() {
           {selected === "accounting" && (
             <div className="space-y-4">
               <div className="grid md:grid-cols-3 gap-3">
-                <div className="glass-card p-3"><p className="text-xs text-cyan-500/40">P&L Net Profit</p><p className="neon-text-green">{formatMoney(data.accounting.profitLoss.netProfit)}</p></div>
-                <div className="glass-card p-3"><p className="text-xs text-cyan-500/40">Balance Check</p><p className={data.accounting.balanceSheet.balanceCheck ? "text-green-300" : "text-red-400"}>{data.accounting.balanceSheet.balanceCheck ? "Balanced" : "Unbalanced"}</p></div>
-                <div className="glass-card p-3"><p className="text-xs text-cyan-500/40">VAT Net</p><p className="text-yellow-300">{formatMoney(data.accounting.vat.netVAT)}</p></div>
+                <button type="button" onClick={() => setJournalScope("sales")} className="glass-card p-3 text-left"><p className="text-xs text-cyan-500/40">P&L Net Profit</p><p className="neon-text-green">{formatMoney(data.accounting.profitLoss.netProfit)}</p></button>
+                <button type="button" onClick={() => setJournalScope("all")} className="glass-card p-3 text-left"><p className="text-xs text-cyan-500/40">Balance Check</p><p className={data.accounting.balanceSheet.balanceCheck ? "text-green-300" : "text-red-400"}>{data.accounting.balanceSheet.balanceCheck ? "Balanced" : "Unbalanced"}</p></button>
+                <button type="button" onClick={() => setJournalScope("purchases")} className="glass-card p-3 text-left"><p className="text-xs text-cyan-500/40">VAT Net</p><p className="text-yellow-300">{formatMoney(data.accounting.vat.netVAT)}</p></button>
+              </div>
+              <div className="glass-card p-3">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {(["all", "sales", "purchases", "receipts", "payments"] as const).map((scope) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => setJournalScope(scope)}
+                      className={cn("btn-ghost text-xs", journalScope === scope && "border-cyan-400/50 bg-cyan-500/10")}
+                    >
+                      {scope === "all" ? "All entries" : scope}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-cyan-500/50 mb-2">Journal drill-down ({filteredJournalRows.length} entries)</p>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr>
+                      <th className="py-2 px-2 text-left">Date</th>
+                      <th className="py-2 px-2 text-left">Source</th>
+                      <th className="py-2 px-2 text-left">Reference</th>
+                      <th className="py-2 px-2 text-left">Counterparty</th>
+                      <th className="py-2 px-2 text-left">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredJournalRows.slice(0, 12).map((row) => (
+                      <tr key={row.id}>
+                        <td className="py-1 px-2 text-cyan-100/70">{row.date}</td>
+                        <td className="py-1 px-2 text-cyan-300/70">{row.source}</td>
+                        <td className="py-1 px-2 neon-text-cyan">{row.reference}</td>
+                        <td className="py-1 px-2 text-cyan-100/70">{row.counterparty}</td>
+                        <td className="py-1 px-2 text-yellow-300">{formatMoney(row.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
