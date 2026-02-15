@@ -42,4 +42,7 @@ Track execution progress for `NEXT_GEN_V3_ARCHITECTURE_PLAN.md` and enforce meas
 1. ✅ Introduced persistent event store adapter abstraction with in-memory + localStorage-backed implementations (`src/v3/events/persistentEventStore.ts`)
 2. ✅ Added journal projection snapshot/rebuild primitives (`src/v3/finance/journalProjection.ts`)
 3. ✅ Started dual-write adapter pilot for sales commands (`src/v3/migration/salesDualWriteAdapter.ts`)
-4. ⏳ Add command/query API contracts and server-side gateway scaffold
+4. ✅ Added command/query API contracts and in-memory gateway scaffold (`src/v3/api/contracts.ts`, `src/v3/api/gateway.ts`)
+
+5. ⏳ Introduce durable projection worker jobs (incremental + scheduled rebuild)
+6. ⏳ Add parity dashboard for dual-write drift detection
