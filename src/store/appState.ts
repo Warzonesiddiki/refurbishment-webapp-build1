@@ -10,6 +10,7 @@
 import { laptopTable, partTable, activityFeed, alertList } from "@/data/mockData";
 import { makeSequenceGenerator, computeVat, canAdvance, trackStages } from "@/domain";
 import { canTransitionLaptopStatus, canTransitionLotStatus } from "@/domain/statusTransitions";
+import { buildHarvestedPartName, calculateReplacementNetCost, normalizeReplacementDestination } from "@/utils/wipReplacement";
 
 // ── Sequence Generators ──
 const seqLaptop = makeSequenceGenerator("laptop");
@@ -50,6 +51,7 @@ export type PartRecord = typeof partTable[0] & {
   id: string;
   /** Reserved quantity (allocated to WIP, etc.) */
   reserved?: number;
+  importMeta?: Record<string, string>;
 };
 
 export type WipRecord = {
@@ -68,9 +70,21 @@ export type WipRecord = {
   opened: string;
   diagnosisNotes: string;
   parts: { name: string; barcode: string; cost: number }[];
-  laborEntries: { tech: string; hours: number; rate: number; date: string }[];
+  laborEntries: { tech: string; hours: number; rate: number; date: string; source?: "manual" | "timer"; approved?: boolean; approvedBy?: string; startedAt?: string; endedAt?: string }[];
   history: { ts: string; action: string; user: string }[];
 };
+
+export type WipPartReplacementInput = {
+  component: string;
+  name: string;
+  category?: string;
+  spec?: string;
+  condition?: string;
+  estimatedValue?: number;
+  removedSerial?: string;
+  destination?: "Harvest QA Bin" | "Scrap Bin";
+};
+
 
 export type SaleRecord = {
   id: string;
@@ -726,8 +740,16 @@ export type Action =
   | { type: "UPDATE_WIP"; id: string; payload: Partial<WipRecord> }
   | { type: "WIP_MOVE_STAGE"; wipId: string; toStage: string }
   | { type: "WIP_ADD_PART"; wipId: string; partBarcode: string }
+  | {
+    type: "WIP_REPLACE_PART";
+    wipId: string;
+    installedPartBarcode: string;
+    removedPart: WipPartReplacementInput;
+    technician?: string;
+  }
   | { type: "WIP_REMOVE_PART"; wipId: string; index: number }
-  | { type: "WIP_ADD_LABOR"; wipId: string; tech: string; hours: number }
+  | { type: "WIP_ADD_LABOR"; wipId: string; tech: string; hours: number; source?: "manual" | "timer"; startedAt?: string; endedAt?: string }
+  | { type: "WIP_APPROVE_LABOR_ENTRY"; wipId: string; index: number; approvedBy: string }
   | { type: "WIP_UPDATE_DIAGNOSIS"; wipId: string; notes: string }
   | { type: "WIP_COMPLETE"; wipId: string }
   | { type: "ADD_ACTIVITY"; payload: ActivityItem }
@@ -1468,6 +1490,143 @@ export function appReducer(state: AppState, action: Action): AppState {
       };
     }
 
+    case "WIP_REPLACE_PART": {
+      const wip = state.wipJobs.find((w) => w.id === action.wipId);
+      if (!wip) return state;
+
+      const installedPart = state.parts.find((p) => p.barcode.toUpperCase() === action.installedPartBarcode.toUpperCase());
+      if (!installedPart) return state;
+
+      const normalizedInstalled = normalizePart(installedPart);
+      const reserved = normalizedInstalled.reserved ?? 0;
+      const available = normalizedInstalled.onHand - reserved;
+      if (available <= 0) {
+        return {
+          ...state,
+          alerts: [
+            { id: uid(), title: "Out of stock", description: `${installedPart.name} (${installedPart.barcode}) is not available`, tone: "red" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
+      const removedName = action.removedPart.name.trim();
+      if (!removedName) return state;
+
+      const nextInstalled = normalizePart({ ...normalizedInstalled, reserved: reserved + 1 } as PartRecord);
+      const harvestBarcode = generators.part(new Date());
+      const destination = normalizeReplacementDestination(action.removedPart.destination);
+      const recoveredValue = Math.max(0, action.removedPart.estimatedValue ?? 0);
+      const harvestedPart: PartRecord = normalizePart({
+        id: uid(),
+        barcode: harvestBarcode,
+        name: buildHarvestedPartName(removedName),
+        category: action.removedPart.category || action.removedPart.component || "Harvested",
+        spec: action.removedPart.spec || `Recovered from ${wip.wip}`,
+        condition: action.removedPart.condition || "Refurbished",
+        onHand: 1,
+        available: 1,
+        reorder: 0,
+        cost: recoveredValue,
+        importMeta: action.removedPart.removedSerial?.trim() ? { removedSerial: action.removedPart.removedSerial.trim() } : undefined,
+        location: destination,
+        reserved: 0,
+      });
+
+      const nextParts = state.parts
+        .map((p) => (p.id === installedPart.id ? nextInstalled : p))
+        .concat(harvestedPart);
+
+      const installedWipPart = {
+        name: installedPart.name,
+        barcode: installedPart.barcode,
+        cost: calculateReplacementNetCost(installedPart.cost, recoveredValue),
+      };
+      const nextWipParts = [...wip.parts, installedWipPart];
+      const nextWipCost = nextWipParts.reduce((a, x) => a + x.cost, 0);
+      const tech = action.technician?.trim() || systemUser();
+
+      const nextWip: WipRecord = {
+        ...wip,
+        parts: nextWipParts,
+        partsUsed: nextWipParts.length,
+        partsCost: nextWipCost,
+        history: [
+          ...wip.history,
+          {
+            ts: new Date().toLocaleString(),
+            action: `Part replaced (${action.removedPart.component}): installed ${installedPart.name}, harvested ${harvestedPart.barcode} -> ${destination}`,
+            user: tech,
+          },
+        ],
+      };
+
+      const logs = appendLogs(
+        state,
+        {
+          entityType: "part",
+          entityId: installedPart.id,
+          ref: installedPart.barcode,
+          action: "reserve",
+          from: `reserved=${reserved}`,
+          to: `reserved=${reserved + 1}`,
+          qty: 1,
+          note: `Replacement install for ${wip.wip}`,
+        },
+        {
+          entityType: "wip",
+          entityId: wip.id,
+          ref: wip.wip,
+          action: "replace_part",
+          payload: {
+            installedPartBarcode: installedPart.barcode,
+            harvestedPartBarcode: harvestedPart.barcode,
+            removedPart: action.removedPart,
+          },
+        }
+      );
+
+      const harvestMovement: MovementLogRecord = {
+        id: uid(),
+        ts: nowTs(),
+        entityType: "part",
+        entityId: harvestedPart.id,
+        ref: harvestedPart.barcode,
+        action: "harvest_in",
+        qty: 1,
+        note: `Recovered from ${wip.wip}`,
+        user: tech,
+      };
+
+      const harvestAudit: AuditLogRecord = {
+        id: uid(),
+        ts: nowTs(),
+        entityType: "part",
+        entityId: harvestedPart.id,
+        ref: harvestedPart.barcode,
+        action: "harvest_in",
+        payload: {
+          sourceWip: wip.wip,
+          sourceLaptop: wip.laptop,
+          component: action.removedPart.component,
+          removedPartName: removedName,
+          removedSerial: action.removedPart.removedSerial?.trim() || null,
+          destination,
+          recoveredValue,
+          technician: tech,
+        },
+        user: tech,
+      };
+
+      return {
+        ...state,
+        parts: nextParts,
+        wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
+        movementLog: [harvestMovement, ...logs.movementLog].slice(0, 1000),
+        auditLog: [harvestAudit, ...logs.auditLog].slice(0, 1000),
+      };
+    }
+
     case "WIP_REMOVE_PART": {
       const wip = state.wipJobs.find((w) => w.id === action.wipId);
       if (!wip) return state;
@@ -1535,6 +1694,10 @@ export function appReducer(state: AppState, action: Action): AppState {
         hours: action.hours,
         rate: state.settings.laborRate,
         date: isoDate(),
+        source: action.source || "manual",
+        approved: action.source === "timer" ? false : true,
+        startedAt: action.startedAt,
+        endedAt: action.endedAt,
       };
       const laborEntries = [...wip.laborEntries, entry];
       const laborHrs = laborEntries.reduce((a, x) => a + x.hours, 0);
@@ -1548,9 +1711,34 @@ export function appReducer(state: AppState, action: Action): AppState {
       const logs = appendLogs(
         state,
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_add", qty: action.hours, note: action.tech },
-        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_add", payload: { tech: action.tech, hours: action.hours } }
+        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_add", payload: { tech: action.tech, hours: action.hours, source: action.source || "manual" } }
       );
 
+      return {
+        ...state,
+        ...logs,
+        wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
+      };
+    }
+
+    case "WIP_APPROVE_LABOR_ENTRY": {
+      const wip = state.wipJobs.find((w) => w.id === action.wipId);
+      if (!wip) return state;
+      const target = wip.laborEntries[action.index];
+      if (!target) return state;
+      const laborEntries = wip.laborEntries.map((entry, idx) =>
+        idx === action.index ? { ...entry, approved: true, approvedBy: action.approvedBy } : entry
+      );
+      const nextWip: WipRecord = {
+        ...wip,
+        laborEntries,
+        history: [...wip.history, { ts: new Date().toLocaleString(), action: `Labor approved: ${target.hours}h (${target.tech})`, user: action.approvedBy }],
+      };
+      const logs = appendLogs(
+        state,
+        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_approve", qty: target.hours, note: action.approvedBy },
+        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_approve", payload: { index: action.index, approvedBy: action.approvedBy } }
+      );
       return {
         ...state,
         ...logs,

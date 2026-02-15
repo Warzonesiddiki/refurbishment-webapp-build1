@@ -10,3 +10,4 @@ export * from "@/store/persistence/backup";
 export * from "@/store/persistence/validateBackup";
 export * from "@/store/persistence/tabSync";
 export * from "@/store/persistence/PersistenceProvider";
+export * from "@/store/persistence/useRemoteStateSync";

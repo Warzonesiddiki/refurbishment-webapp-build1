@@ -5,6 +5,16 @@ import { nextWipNumber } from "@/utils/dateUtils";
 import { trackStages } from "@/domain";
 import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
 import { getPageSectionHint } from "@/components/pages/pageSectionHints";
+import { REPLACEMENT_DESTINATIONS } from "@/utils/wipReplacement";
+import { useOfflineQueue } from "@/hooks/useOfflineQueue";
+import { evaluateWipCompletionGate } from "@/utils/wipQualityGate";
+import { useLaborTimer } from "@/hooks/useLaborTimer";
+import { formatElapsed, millisecondsToHours } from "@/utils/laborTimer";
+import { computeWipQualityAnalytics } from "@/utils/wipQualityAnalytics";
+import { computeWipLaborEfficiency } from "@/utils/wipLaborEfficiency";
+import { computeTechnicianProductivityByTrack } from "@/utils/wipProductivity";
+import { computeWipLaborDrilldown, laborDrilldownToCsv } from "@/utils/wipLaborDrilldown";
+import { computeTrackProductivityTrends } from "@/utils/wipTrackTrend";
 
 const priorityColors: Record<string, string> = { High: "cyber-badge-red", Normal: "cyber-badge-yellow", Low: "cyber-badge-green" };
 const statusColors: Record<string, string> = { "In Progress": "cyber-badge-purple", Active: "cyber-badge-cyan", "Awaiting Parts": "cyber-badge-yellow", Completed: "cyber-badge-green" };
@@ -22,7 +32,18 @@ export function WipJobs() {
   const [addPartBarcode, setAddPartBarcode] = useState("");
   const [addLaborTech, setAddLaborTech] = useState("");
   const [addLaborHours, setAddLaborHours] = useState(0);
+  const [laborApprover, setLaborApprover] = useState("Supervisor");
   const [diagNotes, setDiagNotes] = useState("");
+  const [replaceInstalledBarcode, setReplaceInstalledBarcode] = useState("");
+  const [replaceRemovedName, setReplaceRemovedName] = useState("");
+  const [replaceRemovedComponent, setReplaceRemovedComponent] = useState("RAM");
+  const [replaceRemovedSpec, setReplaceRemovedSpec] = useState("");
+  const [replaceRemovedCondition, setReplaceRemovedCondition] = useState("Refurbished");
+  const [replaceEstimatedValue, setReplaceEstimatedValue] = useState(0);
+  const [replaceRemovedSerial, setReplaceRemovedSerial] = useState("");
+  const [replaceDestination, setReplaceDestination] = useState<(typeof REPLACEMENT_DESTINATIONS)[number]>("Harvest QA Bin");
+  const { enqueue } = useOfflineQueue();
+  const laborTimer = useLaborTimer();
 
   const filtered = useMemo(() => {
     let data = state.wipJobs;
@@ -38,6 +59,11 @@ export function WipJobs() {
   const inProgressCount = state.wipJobs.filter(w => w.status === "In Progress").length;
   const awaitingParts = state.wipJobs.filter(w => w.status === "Awaiting Parts").length;
   const totalPartsCost = state.wipJobs.reduce((a, w) => a + w.partsCost, 0);
+  const qualityAnalytics = computeWipQualityAnalytics(state.wipJobs);
+  const laborEfficiency = computeWipLaborEfficiency(state.wipJobs);
+  const productivityTop = computeTechnicianProductivityByTrack(state.wipJobs).slice(0, 5);
+  const laborDrilldown = computeWipLaborDrilldown(state.wipJobs);
+  const trackTrends = computeTrackProductivityTrends(state.wipJobs).slice(0, 5);
 
   const createWip = () => {
     if (!newWip.laptop) return;
@@ -67,6 +93,9 @@ export function WipJobs() {
   const addPartToWip = () => {
     if (!selectedJob || !addPartBarcode) return;
     dispatch({ type: "WIP_ADD_PART", wipId: selectedJob.id, partBarcode: addPartBarcode.trim() });
+    if (!navigator.onLine) {
+      enqueue({ type: "WIP_ADD_PART", summary: `Queued part add for ${selectedJob.wip}`, payload: { partBarcode: addPartBarcode.trim() } });
+    }
     setAddPartBarcode("");
   };
 
@@ -75,11 +104,82 @@ export function WipJobs() {
     dispatch({ type: "WIP_REMOVE_PART", wipId: selectedJob.id, index: idx });
   };
 
+  const replacePartInWip = () => {
+    if (!selectedJob || !replaceInstalledBarcode.trim() || !replaceRemovedName.trim()) return;
+
+    dispatch({
+      type: "WIP_REPLACE_PART",
+      wipId: selectedJob.id,
+      installedPartBarcode: replaceInstalledBarcode.trim(),
+      removedPart: {
+        component: replaceRemovedComponent.trim() || "Component",
+        name: replaceRemovedName.trim(),
+        spec: replaceRemovedSpec.trim() || undefined,
+        condition: replaceRemovedCondition.trim() || undefined,
+        estimatedValue: replaceEstimatedValue > 0 ? replaceEstimatedValue : undefined,
+        removedSerial: replaceRemovedSerial.trim() || undefined,
+        destination: replaceDestination,
+      },
+    });
+
+    if (!navigator.onLine) {
+      enqueue({
+        type: "WIP_REPLACE_PART",
+        summary: `Queued replacement for ${selectedJob.wip}`,
+        payload: { installedPartBarcode: replaceInstalledBarcode.trim(), removedName: replaceRemovedName.trim() },
+      });
+    }
+
+    setReplaceInstalledBarcode("");
+    setReplaceRemovedName("");
+    setReplaceRemovedSpec("");
+    setReplaceEstimatedValue(0);
+    setReplaceRemovedSerial("");
+    setReplaceDestination("Harvest QA Bin");
+  };
+
   const addLabor = () => {
     if (!selectedJob || !addLaborTech || addLaborHours <= 0) return;
-    dispatch({ type: "WIP_ADD_LABOR", wipId: selectedJob.id, tech: addLaborTech, hours: addLaborHours });
+    dispatch({ type: "WIP_ADD_LABOR", wipId: selectedJob.id, tech: addLaborTech, hours: addLaborHours, source: "manual" });
+    if (!navigator.onLine) {
+      enqueue({
+        type: "WIP_ADD_LABOR",
+        summary: `Queued labor entry for ${selectedJob.wip}`,
+        payload: { tech: addLaborTech, hours: addLaborHours },
+      });
+    }
     setAddLaborTech("");
     setAddLaborHours(0);
+  };
+
+
+  const stopLaborTimer = () => {
+    if (!selectedJob || !addLaborTech) return;
+    const session = laborTimer.stop();
+    if (!session) return;
+    const hours = Number(millisecondsToHours(session.elapsedMs).toFixed(2));
+    if (hours <= 0) return;
+    dispatch({
+      type: "WIP_ADD_LABOR",
+      wipId: selectedJob.id,
+      tech: addLaborTech,
+      hours,
+      source: "timer",
+      startedAt: new Date(session.start).toISOString(),
+      endedAt: new Date(session.end).toISOString(),
+    });
+    if (!navigator.onLine) {
+      enqueue({
+        type: "WIP_ADD_LABOR",
+        summary: `Queued timed labor entry for ${selectedJob.wip}`,
+        payload: { tech: addLaborTech, hours, source: "timer" },
+      });
+    }
+  };
+
+  const approveLaborEntry = (index: number) => {
+    if (!selectedJob || !laborApprover.trim()) return;
+    dispatch({ type: "WIP_APPROVE_LABOR_ENTRY", wipId: selectedJob.id, index, approvedBy: laborApprover.trim() });
   };
 
   const saveDiagnosis = () => {
@@ -87,8 +187,21 @@ export function WipJobs() {
     dispatch({ type: "WIP_UPDATE_DIAGNOSIS", wipId: selectedJob.id, notes: diagNotes });
   };
 
+  const exportLaborDrilldown = () => {
+    const csv = laborDrilldownToCsv(laborDrilldown);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `wip-labor-drilldown-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const completeJob = () => {
     if (!selectedJob) return;
+    const gate = evaluateWipCompletionGate(selectedJob);
+    if (!gate.canComplete) return;
     dispatch({ type: "WIP_COMPLETE", wipId: selectedJob.id });
   };
 
@@ -106,6 +219,7 @@ export function WipJobs() {
 
   const laborCost = selectedJob ? selectedJob.laborEntries.reduce((a, l) => a + l.hours * l.rate, 0) : 0;
   const totalJobCost = selectedJob ? selectedJob.partsCost + laborCost : 0;
+  const completionGate = selectedJob ? evaluateWipCompletionGate(selectedJob) : null;
 
   return (
     <div className="space-y-6">
@@ -122,12 +236,77 @@ export function WipJobs() {
 
       <SectionHelpHint hint={getPageSectionHint("wipJobs")} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-10 gap-4">
         <KpiCard label="Active Jobs" value={activeCount} tone="cyan" icon="⬢" />
         <KpiCard label="In Progress" value={inProgressCount} tone="purple" icon="⚙" />
         <KpiCard label="Awaiting Parts" value={awaitingParts} tone="yellow" icon="⏳" />
         <KpiCard label="Completed Today" value={0} tone="green" icon="✓" />
         <KpiCard label="Total Parts Cost" value={`AED ${totalPartsCost}`} tone="magenta" icon="◈" />
+        <KpiCard label="Ready to Complete" value={qualityAnalytics.readyToComplete} tone="green" icon="◎" />
+        <KpiCard label="Labor Approval Pending" value={qualityAnalytics.pendingLaborApproval} tone="yellow" icon="!" />
+        <KpiCard label="Approved Labor Rate" value={`${qualityAnalytics.approvedLaborRatePct}%`} tone="purple" icon="◔" />
+        <KpiCard label="Labor Variance (h)" value={laborEfficiency.varianceHours} tone={laborEfficiency.varianceHours > 0 ? "yellow" : "green"} icon="Δ" />
+        <KpiCard label="Labor Efficiency" value={`${laborEfficiency.efficiencyPct}%`} tone="cyan" icon="◍" />
+      </div>
+
+
+      <div className="glass-card p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold neon-text-cyan" style={{ fontFamily: "var(--font-heading)" }}>TECHNICIAN PRODUCTIVITY BY TRACK</p>
+          <span className="text-[10px] text-cyan-500/40">Top 5 by labor hours</span>
+        </div>
+        {productivityTop.length === 0 ? (
+          <p className="text-xs text-cyan-500/40">No labor entries yet.</p>
+        ) : (
+          <div className="space-y-1">
+            {productivityTop.map((row) => (
+              <div key={`${row.tech}-${row.track}`} className="flex items-center justify-between text-xs border-b border-cyan-500/10 py-1">
+                <span>{row.tech} • {row.track}</span>
+                <span style={{ fontFamily: "var(--font-mono)" }}>{row.hours}h ({row.entries} entries)</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+
+      <div className="glass-card p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold neon-text-cyan" style={{ fontFamily: "var(--font-heading)" }}>LABOR VARIANCE DRILLDOWN (FINANCE)</p>
+          <button className="btn-ghost text-[11px]" onClick={exportLaborDrilldown}>Export CSV</button>
+        </div>
+        {laborDrilldown.length === 0 ? (
+          <p className="text-xs text-cyan-500/40">No labor data yet.</p>
+        ) : (
+          <div className="space-y-1">
+            {laborDrilldown.map((row) => (
+              <div key={row.track} className="flex items-center justify-between text-xs border-b border-cyan-500/10 py-1">
+                <span>{row.track} • jobs {row.jobs}</span>
+                <span style={{ fontFamily: "var(--font-mono)" }}>Δh {row.varianceHours} • Δcost AED {row.varianceCost}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+
+      <div className="glass-card p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold neon-text-cyan" style={{ fontFamily: "var(--font-heading)" }}>TRACK PRODUCTIVITY TRENDS</p>
+          <span className="text-[10px] text-cyan-500/40">Average hours per labor entry</span>
+        </div>
+        {trackTrends.length === 0 ? (
+          <p className="text-xs text-cyan-500/40">No trend data yet.</p>
+        ) : (
+          <div className="space-y-1">
+            {trackTrends.map((row) => (
+              <div key={row.track} className="flex items-center justify-between text-xs border-b border-cyan-500/10 py-1">
+                <span>{row.track}</span>
+                <span style={{ fontFamily: "var(--font-mono)" }}>{row.avgHoursPerEntry}h avg ({row.entries} entries)</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="glass-card p-4">
@@ -225,6 +404,37 @@ export function WipJobs() {
                   <input value={addPartBarcode} onChange={e => setAddPartBarcode(e.target.value)} placeholder="Scan part barcode..." className="flex-1 px-3 py-2 rounded-lg text-sm" style={{ fontFamily: "var(--font-mono)" }} />
                   <button className="btn-cyber text-xs" onClick={addPartToWip}>+ Add Part</button>
                 </div>
+
+                <div className="glass-card p-3 border border-cyan-500/10 space-y-2">
+                  <p className="text-[11px] text-cyan-400/50" style={{ fontFamily: "var(--font-mono)" }}>
+                    Replacement flow: install new part + harvest removed part to inventory.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <input value={replaceInstalledBarcode} onChange={e => setReplaceInstalledBarcode(e.target.value)} placeholder="Installed part barcode" className="px-3 py-2 rounded-lg text-sm" style={{ fontFamily: "var(--font-mono)" }} />
+                    <select value={replaceRemovedComponent} onChange={e => setReplaceRemovedComponent(e.target.value)} className="px-3 py-2 rounded-lg text-sm">
+                      <option>RAM</option>
+                      <option>SSD</option>
+                      <option>Battery</option>
+                      <option>Keyboard</option>
+                      <option>Other</option>
+                    </select>
+                    <input value={replaceRemovedName} onChange={e => setReplaceRemovedName(e.target.value)} placeholder="Removed part name" className="px-3 py-2 rounded-lg text-sm" />
+                    <input value={replaceRemovedSpec} onChange={e => setReplaceRemovedSpec(e.target.value)} placeholder="Removed part spec (optional)" className="px-3 py-2 rounded-lg text-sm" style={{ fontFamily: "var(--font-mono)" }} />
+                    <input value={replaceRemovedSerial} onChange={e => setReplaceRemovedSerial(e.target.value)} placeholder="Removed part serial (optional)" className="px-3 py-2 rounded-lg text-sm" style={{ fontFamily: "var(--font-mono)" }} />
+                    <select value={replaceRemovedCondition} onChange={e => setReplaceRemovedCondition(e.target.value)} className="px-3 py-2 rounded-lg text-sm">
+                      <option>Refurbished</option>
+                      <option>Used</option>
+                      <option>New</option>
+                    </select>
+                    <select value={replaceDestination} onChange={e => setReplaceDestination(e.target.value as (typeof REPLACEMENT_DESTINATIONS)[number])} className="px-3 py-2 rounded-lg text-sm">
+                      {REPLACEMENT_DESTINATIONS.map((destination) => (
+                        <option key={destination} value={destination}>{destination}</option>
+                      ))}
+                    </select>
+                    <input type="number" value={replaceEstimatedValue || ""} onChange={e => setReplaceEstimatedValue(Number(e.target.value) || 0)} placeholder="Est. salvage value" className="px-3 py-2 rounded-lg text-sm" style={{ fontFamily: "var(--font-mono)" }} />
+                    <button className="btn-cyber text-xs" onClick={replacePartInWip}>↺ Replace + Harvest</button>
+                  </div>
+                </div>
                 {selectedJob.parts.length > 0 && (
                   <div className="glass-card p-3 border border-cyan-500/10">
                     {selectedJob.parts.map((p, idx) => (
@@ -238,15 +448,58 @@ export function WipJobs() {
               </div>
             )}
             {detailTab === "labor" && (
-              <div className="space-y-3"><div className="flex gap-2"><input value={addLaborTech} onChange={e => setAddLaborTech(e.target.value)} placeholder="Technician name" className="flex-1 px-3 py-2 rounded-lg text-sm" /><input type="number" value={addLaborHours || ""} onChange={e => setAddLaborHours(Number(e.target.value))} placeholder="Hours" className="w-24 px-3 py-2 rounded-lg text-sm" style={{ fontFamily: "var(--font-mono)" }} /><button className="btn-cyber text-xs" onClick={addLabor}>+ Add Labor</button></div></div>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input value={addLaborTech} onChange={e => setAddLaborTech(e.target.value)} placeholder="Technician name" className="flex-1 px-3 py-2 rounded-lg text-sm" />
+                  <input type="number" value={addLaborHours || ""} onChange={e => setAddLaborHours(Number(e.target.value))} placeholder="Hours" className="w-24 px-3 py-2 rounded-lg text-sm" style={{ fontFamily: "var(--font-mono)" }} />
+                  <button className="btn-cyber text-xs" onClick={addLabor}>+ Add Labor</button>
+                </div>
+                <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/5 p-3 space-y-2">
+                  <p className="text-[11px] text-cyan-400/60" style={{ fontFamily: "var(--font-mono)" }}>Labor timer session</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold" style={{ fontFamily: "var(--font-mono)" }}>{formatElapsed(laborTimer.elapsedMs)}</span>
+                    {!laborTimer.running ? (
+                      <button className="btn-ghost text-xs" onClick={laborTimer.start}>▶ Start Timer</button>
+                    ) : (
+                      <button className="btn-cyber text-xs" onClick={stopLaborTimer}>■ Stop + Add</button>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/5 p-3 space-y-2">
+                  <div className="flex gap-2 items-center">
+                    <input value={laborApprover} onChange={e => setLaborApprover(e.target.value)} placeholder="Approver" className="px-3 py-2 rounded-lg text-xs" />
+                    <span className="text-[11px] text-cyan-400/60">Timer entries require approval</span>
+                  </div>
+                  {selectedJob.laborEntries.map((entry, idx) => (
+                    <div key={`${entry.tech}-${idx}`} className="flex items-center justify-between text-xs border-b border-cyan-500/10 py-1">
+                      <span>{entry.tech} • {entry.hours}h • {entry.source || "manual"} {entry.approved ? `• approved by ${entry.approvedBy || "system"}` : "• pending approval"}</span>
+                      {!entry.approved && (
+                        <button className="btn-ghost text-[10px]" onClick={() => approveLaborEntry(idx)}>Approve</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
             {detailTab === "history" && (
               <div className="space-y-2">{selectedJob.history.map((h, i) => (<div key={i} className="flex items-start gap-3 py-2 border-b border-cyan-500/5"><div className="w-2 h-2 rounded-full bg-cyan-500/30 mt-1.5" /><div className="flex-1"><p className="text-sm text-cyan-200/70">{h.action}</p><p className="text-[10px] text-cyan-500/20" style={{ fontFamily: "var(--font-mono)" }}>{h.ts} • {h.user}</p></div></div>))}</div>
             )}
+            {completionGate && (
+              <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/5 p-3">
+                <p className="text-[11px] text-cyan-400/60 mb-2" style={{ fontFamily: "var(--font-mono)" }}>Quality gate before completion</p>
+                <div className="space-y-1">
+                  {completionGate.checks.map((check) => (
+                    <p key={check.label} className={check.pass ? "text-green-300 text-xs" : "text-yellow-300 text-xs"}>
+                      {check.pass ? "✓" : "•"} {check.label}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex justify-end gap-3">
               <button className="btn-ghost" onClick={() => setSelectedJobId(null)}>Close</button>
               <button className="btn-ghost" data-action="wip-move-stage" onClick={moveToNextStage}>→ Next Stage</button>
-              <button className="btn-cyber" onClick={completeJob}>✓ Complete Job</button>
+              <button className="btn-cyber disabled:opacity-50 disabled:cursor-not-allowed" onClick={completeJob} disabled={!completionGate?.canComplete}>✓ Complete Job</button>
             </div>
           </div>
         </div>

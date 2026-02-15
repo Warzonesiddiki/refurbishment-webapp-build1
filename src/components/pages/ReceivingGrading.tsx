@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { useIdempotentAction } from "@/hooks/useIdempotentAction";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
@@ -24,6 +24,29 @@ const tracks = [
   { label: "Track E", desc: "Disassembly / Harvest", color: "border-red-500/30", icon: "E" },
 ];
 
+const criticalChecklistItems = new Set([
+  "Powers on",
+  "No cracks/damage",
+  "All keys working",
+  "USB-C ports",
+  "Network/WiFi",
+]);
+
+function getRecommendedGrading(itemStates: Record<string, boolean>) {
+  const checklistItems = checklist.flatMap((group) => group.items);
+  const checkedCount = checklistItems.filter((item) => itemStates[item]).length;
+  const completionRate = checkedCount / checklistItems.length;
+  const criticalFailures = checklistItems.filter((item) => criticalChecklistItems.has(item) && !itemStates[item]).length;
+
+  if (criticalFailures >= 2 || completionRate < 0.5) {
+    return { grade: "C", track: "Track C", reason: "Critical failures detected" };
+  }
+  if (criticalFailures === 1 || completionRate < 0.8) {
+    return { grade: "B", track: "Track B", reason: "Minor issues require cosmetic or light rework" };
+  }
+  return { grade: "A", track: "Track A", reason: "All key checks passed" };
+}
+
 export function ReceivingGrading() {
   const state = useAppState();
   const dispatch = useDispatch();
@@ -31,8 +54,29 @@ export function ReceivingGrading() {
   const { trigger } = useUiActionFeedback();
   const queue = useMemo(() => state.laptops.filter(l => l.status === "Pending Grading"), [state.laptops]);
   const [selected, setSelected] = useState<(typeof queue)[number] | null>(queue[0] || null);
+  const [barcodeInput, setBarcodeInput] = useState("");
   const [selectedGrade, setSelectedGrade] = useState<string>("");
   const [selectedTrack, setSelectedTrack] = useState<string>("");
+  const [checklistState, setChecklistState] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(checklist.flatMap((group) => group.items.map((item) => [item, true])))
+  );
+
+  const recommendation = useMemo(() => getRecommendedGrading(checklistState), [checklistState]);
+
+  useEffect(() => {
+    if (!selectedGrade) {
+      setSelectedGrade(recommendation.grade);
+    }
+    if (!selectedTrack) {
+      setSelectedTrack(recommendation.track);
+    }
+  }, [recommendation.grade, recommendation.track, selectedGrade, selectedTrack]);
+
+  const checklistCompletion = useMemo(() => {
+    const total = Object.keys(checklistState).length;
+    const passed = Object.values(checklistState).filter(Boolean).length;
+    return Math.round((passed / total) * 100);
+  }, [checklistState]);
 
   const handleSave = () => {
     if (!selected || !selectedGrade || !selectedTrack) return;
@@ -65,6 +109,11 @@ export function ReceivingGrading() {
     trigger("success", `Graded ${selected.barcode}`);
   };
 
+  const handleLoad = () => {
+    const laptop = queue.find((item) => item.barcode === barcodeInput.trim());
+    setSelected(laptop || queue[0] || null);
+  };
+
   return (
     <div className="space-y-6 max-w-6xl">
       <div className="flex flex-wrap justify-between items-end gap-4">
@@ -87,8 +136,14 @@ export function ReceivingGrading() {
             Scan / Load Laptop
           </label>
           <div className="flex gap-3">
-            <input className="flex-1 px-4 py-3 rounded-lg text-lg animate-border-glow" placeholder="Scan barcode" style={{ fontFamily: "Share Tech Mono", fontSize: "16px" }} />
-            <button className="btn-cyber" onClick={() => setSelected(queue[0] || null)}>LOAD</button>
+            <input
+              value={barcodeInput}
+              onChange={(event) => setBarcodeInput(event.target.value)}
+              className="flex-1 px-4 py-3 rounded-lg text-lg animate-border-glow"
+              placeholder="Scan barcode"
+              style={{ fontFamily: "Share Tech Mono", fontSize: "16px" }}
+            />
+            <button className="btn-cyber" onClick={handleLoad}>LOAD</button>
           </div>
         </div>
         <div className="glass-card corner-marks p-5 neon-border">
@@ -98,7 +153,7 @@ export function ReceivingGrading() {
           <p className="text-center text-[12px] neon-text-cyan mb-3" style={{ fontFamily: "Share Tech Mono" }}>{selected?.barcode || "—"}</p>
           <div className="space-y-2 text-center">
             <p className="text-sm font-semibold text-cyan-100/70">{selected ? `${selected.brand} ${selected.model}` : "No selection"}</p>
-            <span className="cyber-chip cyber-badge-yellow">Grade-Ready</span>
+            <span className="cyber-chip cyber-badge-yellow">Checklist {checklistCompletion}%</span>
           </div>
         </div>
       </div>
@@ -117,7 +172,12 @@ export function ReceivingGrading() {
               <div className="space-y-2">
                 {group.items.map((item) => (
                   <label key={item} className="flex items-center gap-2 cursor-pointer group">
-                    <input type="checkbox" className="rounded" />
+                    <input
+                      type="checkbox"
+                      className="rounded"
+                      checked={checklistState[item]}
+                      onChange={(event) => setChecklistState((prev) => ({ ...prev, [item]: event.target.checked }))}
+                    />
                     <span className="text-[12px] text-cyan-100/50 group-hover:text-cyan-100/70 transition-colors" style={{ fontFamily: "Rajdhani" }}>{item}</span>
                   </label>
                 ))}
@@ -135,20 +195,25 @@ export function ReceivingGrading() {
         <div className="glass-card p-5">
           <label className="block text-[10px] uppercase tracking-[0.12em] text-cyan-500/40 mb-3" style={{ fontFamily: "Orbitron" }}>Assign Grade</label>
           <div className="space-y-2">
-            {grades.map((g) => (
-              <button key={g.label} className={`w-full p-3 rounded-lg border text-left transition-all ${selectedGrade === g.label ? `${g.border} ${g.bg} ${g.text}` : "border-cyan-500/10 text-cyan-100/40"}`} onClick={() => setSelectedGrade(g.label)}>
-                <div className="flex items-center gap-3"><span className={`text-lg font-black ${selectedGrade === g.label ? g.text : ""}`} style={{ fontFamily: "Orbitron" }}>{g.label}</span><span className="text-[11px]" style={{ fontFamily: "Rajdhani" }}>{g.desc}</span></div>
-              </button>
-            ))}
+            <select className="w-full p-3 rounded-lg border border-cyan-500/20 bg-transparent" value={selectedGrade} onChange={(event) => setSelectedGrade(event.target.value)}>
+              {grades.map((grade) => (
+                <option key={grade.label} value={grade.label}>{grade.label} — {grade.desc}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-cyan-100/50" style={{ fontFamily: "Rajdhani" }}>
+              Recommended: <span className="neon-text-cyan">{recommendation.grade}</span> ({recommendation.reason})
+            </p>
           </div>
           <label className="block text-[10px] uppercase tracking-[0.12em] text-cyan-500/40 mt-4 mb-3" style={{ fontFamily: "Orbitron" }}>Assign Track</label>
-          <div className="grid grid-cols-2 gap-2">
-            {tracks.map((t) => (
-              <button key={t.label} className={`p-3 rounded-lg border text-center transition-all ${selectedTrack === t.label ? `${t.color} bg-cyan-500/8 text-cyan-200` : "border-cyan-500/10 text-cyan-100/30"}`} onClick={() => setSelectedTrack(t.label)}>
-                <span className="text-sm font-bold" style={{ fontFamily: "Orbitron" }}>{t.icon}</span>
-                <p className="text-[10px] mt-1" style={{ fontFamily: "Rajdhani" }}>{t.desc}</p>
-              </button>
-            ))}
+          <div className="space-y-2">
+            <select className="w-full p-3 rounded-lg border border-cyan-500/20 bg-transparent" value={selectedTrack} onChange={(event) => setSelectedTrack(event.target.value)}>
+              {tracks.map((track) => (
+                <option key={track.label} value={track.label}>{track.label} — {track.desc}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-cyan-100/50" style={{ fontFamily: "Rajdhani" }}>
+              Recommended: <span className="neon-text-cyan">{recommendation.track}</span>
+            </p>
           </div>
         </div>
         <div className="glass-card p-5 space-y-4">

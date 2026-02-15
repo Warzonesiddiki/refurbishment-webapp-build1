@@ -10,6 +10,8 @@ import { resolveActionRoute } from "@/utils/actionRouting";
 import { parseBackupJson } from "@/utils/backup";
 import { KEYBOARD_SHORTCUT_MAP, ShortcutAction } from "@/utils/actionShortcuts";
 import { ActionCommandPalette } from "@/components/ui/ActionCommandPalette";
+import { InstallAppBanner, MobileOpsBanner, OfflineQueueBanner, OfflineReplayAuditPanel } from "@/components/mobile";
+import { buildLanHintUrl, isLocalhostHost } from "@/utils/network";
 
 export type LayoutProps = {
   activePage: string;
@@ -24,6 +26,9 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [recentPages, setRecentPages] = useState<string[]>([activePage]);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isLocalhostRuntime, setIsLocalhostRuntime] = useState(false);
+  const [lanHintUrl, setLanHintUrl] = useState("http://192.168.x.x:5173");
   const { state, dispatch } = useStore();
 
   const createBackup = useCallback(() => {
@@ -82,6 +87,21 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
   }, [activePage]);
 
   useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => {
+      setIsMobile(mq.matches);
+      setSidebarOpen(!mq.matches);
+    };
+
+    setIsLocalhostRuntime(isLocalhostHost(window.location.hostname));
+    setLanHintUrl(buildLanHintUrl(window.location.hostname, window.location.port, window.location.protocol));
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+
+  useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target) {
@@ -128,9 +148,13 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
 
       <aside
         className={cn(
-          "glass-panel hex-pattern transition-all duration-300 flex flex-col relative z-10",
+          "glass-panel hex-pattern transition-all duration-300 flex flex-col z-30",
           theme === "pro" ? "erp-sidebar" : "border-r border-cyan-500/10",
-          sidebarOpen ? "w-72" : "w-16"
+          isMobile
+            ? cn("fixed left-0 top-0 bottom-0 w-72", sidebarOpen ? "translate-x-0" : "-translate-x-full")
+            : sidebarOpen
+              ? "w-72"
+              : "w-16"
         )}
       >
         <div className={cn("p-4 flex items-center justify-between", theme === "pro" ? "border-b border-slate-200" : "border-b border-cyan-500/10")}>
@@ -177,6 +201,9 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
               isActive={activePage === item.id || Boolean(item.children?.some((c) => c.id === activePage))}
               sidebarOpen={sidebarOpen}
               onNavigate={onNavigate}
+              onNavigateLeaf={() => {
+                if (isMobile) setSidebarOpen(false);
+              }}
               theme={theme}
             />
           ))}
@@ -209,6 +236,14 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
           </div>
         )}
       </aside>
+
+      {isMobile && sidebarOpen && (
+        <button
+          aria-label="Close mobile navigation"
+          className="fixed inset-0 z-20 bg-black/45 backdrop-blur-[1px] lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       <div className="flex-1 flex flex-col overflow-hidden relative z-10">
         <header className={cn("glass-panel px-6 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between", theme === "pro" ? "erp-header" : "border-b border-cyan-500/10")}>
@@ -302,9 +337,20 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
               <span className={`w-2.5 h-2.5 rounded-full ${theme === "pro" ? "bg-blue-500" : "bg-cyan-400"}`} />
             </div>
           </div>
+          <div className="w-full space-y-2">
+            {isLocalhostRuntime && (
+              <div className={theme === "pro" ? "rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900" : "rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-2.5 text-xs text-yellow-300"}>
+                LAN tip: on same Wi‑Fi, open this app using your computer IP (example: <code>{lanHintUrl}</code>) not <code>localhost</code>.
+              </div>
+            )}
+            <MobileOpsBanner lanHintUrl={lanHintUrl} theme={theme} />
+            <OfflineQueueBanner theme={theme} />
+            <OfflineReplayAuditPanel theme={theme} />
+            <InstallAppBanner theme={theme} />
+          </div>
         </header>
 
-        <main id="main-content" className="flex-1 overflow-auto p-6 animate-slide-up">
+        <main id="main-content" className="flex-1 overflow-auto p-4 md:p-6 animate-slide-up">
           {children}
         </main>
       </div>
@@ -326,6 +372,7 @@ function NavGroup({
   isActive,
   sidebarOpen,
   onNavigate,
+  onNavigateLeaf,
   activePage,
   theme,
 }: {
@@ -333,6 +380,7 @@ function NavGroup({
   isActive: boolean;
   sidebarOpen: boolean;
   onNavigate: (id: string) => void;
+  onNavigateLeaf: () => void;
   activePage: string;
   theme: "cyber" | "pro";
 }) {
@@ -370,6 +418,7 @@ function NavGroup({
             setOpen((p) => !p);
           } else {
             onNavigate(item.id);
+            onNavigateLeaf();
           }
         }}
       >
@@ -420,7 +469,7 @@ function NavGroup({
                     : "text-cyan-100/40 hover:text-cyan-200 hover:bg-cyan-500/5"
               )}
               style={{ fontFamily: theme === "pro" ? "Inter" : "Rajdhani" }}
-              onClick={() => onNavigate(child.id)}
+              onClick={() => { onNavigate(child.id); onNavigateLeaf(); }}
             >
               <span className={cn("mr-2 text-[10px]", theme === "pro" ? "text-slate-400" : "text-cyan-500/20")}>▸</span>
               {child.label}

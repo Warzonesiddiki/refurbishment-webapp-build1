@@ -61,6 +61,20 @@ npm run dev
 npm run build
 ```
 
+
+## LAN Access (Same Wi‑Fi)
+Run the dev server bound to all interfaces:
+```bash
+npm run dev:lan
+```
+Then open from another device using your computer IP, for example:
+- `http://192.168.1.10:5173`
+
+## Android App Install (PWA)
+- Open the app in Chrome on Android.
+- Use the in-app **Install App** banner (or browser install prompt).
+- After install, launch **Tahir ERP** from home screen for app-like usage.
+
 ## Docker
 Build and run the full stack (frontend + Java auth API + Postgres + Adminer):
 ```bash
@@ -76,6 +90,13 @@ Services:
 ### Compose health checks
 `web` now waits for `java-api` health before startup to reduce first-run race conditions.
 
+
+
+## Real-time Shared Data Sync
+- Local persistence uses browser storage for offline-first behavior.
+- Cross-browser / multi-user live sharing now uses the Java API snapshot endpoint: `GET/PUT /api/state/snapshot`.
+- Configure `VITE_JAVA_API_BASE` (defaults to `http://localhost:8085`) so all users point to the same API host.
+- The app pushes state updates continuously (debounced) and polls for remote updates every few seconds, so users in different browsers/devices see near real-time changes.
 
 ## Project Structure
 - `src/` application source
@@ -114,3 +135,21 @@ See `docs/CONTRIBUTING.md`.
 
 ## License
 Proprietary/Internal.
+
+
+## Mobile rollout checklist
+- Start with `npm run dev:lan` on operations PC.
+- Confirm Android device can open LAN URL.
+- Install app from in-app banner.
+- Verify scanner, WIP parts replacement, and backup/restore on mobile.
+- Validate offline queue banner by toggling airplane mode during WIP updates.
+- Replay queued items after reconnect and resolve conflict-marked entries first.
+- Export replay audit CSV for supervisor handoff at shift close.
+- Verify labor timer start/stop and supervisor approval for timed entries.
+- If LAN fails, verify firewall allows TCP 5173.
+
+
+## Session progress tracker
+- Completed: 100%
+- Pending: 0%
+- Next focus: production hardening, SOP rollout, and monitoring tuning.
