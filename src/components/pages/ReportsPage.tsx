@@ -454,6 +454,7 @@ export function ReportsPage() {
                       key={scope}
                       type="button"
                       onClick={() => setJournalScope(scope)}
+                      aria-pressed={journalScope === scope}
                       className={cn("btn-ghost text-xs", journalScope === scope && "border-cyan-400/50 bg-cyan-500/10")}
                     >
                       {scope === "all" ? "All entries" : scope.charAt(0).toUpperCase() + scope.slice(1)}

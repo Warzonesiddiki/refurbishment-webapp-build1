@@ -64,7 +64,7 @@ describe("ReportsPage completion readiness panel", () => {
     });
 
     expect(screen.getByText(/Journal drill-down/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Sales$/i }).className).toContain("bg-cyan-500/10");
+    expect(screen.getByRole("button", { name: /^Sales$/i })).toHaveAttribute("aria-pressed", "true");
   });
 
 
@@ -83,7 +83,7 @@ describe("ReportsPage completion readiness panel", () => {
     });
 
     expect(screen.getByText(/Journal drill-down/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Purchases$/i }).className).toContain("bg-cyan-500/10");
+    expect(screen.getByRole("button", { name: /^Purchases$/i })).toHaveAttribute("aria-pressed", "true");
   });
   it("shows cash flow statement section in reports", async () => {
     await act(async () => {
