@@ -1,4 +1,5 @@
 import React from "react";
+import { recordRuntimeEvent } from "@/utils/runtimeDiagnostics";
 
 type ErrorBoundaryProps = {
   children: React.ReactNode;
@@ -19,6 +20,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
     this.props.onError?.(error, info);
+    recordRuntimeEvent({
+      level: "error",
+      source: "ErrorBoundary",
+      message: error.message || "Unknown render error",
+      context: info.componentStack?.slice(0, 400),
+    });
     console.error("[ErrorBoundary]", error, info.componentStack);
   }
 
