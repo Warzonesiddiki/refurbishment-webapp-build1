@@ -246,6 +246,15 @@ export function ReportsPage() {
     setJournalScope(scope);
   };
 
+  const exportJournalDrilldownCsv = () => {
+    const rows = [
+      ["Date", "Source", "Reference", "Counterparty", "Amount"],
+      ...filteredJournalRows.map((row) => [row.date, row.source, row.reference, row.counterparty, row.amount.toFixed(2)]),
+    ];
+    exportCsv(`report-accounting-journal-${journalScope}-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    trigger("info", `Exported accounting journal (${journalScope})`);
+  };
+
   const handleExport = (format: "excel" | "csv" | "json") => {
     logExport(`report-${format}`, { format, report: selected });
     const payload = data[dataKeyByReport[selected]] ?? data;
@@ -470,7 +479,11 @@ export function ReportsPage() {
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-cyan-500/50 mb-2">Journal drill-down ({filteredJournalRows.length} entries)</p>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-xs text-cyan-500/50">Journal drill-down ({filteredJournalRows.length} entries)</p>
+                  <button type="button" className="btn-ghost text-xs" onClick={exportJournalDrilldownCsv}>Export journal CSV</button>
+                </div>
+                <p className="text-[11px] text-cyan-500/40 mb-2">Showing latest {Math.min(12, filteredJournalRows.length)} row(s)</p>
                 <table className="w-full text-xs">
                   <thead>
                     <tr>
@@ -491,6 +504,11 @@ export function ReportsPage() {
                         <td className="py-1 px-2 text-yellow-300">{formatMoney(row.amount)}</td>
                       </tr>
                     ))}
+                    {filteredJournalRows.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-3 px-2 text-center text-cyan-500/50">No journal entries found for this filter.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
