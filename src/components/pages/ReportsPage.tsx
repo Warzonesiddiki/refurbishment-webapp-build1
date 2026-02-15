@@ -63,6 +63,8 @@ type JournalDrilldownRow = {
   amount: number;
 };
 
+const journalScopes: JournalDrilldownScope[] = ["all", "sales", "purchases", "receipts", "payments"];
+
 const dataKeyByReport: Record<ReportKey, ReportDataKey> = {
   inventory: "inventory",
   "low-stock": "lowStock",
@@ -232,6 +234,13 @@ export function ReportsPage() {
     [data.journalDrilldown, journalScope]
   );
 
+  const handleSelectReport = (report: ReportKey) => {
+    setSelected(report);
+    if (report !== "accounting") {
+      setJournalScope("all");
+    }
+  };
+
   const openAccountingDrilldown = (scope: JournalDrilldownScope) => {
     setSelected("accounting");
     setJournalScope(scope);
@@ -277,10 +286,10 @@ export function ReportsPage() {
       <SectionHelpHint hint={getPageSectionHint("reports")} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <button type="button" onClick={() => setSelected("inventory")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Inventory Value</p><p className="text-lg neon-text-green">{formatMoney(data.summary.inventoryValue)}</p></button>
+        <button type="button" onClick={() => handleSelectReport("inventory")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Inventory Value</p><p className="text-lg neon-text-green">{formatMoney(data.summary.inventoryValue)}</p></button>
         <button type="button" onClick={() => openAccountingDrilldown("sales")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Receivable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.receivableDue)}</p></button>
         <button type="button" onClick={() => openAccountingDrilldown("purchases")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Payable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.payableDue)}</p></button>
-        <button type="button" onClick={() => setSelected("wip")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">WIP Cost</p><p className="text-lg neon-text-cyan">{formatMoney(data.summary.wipCost)}</p></button>
+        <button type="button" onClick={() => handleSelectReport("wip")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">WIP Cost</p><p className="text-lg neon-text-cyan">{formatMoney(data.summary.wipCost)}</p></button>
       </div>
 
 
@@ -344,7 +353,7 @@ export function ReportsPage() {
           {reportCards.map((card) => (
             <button
               key={card.key}
-              onClick={() => setSelected(card.key)}
+              onClick={() => handleSelectReport(card.key)}
               className={cn(
                 "w-full text-left p-3 rounded-xl border",
                 selected === card.key ? "border-cyan-400/40 bg-cyan-500/10" : "border-cyan-500/10 hover:bg-cyan-500/5"
@@ -449,7 +458,7 @@ export function ReportsPage() {
               </div>
               <div className="glass-card p-3">
                 <div className="mb-3 flex flex-wrap gap-2">
-                  {(["all", "sales", "purchases", "receipts", "payments"] as const).map((scope) => (
+                  {journalScopes.map((scope) => (
                     <button
                       key={scope}
                       type="button"

@@ -85,6 +85,29 @@ describe("ReportsPage completion readiness panel", () => {
     expect(screen.getByText(/Journal drill-down/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Purchases$/i })).toHaveAttribute("aria-pressed", "true");
   });
+  it("resets drilldown scope when leaving accounting reports", async () => {
+    await act(async () => {
+      render(
+        <StoreProvider>
+          <ReportsPage />
+        </StoreProvider>
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Receivable Due/i }));
+    });
+
+    expect(screen.getByRole("button", { name: /^Sales$/i })).toHaveAttribute("aria-pressed", "true");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Inventory Valuation/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Accounting Statements/i }));
+    });
+
+    expect(screen.getByRole("button", { name: /All entries/i })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("shows cash flow statement section in reports", async () => {
     await act(async () => {
       render(
