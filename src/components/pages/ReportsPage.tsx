@@ -17,6 +17,13 @@ import {
 import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
 import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 import { buildCompletionRoadmap } from "@/utils/completionRoadmap";
+import {
+  buildJournalDrilldownRows,
+  filterJournalDrilldownRows,
+  summarizeJournalRows,
+  type JournalDrilldownScope,
+  type JournalWindow,
+} from "@/utils/reportJournal";
 
 const reportCards = [
   { key: "inventory", title: "Inventory Valuation", desc: "Laptops unsold + parts valuation" },
@@ -52,17 +59,6 @@ type ReportDataKey =
   | "management"
   | "tax";
 
-type JournalDrilldownScope = "all" | "sales" | "purchases" | "receipts" | "payments";
-type JournalWindow = "all-time" | "this-month" | "last-30-days";
-
-type JournalDrilldownRow = {
-  id: string;
-  date: string;
-  source: Exclude<JournalDrilldownScope, "all">;
-  reference: string;
-  counterparty: string;
-  amount: number;
-};
 
 const journalScopes: JournalDrilldownScope[] = ["all", "sales", "purchases", "receipts", "payments"];
 const journalWindows: { key: JournalWindow; label: string }[] = [
@@ -173,42 +169,7 @@ export function ReportsPage() {
     const management = generateManagementAccountingSnapshot(state, periodStart, periodEnd);
     const tax = generateTaxationSummary(state, periodStart, periodEnd);
     const agedBalances = generateAgedBalanceSnapshot(state, periodEnd);
-    const invoiceToCustomer = new Map(state.sales.map((sale) => [sale.invoice, sale.customer]));
-
-    const journalDrilldown: JournalDrilldownRow[] = [
-      ...state.sales.map((sale) => ({
-        id: `sale-${sale.id}`,
-        date: sale.date,
-        source: "sales" as const,
-        reference: sale.invoice,
-        counterparty: sale.customer,
-        amount: sale.total,
-      })),
-      ...state.purchases.map((purchase) => ({
-        id: `purchase-${purchase.id}`,
-        date: purchase.date,
-        source: "purchases" as const,
-        reference: purchase.purchase,
-        counterparty: purchase.supplier,
-        amount: purchase.total,
-      })),
-      ...state.receipts.map((receipt) => ({
-        id: `receipt-${receipt.id}`,
-        date: receipt.date,
-        source: "receipts" as const,
-        reference: receipt.receipt,
-        counterparty: invoiceToCustomer.get(receipt.invoice) ?? "Unknown",
-        amount: receipt.amount,
-      })),
-      ...state.payments.map((payment) => ({
-        id: `payment-${payment.id}`,
-        date: payment.date,
-        source: "payments" as const,
-        reference: payment.payment,
-        counterparty: payment.supplier,
-        amount: payment.amount,
-      })),
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const journalDrilldown = buildJournalDrilldownRows(state);
 
     const summary = {
       inventoryValue: inventory.reduce((sum, row) => sum + row.value, 0) + parts.reduce((sum, row) => sum + row.value, 0),
@@ -236,33 +197,12 @@ export function ReportsPage() {
     };
   }, [state]);
 
-  const filteredJournalRows = useMemo(() => {
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const last30 = new Date(now);
-    last30.setDate(now.getDate() - 30);
+  const filteredJournalRows = useMemo(
+    () => filterJournalDrilldownRows(data.journalDrilldown, journalScope, journalWindow),
+    [data.journalDrilldown, journalScope, journalWindow]
+  );
 
-    return data.journalDrilldown.filter((row) => {
-      const matchesScope = journalScope === "all" || row.source === journalScope;
-      if (!matchesScope) return false;
-
-      if (journalWindow === "all-time") return true;
-      const rowDate = new Date(row.date);
-      if (Number.isNaN(rowDate.getTime())) return false;
-      if (journalWindow === "this-month") return rowDate >= monthStart;
-      return rowDate >= last30;
-    });
-  }, [data.journalDrilldown, journalScope, journalWindow]);
-
-  const journalTotals = useMemo(() => {
-    const totalAmount = filteredJournalRows.reduce((sum, row) => sum + row.amount, 0);
-    const bySource = filteredJournalRows.reduce<Record<JournalDrilldownScope, number>>(
-      (acc, row) => ({ ...acc, [row.source]: acc[row.source] + row.amount }),
-      { all: 0, sales: 0, purchases: 0, receipts: 0, payments: 0 }
-    );
-    bySource.all = totalAmount;
-    return { totalAmount, bySource };
-  }, [filteredJournalRows]);
+  const journalTotals = useMemo(() => summarizeJournalRows(filteredJournalRows), [filteredJournalRows]);
 
   const handleSelectReport = (report: ReportKey) => {
     setSelected(report);
