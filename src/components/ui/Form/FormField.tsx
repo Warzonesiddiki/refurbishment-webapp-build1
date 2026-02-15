@@ -22,7 +22,7 @@ export function FormField({
   const errorId = `${name}-error`;
   const helpId = `${name}-help`;
   return (
-    <div className="space-y-1">
+    <div data-component="ui-Form-FormField" data-testid="component-ui-Form-FormField" className="space-y-1">
       <FormLabel htmlFor={name} label={label} required={required} />
       {children}
       <FormHelp id={helpId} text={helpText} />

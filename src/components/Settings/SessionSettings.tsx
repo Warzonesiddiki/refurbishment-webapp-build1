@@ -5,7 +5,7 @@ export function SessionSettings() {
   const { session, refresh, end, timeRemaining } = useSession();
   useActivityTracker(refresh);
   return (
-    <div className="glass-card p-4 space-y-2">
+    <div data-component="Settings-SessionSettings" data-testid="component-Settings-SessionSettings" className="glass-card p-4 space-y-2">
       <h3 className="font-bold">Session Settings</h3>
       <div>Session ID: {session.id}</div>
       <div>Started: {new Date(session.startedAt).toLocaleString()}</div>

@@ -17,6 +17,13 @@ import {
 import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
 import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 import { buildCompletionRoadmap } from "@/utils/completionRoadmap";
+import {
+  buildJournalDrilldownRows,
+  filterJournalDrilldownRows,
+  summarizeJournalRows,
+  type JournalDrilldownScope,
+  type JournalWindow,
+} from "@/utils/reportJournal";
 
 const reportCards = [
   { key: "inventory", title: "Inventory Valuation", desc: "Laptops unsold + parts valuation" },
@@ -52,6 +59,14 @@ type ReportDataKey =
   | "management"
   | "tax";
 
+
+const journalScopes: JournalDrilldownScope[] = ["all", "sales", "purchases", "receipts", "payments"];
+const journalWindows: { key: JournalWindow; label: string }[] = [
+  { key: "all-time", label: "All time" },
+  { key: "this-month", label: "This month" },
+  { key: "last-30-days", label: "Last 30 days" },
+];
+
 const dataKeyByReport: Record<ReportKey, ReportDataKey> = {
   inventory: "inventory",
   "low-stock": "lowStock",
@@ -72,6 +87,8 @@ export function ReportsPage() {
   const { run: logExport } = useIdempotentAction("export-reports", "report");
   const { trigger } = useUiActionFeedback();
   const [selected, setSelected] = useState<ReportKey>("inventory");
+  const [journalScope, setJournalScope] = useState<JournalDrilldownScope>("all");
+  const [journalWindow, setJournalWindow] = useState<JournalWindow>("all-time");
 
   const completionRoadmap = useMemo(() => buildCompletionRoadmap(state), [state]);
 
@@ -152,6 +169,7 @@ export function ReportsPage() {
     const management = generateManagementAccountingSnapshot(state, periodStart, periodEnd);
     const tax = generateTaxationSummary(state, periodStart, periodEnd);
     const agedBalances = generateAgedBalanceSnapshot(state, periodEnd);
+    const journalDrilldown = buildJournalDrilldownRows(state);
 
     const summary = {
       inventoryValue: inventory.reduce((sum, row) => sum + row.value, 0) + parts.reduce((sum, row) => sum + row.value, 0),
@@ -160,8 +178,59 @@ export function ReportsPage() {
       wipCost: wip.reduce((sum, row) => sum + row.total, 0),
     };
 
-    return { inventory: [...inventory, ...parts], lowStock, aging, track, wip, profit, payables, receivables, accounting, cashflow, management, tax, agedBalances, summary };
+    return {
+      inventory: [...inventory, ...parts],
+      lowStock,
+      aging,
+      track,
+      wip,
+      profit,
+      payables,
+      receivables,
+      accounting,
+      cashflow,
+      management,
+      tax,
+      agedBalances,
+      summary,
+      journalDrilldown,
+    };
   }, [state]);
+
+  const filteredJournalRows = useMemo(
+    () => filterJournalDrilldownRows(data.journalDrilldown, journalScope, journalWindow),
+    [data.journalDrilldown, journalScope, journalWindow]
+  );
+
+  const journalTotals = useMemo(() => summarizeJournalRows(filteredJournalRows), [filteredJournalRows]);
+
+  const handleSelectReport = (report: ReportKey) => {
+    setSelected(report);
+    if (report !== "accounting") {
+      setJournalScope("all");
+      setJournalWindow("all-time");
+    }
+  };
+
+  const openAccountingDrilldown = (scope: JournalDrilldownScope) => {
+    setSelected("accounting");
+    setJournalScope(scope);
+    setJournalWindow("all-time");
+  };
+
+  const exportJournalDrilldownCsv = () => {
+    const rows = [
+      ["Date", "Source", "Reference", "Counterparty", "Amount"],
+      ...filteredJournalRows.map((row) => [row.date, row.source, row.reference, row.counterparty, row.amount.toFixed(2)]),
+    ];
+    exportCsv(`report-accounting-journal-${journalScope}-${journalWindow}-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    trigger("info", `Exported accounting journal CSV (${journalScope}, ${journalWindow})`);
+  };
+
+  const exportJournalDrilldownJson = () => {
+    exportJson(`report-accounting-journal-${journalScope}-${journalWindow}-${new Date().toISOString().slice(0, 10)}.json`, filteredJournalRows);
+    trigger("info", `Exported accounting journal JSON (${journalScope}, ${journalWindow})`);
+  };
 
   const handleExport = (format: "excel" | "csv" | "json") => {
     logExport(`report-${format}`, { format, report: selected });
@@ -181,7 +250,7 @@ export function ReportsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div data-page="reports-page" data-testid="page-reports-page" className="space-y-6">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -203,10 +272,10 @@ export function ReportsPage() {
       <SectionHelpHint hint={getPageSectionHint("reports")} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">Inventory Value</p><p className="text-lg neon-text-green">{formatMoney(data.summary.inventoryValue)}</p></div>
-        <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">Receivable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.receivableDue)}</p></div>
-        <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">Payable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.payableDue)}</p></div>
-        <div className="glass-card p-4"><p className="text-xs text-cyan-500/40">WIP Cost</p><p className="text-lg neon-text-cyan">{formatMoney(data.summary.wipCost)}</p></div>
+        <button type="button" onClick={() => handleSelectReport("inventory")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Inventory Value</p><p className="text-lg neon-text-green">{formatMoney(data.summary.inventoryValue)}</p></button>
+        <button type="button" onClick={() => openAccountingDrilldown("sales")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Receivable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.receivableDue)}</p></button>
+        <button type="button" onClick={() => openAccountingDrilldown("purchases")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">Payable Due</p><p className="text-lg text-yellow-300">{formatMoney(data.summary.payableDue)}</p></button>
+        <button type="button" onClick={() => handleSelectReport("wip")} className="glass-card p-4 text-left"><p className="text-xs text-cyan-500/40">WIP Cost</p><p className="text-lg neon-text-cyan">{formatMoney(data.summary.wipCost)}</p></button>
       </div>
 
 
@@ -270,7 +339,7 @@ export function ReportsPage() {
           {reportCards.map((card) => (
             <button
               key={card.key}
-              onClick={() => setSelected(card.key)}
+              onClick={() => handleSelectReport(card.key)}
               className={cn(
                 "w-full text-left p-3 rounded-xl border",
                 selected === card.key ? "border-cyan-400/40 bg-cyan-500/10" : "border-cyan-500/10 hover:bg-cyan-500/5"
@@ -369,9 +438,77 @@ export function ReportsPage() {
           {selected === "accounting" && (
             <div className="space-y-4">
               <div className="grid md:grid-cols-3 gap-3">
-                <div className="glass-card p-3"><p className="text-xs text-cyan-500/40">P&L Net Profit</p><p className="neon-text-green">{formatMoney(data.accounting.profitLoss.netProfit)}</p></div>
-                <div className="glass-card p-3"><p className="text-xs text-cyan-500/40">Balance Check</p><p className={data.accounting.balanceSheet.balanceCheck ? "text-green-300" : "text-red-400"}>{data.accounting.balanceSheet.balanceCheck ? "Balanced" : "Unbalanced"}</p></div>
-                <div className="glass-card p-3"><p className="text-xs text-cyan-500/40">VAT Net</p><p className="text-yellow-300">{formatMoney(data.accounting.vat.netVAT)}</p></div>
+                <button type="button" onClick={() => setJournalScope("sales")} className="glass-card p-3 text-left"><p className="text-xs text-cyan-500/40">P&L Net Profit</p><p className="neon-text-green">{formatMoney(data.accounting.profitLoss.netProfit)}</p></button>
+                <button type="button" onClick={() => setJournalScope("all")} className="glass-card p-3 text-left"><p className="text-xs text-cyan-500/40">Balance Check</p><p className={data.accounting.balanceSheet.balanceCheck ? "text-green-300" : "text-red-400"}>{data.accounting.balanceSheet.balanceCheck ? "Balanced" : "Unbalanced"}</p></button>
+                <button type="button" onClick={() => setJournalScope("purchases")} className="glass-card p-3 text-left"><p className="text-xs text-cyan-500/40">VAT Net</p><p className="text-yellow-300">{formatMoney(data.accounting.vat.netVAT)}</p></button>
+              </div>
+              <div className="glass-card p-3">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {journalScopes.map((scope) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => setJournalScope(scope)}
+                      aria-pressed={journalScope === scope}
+                      className={cn("btn-ghost text-xs", journalScope === scope && "border-cyan-400/50 bg-cyan-500/10")}
+                    >
+                      {scope === "all" ? "All entries" : scope.charAt(0).toUpperCase() + scope.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-cyan-500/50">Journal drill-down ({filteredJournalRows.length} entries)</p>
+                  <div className="flex gap-2">
+                    <button type="button" className="btn-ghost text-xs" onClick={exportJournalDrilldownCsv}>Export journal CSV</button>
+                    <button type="button" className="btn-ghost text-xs" onClick={exportJournalDrilldownJson}>Export journal JSON</button>
+                  </div>
+                </div>
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {journalWindows.map((windowOption) => (
+                    <button
+                      key={windowOption.key}
+                      type="button"
+                      onClick={() => setJournalWindow(windowOption.key)}
+                      aria-pressed={journalWindow === windowOption.key}
+                      className={cn("btn-ghost text-xs", journalWindow === windowOption.key && "border-cyan-400/50 bg-cyan-500/10")}
+                    >
+                      {windowOption.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mb-2 grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px]">
+                  <div className="glass-card p-2"><span className="text-cyan-500/50">Total</span><p className="neon-text-green">{formatMoney(journalTotals.totalAmount)}</p></div>
+                  <div className="glass-card p-2"><span className="text-cyan-500/50">Sales</span><p>{formatMoney(journalTotals.bySource.sales)}</p></div>
+                  <div className="glass-card p-2"><span className="text-cyan-500/50">Purchases</span><p>{formatMoney(journalTotals.bySource.purchases)}</p></div>
+                </div>
+                <p className="text-[11px] text-cyan-500/40 mb-2">Showing latest {Math.min(12, filteredJournalRows.length)} row(s)</p>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr>
+                      <th className="py-2 px-2 text-left">Date</th>
+                      <th className="py-2 px-2 text-left">Source</th>
+                      <th className="py-2 px-2 text-left">Reference</th>
+                      <th className="py-2 px-2 text-left">Counterparty</th>
+                      <th className="py-2 px-2 text-left">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredJournalRows.slice(0, 12).map((row) => (
+                      <tr key={row.id}>
+                        <td className="py-1 px-2 text-cyan-100/70">{row.date}</td>
+                        <td className="py-1 px-2 text-cyan-300/70">{row.source}</td>
+                        <td className="py-1 px-2 neon-text-cyan">{row.reference}</td>
+                        <td className="py-1 px-2 text-cyan-100/70">{row.counterparty}</td>
+                        <td className="py-1 px-2 text-yellow-300">{formatMoney(row.amount)}</td>
+                      </tr>
+                    ))}
+                    {filteredJournalRows.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-3 px-2 text-center text-cyan-500/50">No journal entries found for this filter.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

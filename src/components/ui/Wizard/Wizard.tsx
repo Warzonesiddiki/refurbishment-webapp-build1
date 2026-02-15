@@ -34,7 +34,7 @@ export function Wizard({
   };
 
   return (
-    <div className="space-y-3">
+    <div data-component="ui-Wizard-Wizard" data-testid="component-ui-Wizard-Wizard" className="space-y-3">
       <WizardProgress currentStep={idx} totalSteps={steps.length} />
       <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
         <div className="space-y-1">{steps.map((s, i) => <WizardStep key={s.id} title={s.title} description={s.description} active={i===idx} completed={i<idx} />)}</div>

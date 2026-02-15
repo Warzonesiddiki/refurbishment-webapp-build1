@@ -27,7 +27,7 @@ export function OfflineReplayAuditPanel({ theme = "cyber" }: OfflineReplayAuditP
         theme === "pro" ? "border-blue-200 bg-blue-50 text-blue-900" : "border-cyan-500/20 bg-cyan-500/5 text-cyan-200"
       )}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div data-component="mobile-OfflineReplayAuditPanel" data-testid="component-mobile-OfflineReplayAuditPanel" className="flex items-center justify-between gap-2">
         <p className="font-semibold">Replay audit: {records.length}</p>
         <div className="flex items-center gap-1">
           <button className="btn-ghost text-[11px]" onClick={exportCsv}>Export CSV</button>

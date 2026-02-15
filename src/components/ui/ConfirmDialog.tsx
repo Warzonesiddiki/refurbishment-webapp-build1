@@ -43,7 +43,7 @@ export function ConfirmDialog({
   const canConfirm = !loading && (!typeToConfirm || typed === typeToConfirm);
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50" onClick={onCancel}>
+    <div data-component="ui-ConfirmDialog" data-testid="component-ui-ConfirmDialog" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50" onClick={onCancel}>
       <div className="glass-card w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-bold">{title}</h3>
         <div className="text-sm text-cyan-200/70">{message}</div>

@@ -115,7 +115,7 @@ export function ReceivingGrading() {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div data-page="receiving-grading" data-testid="page-receiving-grading" className="space-y-6 max-w-6xl">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">

@@ -89,7 +89,7 @@ export function ScannerPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const laptopStatuses = ["Pending Verification", "Pending Grading", "In Processing", "Ready for Sale", "Sold", "Disposed"];
 
   return (
-    <div className="space-y-6">
+    <div data-page="scanner-page" data-testid="page-scanner-page" className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>

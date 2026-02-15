@@ -99,7 +99,7 @@ export function SalesNew() {
 
   if (completed) {
     return (
-      <div className="space-y-6">
+      <div data-page="sales-new" data-testid="page-sales-new" className="space-y-6">
         <div className="glass-card corner-marks p-12 text-center space-y-4">
           <div className="text-6xl mb-4">✅</div>
           <h2 className="text-2xl font-bold neon-text-green" style={{ fontFamily: "var(--font-heading)" }}>SALE COMPLETED</h2>

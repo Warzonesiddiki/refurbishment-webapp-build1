@@ -37,7 +37,7 @@ export function Toast({ open, tone, message, onClose }: ToastProps) {
   const t = toneStyles[tone] || toneStyles.info;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 animate-slide-up max-w-sm">
+    <div data-component="ui-Toast" data-testid="component-ui-Toast" className="fixed bottom-6 right-6 z-50 animate-slide-up max-w-sm">
       <div
         className={cn(
           "glass-card p-4 border relative overflow-hidden",

@@ -42,7 +42,7 @@ export function AlertCard({ title, description, tone = "yellow", onClear }: Prop
   const t = toneConfig[tone];
 
   return (
-    <div className={`glass-card p-3 ${t.border} relative overflow-hidden`}>
+    <div data-component="cards-AlertCard" data-testid="component-cards-AlertCard" className={`glass-card p-3 ${t.border} relative overflow-hidden`}>
       <div className={`absolute top-0 left-0 right-0 h-full bg-gradient-to-r ${t.bg} pointer-events-none`} />
       <div className="relative flex items-start gap-3">
         <span className={`text-base mt-0.5 ${t.iconColor}`}>{t.icon}</span>

@@ -8,7 +8,7 @@ export function ActionReplay({ logs }: { logs: AuditLogRecord[] }) {
   const dev = import.meta.env.DEV;
   if (!dev) return null;
   return (
-    <div className="glass-card p-4 space-y-2">
+    <div data-component="DevTools-ActionReplay" data-testid="component-DevTools-ActionReplay" className="glass-card p-4 space-y-2">
       <h3 className="font-bold">Action Replay (Dev Only)</h3>
       <div className="flex gap-2">
         <button className="btn-ghost" onClick={() => setIndex((i) => Math.max(0, i - 1))}>Step back</button>

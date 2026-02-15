@@ -67,7 +67,7 @@ export function ActionCommandPalette({ open, onClose, onNavigate, onAction, rece
   const activeId = filtered[activeIndex] ? `${listId}-option-${activeIndex}` : undefined;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-24 bg-black/45" onClick={onClose}>
+    <div data-component="ui-ActionCommandPalette" data-testid="component-ui-ActionCommandPalette" className="fixed inset-0 z-[100] flex items-start justify-center pt-24 bg-black/45" onClick={onClose}>
       <FocusTrap active={open}>
         <div
           className={cn("w-full max-w-3xl rounded-2xl border shadow-2xl overflow-hidden", theme === "pro" ? "bg-white border-slate-200" : "glass-panel border-cyan-500/30")}

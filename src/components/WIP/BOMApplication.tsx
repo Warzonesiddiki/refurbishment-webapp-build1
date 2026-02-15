@@ -9,7 +9,7 @@ type BOMApplicationProps = {
 
 export function BOMApplication({ templates, parts, onApply }: BOMApplicationProps) {
   return (
-    <div className="space-y-2">
+    <div data-component="WIP-BOMApplication" data-testid="component-WIP-BOMApplication" className="space-y-2">
       <h3>BOM Application</h3>
       {templates.map((t) => (
         <button key={t.id} onClick={() => onApply(t.id)}>

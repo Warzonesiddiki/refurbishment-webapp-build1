@@ -5,7 +5,7 @@ export function AuditDetailModal({ entry, open, onClose }: { entry: AuditLogReco
   return (
     <Modal open={open} onClose={onClose} title="Audit Detail">
       {!entry ? <p>No entry selected.</p> : (
-        <div className="space-y-2 text-sm">
+        <div data-component="Audit-AuditDetailModal" data-testid="component-Audit-AuditDetailModal" className="space-y-2 text-sm">
           <div><strong>Action:</strong> {entry.action}</div>
           <div><strong>Timestamp:</strong> {entry.timestamp}</div>
           <div><strong>Result:</strong> {entry.result}</div>

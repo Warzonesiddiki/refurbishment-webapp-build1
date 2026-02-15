@@ -1,4 +1,4 @@
-import { useReducer, useState } from "react";
+import { useMemo, useReducer, useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { BackupRestoreModal, BackupSettings as BackupSettingsPanel } from "@/components/Backup";
 import { backupReducer, createInitialBackupState } from "@/store/reducers/backupReducer";
@@ -8,6 +8,7 @@ import { isRestorableBackupData, restoreStateFromBackupData, selectBackupDataMod
 import { runRestoreRehearsal } from "@/utils/backup/restoreRehearsal";
 import { getSettingsSectionHint } from "@/components/pages/settingsHints";
 import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { clearRuntimeEvents, getBuildMetadata, listRuntimeEvents, recordRuntimeEvent } from "@/utils/runtimeDiagnostics";
 
 export function SettingsPage() {
   const state = useAppState();
@@ -18,6 +19,7 @@ export function SettingsPage() {
   const [showDanger, setShowDanger] = useState(false);
   const [backupState, backupDispatch] = useReducer(backupReducer, undefined, createInitialBackupState);
   const [backupModalMode, setBackupModalMode] = useState<"EXPORT" | "IMPORT" | null>(null);
+  const [diagnosticsRefreshTick, setDiagnosticsRefreshTick] = useState(0);
 
   const save = () => {
     dispatch({ type: "UPDATE_SETTINGS", payload: form });
@@ -37,9 +39,11 @@ export function SettingsPage() {
   ];
 
   const sectionHint = getSettingsSectionHint(activeSection);
+  const buildMetadata = useMemo(() => getBuildMetadata(), []);
+  const runtimeEvents = useMemo(() => listRuntimeEvents(), [activeSection, diagnosticsRefreshTick]);
 
   return (
-    <div className="space-y-6">
+    <div data-page="settings-page" data-testid="page-settings-page" className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
@@ -283,6 +287,14 @@ export function SettingsPage() {
           {activeSection === "diagnostics" && (
             <div className="glass-card corner-marks p-6 space-y-4">
               <h3 className="text-sm font-bold neon-text-cyan" style={{ fontFamily: "var(--font-heading)" }}>DIAGNOSTICS & REPAIR TOOLS</h3>
+
+              <div className="grid md:grid-cols-4 gap-2 text-[11px]">
+                <div className="glass-card p-3"><p className="text-cyan-500/40">Version</p><p>{buildMetadata.appVersion}</p></div>
+                <div className="glass-card p-3"><p className="text-cyan-500/40">Build Hash</p><p>{buildMetadata.buildHash}</p></div>
+                <div className="glass-card p-3"><p className="text-cyan-500/40">Build Time</p><p>{buildMetadata.buildTime}</p></div>
+                <div className="glass-card p-3"><p className="text-cyan-500/40">Mode</p><p>{buildMetadata.mode}</p></div>
+              </div>
+
               <div className="space-y-3">
                 {[
                   {
@@ -291,6 +303,8 @@ export function SettingsPage() {
                     icon: "🔄",
                     onRun: () => {
                       dispatch({ type: "ADD_ACTIVITY", payload: { action: "Recomputed stock levels", time: "just now" } });
+                      recordRuntimeEvent({ level: "info", source: "Settings.Diagnostics", message: "Recompute stock levels executed" });
+                      setDiagnosticsRefreshTick((v) => v + 1);
                     },
                   },
                   {
@@ -299,6 +313,8 @@ export function SettingsPage() {
                     icon: "💳",
                     onRun: () => {
                       dispatch({ type: "ADD_ACTIVITY", payload: { action: "Payment statuses reconciled", time: "just now" } });
+                      recordRuntimeEvent({ level: "info", source: "Settings.Diagnostics", message: "Payment status reconciliation executed" });
+                      setDiagnosticsRefreshTick((v) => v + 1);
                     },
                   },
                   {
@@ -307,6 +323,8 @@ export function SettingsPage() {
                     icon: "📊",
                     onRun: () => {
                       dispatch({ type: "ADD_ACTIVITY", payload: { action: "Barcode validation completed", time: "just now" } });
+                      recordRuntimeEvent({ level: "info", source: "Settings.Diagnostics", message: "Barcode validation executed" });
+                      setDiagnosticsRefreshTick((v) => v + 1);
                     },
                   },
                   {
@@ -315,6 +333,8 @@ export function SettingsPage() {
                     icon: "🗑️",
                     onRun: () => {
                       dispatch({ type: "CLEAR_ACTIVITY" });
+                      recordRuntimeEvent({ level: "warning", source: "Settings.Diagnostics", message: "Activity log cleared" });
+                      setDiagnosticsRefreshTick((v) => v + 1);
                     },
                   },
                 ].map(tool => (
@@ -329,6 +349,33 @@ export function SettingsPage() {
                     <button className="btn-ghost text-xs" onClick={tool.onRun}>Run</button>
                   </div>
                 ))}
+              </div>
+
+              <div className="glass-card p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-cyan-300/70">RUNTIME EVENT LOG</h4>
+                  <button
+                    className="btn-ghost text-xs"
+                    onClick={() => {
+                      clearRuntimeEvents();
+                      setDiagnosticsRefreshTick((v) => v + 1);
+                    }}
+                  >
+                    Clear Runtime Events
+                  </button>
+                </div>
+                <div className="max-h-40 overflow-auto space-y-1">
+                  {runtimeEvents.length === 0 ? (
+                    <p className="text-[11px] text-cyan-500/40">No runtime events recorded in this browser yet.</p>
+                  ) : (
+                    runtimeEvents.slice(0, 10).map((event) => (
+                      <div key={event.id} className="rounded border border-cyan-500/10 p-2 text-[11px]">
+                        <p className="text-cyan-300/70">{event.ts} • {event.level.toUpperCase()} • {event.source}</p>
+                        <p className="text-cyan-100/70">{event.message}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           )}

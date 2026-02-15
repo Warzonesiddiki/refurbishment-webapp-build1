@@ -68,7 +68,7 @@ export function FinanceCash() {
   };
 
   return (
-    <div className="space-y-6">
+    <div data-page="finance-cash" data-testid="page-finance-cash" className="space-y-6">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">

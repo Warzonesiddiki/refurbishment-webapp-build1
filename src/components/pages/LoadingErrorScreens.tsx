@@ -1,6 +1,6 @@
 export function LoadingScreen() {
   return (
-    <div className="min-h-[60vh] flex items-center justify-center">
+    <div data-page="loading-error-screens" data-testid="page-loading-error-screens" className="min-h-[60vh] flex items-center justify-center">
       <div className="glass-card corner-marks p-8 text-center space-y-4 neon-border">
         <div className="text-4xl neon-text-cyan">⬡</div>
         <h2 className="text-lg font-semibold text-cyan-100" style={{ fontFamily: 'Orbitron' }}>Loading Tahir ERP</h2>

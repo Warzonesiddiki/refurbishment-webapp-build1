@@ -11,7 +11,7 @@ export function PartList({ parts, categoryId, onEdit }: PartListProps) {
   ), [parts, categoryId, query]);
 
   return (
-    <div className="space-y-3">
+    <div data-component="Parts-PartList" data-testid="component-Parts-PartList" className="space-y-3">
       <input aria-label="Search parts" className="w-full px-3 py-2 rounded" value={query} onChange={(e) => setQuery(e.target.value)} />
       <table className="w-full text-sm">
         <thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Available</th><th>Cost</th><th /></tr></thead>

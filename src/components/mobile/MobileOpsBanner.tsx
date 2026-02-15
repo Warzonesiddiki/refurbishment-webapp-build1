@@ -24,7 +24,7 @@ export function MobileOpsBanner({ lanHintUrl, theme }: MobileOpsBannerProps) {
   };
 
   return (
-    <div className={theme === "pro" ? "rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs" : "rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-2.5 text-xs"}>
+    <div data-component="mobile-MobileOpsBanner" data-testid="component-mobile-MobileOpsBanner" className={theme === "pro" ? "rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs" : "rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-2.5 text-xs"}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span aria-live="polite" className={theme === "pro" ? "text-slate-700" : "text-cyan-200"}>{statusText}</span>
         <div className="flex items-center gap-2">

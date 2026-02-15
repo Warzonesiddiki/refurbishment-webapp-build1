@@ -2,7 +2,7 @@ import type { RollbackPoint } from "@/store/reducers/backupReducer";
 
 export function RollbackManager({ points, onRollback, onDelete }: { points: RollbackPoint[]; onRollback: (id: string) => void; onDelete: (id: string) => void }) {
   return (
-    <div className="space-y-2">
+    <div data-component="Backup-RollbackManager" data-testid="component-Backup-RollbackManager" className="space-y-2">
       <h4 className="text-sm font-bold">Rollback Points</h4>
       {points.map((p) => (
         <div key={p.id} className="flex items-center justify-between p-2 rounded border border-cyan-500/20 text-xs">
