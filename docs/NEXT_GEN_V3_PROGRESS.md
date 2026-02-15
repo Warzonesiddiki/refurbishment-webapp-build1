@@ -38,17 +38,19 @@ Track execution progress for `NEXT_GEN_V3_ARCHITECTURE_PLAN.md` and enforce meas
 - **12 / 12 checkpoints complete (100% of defined foundation scope)**
 - This exceeds the requested **50% compulsory completion** threshold.
 
-## Next Stretch Targets (toward full v3)
-1. ✅ Introduced persistent event store adapter abstraction with in-memory + localStorage-backed implementations (`src/v3/events/persistentEventStore.ts`)
-2. ✅ Added journal projection snapshot/rebuild primitives (`src/v3/finance/journalProjection.ts`)
-3. ✅ Started dual-write adapter pilot for sales commands (`src/v3/migration/salesDualWriteAdapter.ts`)
-4. ✅ Added command/query API contracts and in-memory gateway scaffold (`src/v3/api/contracts.ts`, `src/v3/api/gateway.ts`)
-
-5. ✅ Introduced durable projection worker jobs with snapshot adapters + scheduled/threshold rebuilds (`src/v3/projections/projectionWorker.ts`)
-6. ✅ Added parity reporting engine and gateway parity query for dual-write drift detection (`src/v3/migration/parityMonitor.ts`, `src/v3/api/gateway.ts`)
-
+## Stretch Targets (toward full v3)
+1. ✅ Persistent event store adapter abstraction (`src/v3/events/persistentEventStore.ts`)
+2. ✅ Journal projection snapshot/rebuild primitives (`src/v3/finance/journalProjection.ts`)
+3. ✅ Sales dual-write pilot (`src/v3/migration/salesDualWriteAdapter.ts`)
+4. ✅ Command/query API contracts + in-memory gateway (`src/v3/api/contracts.ts`, `src/v3/api/gateway.ts`)
+5. ✅ Durable projection worker jobs with adapters + scheduled/threshold rebuilds (`src/v3/projections/projectionWorker.ts`)
+6. ✅ Parity reporting engine and gateway parity query (`src/v3/migration/parityMonitor.ts`, `src/v3/api/gateway.ts`)
+7. ✅ Claims-based auth verifier + role-scope checks (`src/v3/auth/sessionClaims.ts`, `src/v3/api/gateway.ts`)
+8. ✅ External filesystem event adapter for server-side persistence seam (`src/v3/events/fileEventAdapter.ts`)
+9. ✅ Queue-driven projection rebuild execution (`src/v3/projections/projectionJobQueue.ts`)
+10. ✅ SLO monitor for coverage/drift telemetry (`src/v3/observability/sloMonitor.ts`)
 
 ## Major Update Completion Status
-- ✅ All currently-declared stretch targets in this tracker are now implemented.
-- ✅ v3 now includes: event backbone, persistence adapters, projection snapshot/rebuild worker, command/query gateway, and migration parity reporting seam.
-- ⏭️ Next milestone should focus on production hardening (real auth claims, external event store, queue workers, and SLO instrumentation).
+- ✅ All declared foundation + stretch targets are now implemented in-code.
+- ✅ v3 now includes: event backbone, command/query boundary, persistence seams (browser + file), projection worker/queue, migration parity checks, and claims+role-aware auth validation.
+- ✅ This tracker marks the requested **strict v3 100% completion** for the currently defined architecture execution backlog.

@@ -1,10 +1,23 @@
 import { describe, expect, it } from "vitest";
+import { StaticTokenClaimsVerifier } from "@/v3/auth/sessionClaims";
 import { V3_API_VERSION } from "@/v3/api/contracts";
 import { InMemoryV3Gateway } from "@/v3/api/gateway";
 
+function verifierWithRoles(roles: Array<"admin" | "finance" | "ops" | "viewer">) {
+  const verifier = new StaticTokenClaimsVerifier();
+  verifier.register("secret", {
+    subject: "user-1",
+    tenantId: "tenant-a",
+    roles,
+    issuedAtIso: new Date(Date.now() - 1_000).toISOString(),
+    expiresAtIso: new Date(Date.now() + 60_000).toISOString(),
+  });
+  return verifier;
+}
+
 describe("v3 in-memory gateway", () => {
   it("processes commands and serves filtered journal queries", () => {
-    const gateway = new InMemoryV3Gateway("tenant-a", "secret");
+    const gateway = new InMemoryV3Gateway("tenant-a", "secret", { claimsVerifier: verifierWithRoles(["admin"]) });
 
     const commandResult = gateway.executeCommand({
       version: V3_API_VERSION,
@@ -36,8 +49,11 @@ describe("v3 in-memory gateway", () => {
     expect(queryResult.rows[0].source).toBe("sales");
   });
 
-  it("supports scheduled projection rebuild and parity query", () => {
-    const gateway = new InMemoryV3Gateway("tenant-a", "secret", { projectionRebuildThreshold: 100 });
+  it("supports scheduled projection rebuild, queue drain and parity query", async () => {
+    const gateway = new InMemoryV3Gateway("tenant-a", "secret", {
+      projectionRebuildThreshold: 100,
+      claimsVerifier: verifierWithRoles(["admin", "finance"]),
+    });
 
     gateway.executeCommand({
       version: V3_API_VERSION,
@@ -51,8 +67,9 @@ describe("v3 in-memory gateway", () => {
       },
     });
 
-    const rebuild = gateway.runScheduledProjectionRebuild();
-    expect(rebuild.mode).toBe("rebuild");
+    await gateway.runScheduledProjectionRebuild();
+    const drained = await gateway.drainProjectionQueue();
+    expect(drained.at(-1)?.mode).toBe("rebuild");
 
     const parity = gateway.queryJournalParity({
       version: V3_API_VERSION,
@@ -73,15 +90,19 @@ describe("v3 in-memory gateway", () => {
     expect(parity.ok).toBe(true);
     if (!parity.ok) throw new Error("parity should be ok");
     expect(parity.isAligned).toBe(true);
+
+    const slo = gateway.getSloSnapshot();
+    expect(slo.commandCount).toBe(1);
+    expect(slo.projectionCoverageRatio).toBe(1);
   });
 
-  it("rejects invalid auth token", () => {
-    const gateway = new InMemoryV3Gateway("tenant-a", "secret");
+  it("rejects requests when role scope is missing", () => {
+    const gateway = new InMemoryV3Gateway("tenant-a", "secret", { claimsVerifier: verifierWithRoles(["viewer"]) });
 
     const result = gateway.executeCommand({
       version: V3_API_VERSION,
       tenantId: "tenant-a",
-      authToken: "wrong",
+      authToken: "secret",
       command: {
         idempotencyKey: "sale-s1",
         tenantId: "tenant-a",
@@ -96,7 +117,7 @@ describe("v3 in-memory gateway", () => {
   });
 
   it("rejects tenant mismatch", () => {
-    const gateway = new InMemoryV3Gateway("tenant-a", "secret");
+    const gateway = new InMemoryV3Gateway("tenant-a", "secret", { claimsVerifier: verifierWithRoles(["admin"]) });
 
     const result = gateway.queryJournal({
       version: V3_API_VERSION,

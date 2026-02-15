@@ -6,6 +6,7 @@ import type {
   V3CommandRequest,
   V3CommandResponse,
 } from "@/v3/api/contracts";
+import { StaticTokenClaimsVerifier, type SessionClaimsVerifier, type V3Role } from "@/v3/auth/sessionClaims";
 import { InMemoryCommandBus } from "@/v3/commands/commandBus";
 import type { V3CommandName } from "@/v3/commands/types";
 import { InMemoryEventStore } from "@/v3/events/eventStore";
@@ -15,6 +16,8 @@ import {
   type JournalRow,
 } from "@/v3/finance/journalProjection";
 import { buildJournalParityReport } from "@/v3/migration/parityMonitor";
+import { V3SloMonitor } from "@/v3/observability/sloMonitor";
+import { ProjectionJobQueue } from "@/v3/projections/projectionJobQueue";
 import {
   InMemoryProjectionSnapshotAdapter,
   JournalProjectionWorker,
@@ -25,6 +28,9 @@ export class InMemoryV3Gateway {
   private readonly bus = new InMemoryCommandBus();
   private readonly store = new InMemoryEventStore();
   private readonly projectionWorker: JournalProjectionWorker;
+  private readonly projectionQueue: ProjectionJobQueue;
+  private readonly claimsVerifier: SessionClaimsVerifier;
+  private readonly slo = new V3SloMonitor();
 
   constructor(
     private readonly tenantId: string,
@@ -33,6 +39,7 @@ export class InMemoryV3Gateway {
       snapshotKey?: string;
       snapshotAdapter?: ProjectionSnapshotAdapter;
       projectionRebuildThreshold?: number;
+      claimsVerifier?: SessionClaimsVerifier;
     },
   ) {
     this.projectionWorker = new JournalProjectionWorker({
@@ -40,20 +47,37 @@ export class InMemoryV3Gateway {
       adapter: options?.snapshotAdapter ?? new InMemoryProjectionSnapshotAdapter(),
       rebuildThreshold: options?.projectionRebuildThreshold,
     });
+    this.projectionQueue = new ProjectionJobQueue(this.projectionWorker, () => this.store.all());
+
+    if (options?.claimsVerifier) {
+      this.claimsVerifier = options.claimsVerifier;
+    } else {
+      const fallback = new StaticTokenClaimsVerifier();
+      fallback.register(authToken, {
+        subject: "system",
+        tenantId,
+        roles: ["admin"],
+        issuedAtIso: new Date(Date.now() - 1_000).toISOString(),
+        expiresAtIso: new Date(Date.now() + 86_400_000).toISOString(),
+      });
+      this.claimsVerifier = fallback;
+    }
 
     this.registerCommandHandlers();
   }
 
   executeCommand(request: V3CommandRequest): V3CommandResponse {
-    const authError = this.validateAuth(request.tenantId, request.authToken);
+    const authError = this.validateAuth(request.tenantId, request.authToken, ["admin", "ops", "finance"]);
     if (authError) return authError;
 
     const status = this.bus.dispatch(request.command);
     const events = this.store.all();
     const lastEvent = events.at(-1);
     if (lastEvent) {
-      this.projectionWorker.applyEvent(lastEvent, events);
+      const projectionResult = this.projectionWorker.applyEvent(lastEvent, events);
+      this.slo.recordProjectionEventCount(projectionResult.snapshot.eventCount);
     }
+    this.slo.recordCommandProcessed();
 
     return {
       ok: true,
@@ -63,7 +87,7 @@ export class InMemoryV3Gateway {
   }
 
   queryJournal(request: JournalQueryRequest): JournalQueryResponse {
-    const authError = this.validateAuth(request.tenantId, request.authToken);
+    const authError = this.validateAuth(request.tenantId, request.authToken, ["admin", "finance", "viewer", "ops"]);
     if (authError) return authError;
 
     const now = request.nowIso ? new Date(request.nowIso) : new Date();
@@ -77,13 +101,14 @@ export class InMemoryV3Gateway {
   }
 
   queryJournalParity(request: JournalParityQueryRequest): JournalParityQueryResponse {
-    const authError = this.validateAuth(request.tenantId, request.authToken);
+    const authError = this.validateAuth(request.tenantId, request.authToken, ["admin", "finance"]);
     if (authError) return authError;
 
     const report = buildJournalParityReport({
       legacyRows: request.legacyRows,
       v3Rows: this.projectionWorker.getRows(),
     });
+    this.slo.recordParityDriftCount(report.drifts.length);
 
     return {
       ok: true,
@@ -92,7 +117,19 @@ export class InMemoryV3Gateway {
   }
 
   runScheduledProjectionRebuild() {
-    return this.projectionWorker.rebuild(this.store.all(), "scheduled");
+    return this.projectionQueue.enqueueScheduledRebuild();
+  }
+
+  runManualProjectionRebuild() {
+    return this.projectionQueue.enqueueManualRebuild();
+  }
+
+  async drainProjectionQueue() {
+    return this.projectionQueue.drain();
+  }
+
+  getSloSnapshot() {
+    return this.slo.snapshot();
   }
 
   private registerCommandHandlers() {
@@ -136,13 +173,23 @@ export class InMemoryV3Gateway {
     });
   }
 
-  private validateAuth(requestTenantId: string, requestAuthToken: string) {
+  private validateAuth(requestTenantId: string, requestAuthToken: string, requiredRoles: V3Role[]) {
     if (requestAuthToken !== this.authToken) {
       return { ok: false as const, error: "unauthorized" as const, message: "Invalid auth token" };
     }
 
-    if (requestTenantId !== this.tenantId) {
+    const claim = this.claimsVerifier.verify(requestAuthToken);
+    if (!claim) {
+      return { ok: false as const, error: "unauthorized" as const, message: "Invalid or expired claim" };
+    }
+
+    if (requestTenantId !== this.tenantId || claim.tenantId !== this.tenantId) {
       return { ok: false as const, error: "tenant_mismatch" as const, message: "Tenant routing mismatch" };
+    }
+
+    const hasRole = claim.roles.some((role) => requiredRoles.includes(role));
+    if (!hasRole) {
+      return { ok: false as const, error: "unauthorized" as const, message: "Missing required role scope" };
     }
 
     return null;
