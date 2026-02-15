@@ -1,3 +1,11 @@
+import type {
+  JournalParityQueryRequest,
+  JournalParityQueryResponse,
+  JournalQueryRequest,
+  JournalQueryResponse,
+  V3CommandRequest,
+  V3CommandResponse,
+} from "@/v3/api/contracts";
 import { InMemoryCommandBus } from "@/v3/commands/commandBus";
 import type { V3CommandName } from "@/v3/commands/types";
 import { InMemoryEventStore } from "@/v3/events/eventStore";
@@ -6,21 +14,33 @@ import {
   rebuildJournalProjectionFromEvents,
   type JournalRow,
 } from "@/v3/finance/journalProjection";
-import type {
-  JournalQueryRequest,
-  JournalQueryResponse,
-  V3CommandRequest,
-  V3CommandResponse,
-} from "@/v3/api/contracts";
+import { buildJournalParityReport } from "@/v3/migration/parityMonitor";
+import {
+  InMemoryProjectionSnapshotAdapter,
+  JournalProjectionWorker,
+  type ProjectionSnapshotAdapter,
+} from "@/v3/projections/projectionWorker";
 
 export class InMemoryV3Gateway {
   private readonly bus = new InMemoryCommandBus();
   private readonly store = new InMemoryEventStore();
+  private readonly projectionWorker: JournalProjectionWorker;
 
   constructor(
     private readonly tenantId: string,
     private readonly authToken: string,
+    options?: {
+      snapshotKey?: string;
+      snapshotAdapter?: ProjectionSnapshotAdapter;
+      projectionRebuildThreshold?: number;
+    },
   ) {
+    this.projectionWorker = new JournalProjectionWorker({
+      snapshotKey: options?.snapshotKey ?? `v3:journal:${tenantId}`,
+      adapter: options?.snapshotAdapter ?? new InMemoryProjectionSnapshotAdapter(),
+      rebuildThreshold: options?.projectionRebuildThreshold,
+    });
+
     this.registerCommandHandlers();
   }
 
@@ -29,7 +49,11 @@ export class InMemoryV3Gateway {
     if (authError) return authError;
 
     const status = this.bus.dispatch(request.command);
-    const lastEvent = this.store.all().at(-1);
+    const events = this.store.all();
+    const lastEvent = events.at(-1);
+    if (lastEvent) {
+      this.projectionWorker.applyEvent(lastEvent, events);
+    }
 
     return {
       ok: true,
@@ -48,8 +72,27 @@ export class InMemoryV3Gateway {
     return {
       ok: true,
       rows,
-      snapshot: rebuildJournalProjectionFromEvents(this.store.all()),
+      snapshot: this.projectionWorker.getSnapshot().eventCount > 0 ? this.projectionWorker.getSnapshot() : rebuildJournalProjectionFromEvents(this.store.all()),
     };
+  }
+
+  queryJournalParity(request: JournalParityQueryRequest): JournalParityQueryResponse {
+    const authError = this.validateAuth(request.tenantId, request.authToken);
+    if (authError) return authError;
+
+    const report = buildJournalParityReport({
+      legacyRows: request.legacyRows,
+      v3Rows: this.projectionWorker.getRows(),
+    });
+
+    return {
+      ok: true,
+      ...report,
+    };
+  }
+
+  runScheduledProjectionRebuild() {
+    return this.projectionWorker.rebuild(this.store.all(), "scheduled");
   }
 
   private registerCommandHandlers() {

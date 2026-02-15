@@ -36,6 +36,45 @@ describe("v3 in-memory gateway", () => {
     expect(queryResult.rows[0].source).toBe("sales");
   });
 
+  it("supports scheduled projection rebuild and parity query", () => {
+    const gateway = new InMemoryV3Gateway("tenant-a", "secret", { projectionRebuildThreshold: 100 });
+
+    gateway.executeCommand({
+      version: V3_API_VERSION,
+      tenantId: "tenant-a",
+      authToken: "secret",
+      command: {
+        idempotencyKey: "sale-s1",
+        tenantId: "tenant-a",
+        name: "RecordSale",
+        payload: { saleId: "s1", invoice: "INV-1", date: "2026-03-10", customer: "Acme", total: 120 },
+      },
+    });
+
+    const rebuild = gateway.runScheduledProjectionRebuild();
+    expect(rebuild.mode).toBe("rebuild");
+
+    const parity = gateway.queryJournalParity({
+      version: V3_API_VERSION,
+      tenantId: "tenant-a",
+      authToken: "secret",
+      legacyRows: [
+        {
+          id: "legacy-1",
+          date: "2026-03-10",
+          source: "sales",
+          reference: "INV-1",
+          counterparty: "Acme",
+          amount: 120,
+        },
+      ],
+    });
+
+    expect(parity.ok).toBe(true);
+    if (!parity.ok) throw new Error("parity should be ok");
+    expect(parity.isAligned).toBe(true);
+  });
+
   it("rejects invalid auth token", () => {
     const gateway = new InMemoryV3Gateway("tenant-a", "secret");
 

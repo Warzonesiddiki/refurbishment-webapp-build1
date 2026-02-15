@@ -44,5 +44,11 @@ Track execution progress for `NEXT_GEN_V3_ARCHITECTURE_PLAN.md` and enforce meas
 3. ✅ Started dual-write adapter pilot for sales commands (`src/v3/migration/salesDualWriteAdapter.ts`)
 4. ✅ Added command/query API contracts and in-memory gateway scaffold (`src/v3/api/contracts.ts`, `src/v3/api/gateway.ts`)
 
-5. ⏳ Introduce durable projection worker jobs (incremental + scheduled rebuild)
-6. ⏳ Add parity dashboard for dual-write drift detection
+5. ✅ Introduced durable projection worker jobs with snapshot adapters + scheduled/threshold rebuilds (`src/v3/projections/projectionWorker.ts`)
+6. ✅ Added parity reporting engine and gateway parity query for dual-write drift detection (`src/v3/migration/parityMonitor.ts`, `src/v3/api/gateway.ts`)
+
+
+## Major Update Completion Status
+- ✅ All currently-declared stretch targets in this tracker are now implemented.
+- ✅ v3 now includes: event backbone, persistence adapters, projection snapshot/rebuild worker, command/query gateway, and migration parity reporting seam.
+- ⏭️ Next milestone should focus on production hardening (real auth claims, external event store, queue workers, and SLO instrumentation).

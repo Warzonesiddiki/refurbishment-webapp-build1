@@ -34,3 +34,26 @@ export type JournalQueryResponse =
       snapshot: JournalProjectionSnapshot;
     }
   | { ok: false; error: "unauthorized" | "tenant_mismatch"; message: string };
+
+export type JournalParityQueryRequest = {
+  version: typeof V3_API_VERSION;
+  tenantId: string;
+  authToken: string;
+  legacyRows: JournalRow[];
+};
+
+export type JournalParityQueryResponse =
+  | {
+      ok: true;
+      isAligned: boolean;
+      checkedAt: string;
+      legacyCount: number;
+      v3Count: number;
+      drifts: {
+        key: string;
+        issue: "missing_in_v3" | "extra_in_v3" | "value_mismatch";
+        legacy?: JournalRow;
+        v3?: JournalRow;
+      }[];
+    }
+  | { ok: false; error: "unauthorized" | "tenant_mismatch"; message: string };
