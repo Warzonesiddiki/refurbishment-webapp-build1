@@ -76,6 +76,7 @@ export class InMemoryV3Gateway {
     if (lastEvent) {
       const projectionResult = this.projectionWorker.applyEvent(lastEvent, events);
       this.slo.recordProjectionEventCount(projectionResult.snapshot.eventCount);
+      this.slo.recordProjectionLagCount(events.length - projectionResult.snapshot.eventCount);
     }
     this.slo.recordCommandProcessed();
 
@@ -109,6 +110,7 @@ export class InMemoryV3Gateway {
       v3Rows: this.projectionWorker.getRows(),
     });
     this.slo.recordParityDriftCount(report.drifts.length);
+    this.slo.recordProjectionLagCount(this.store.all().length - this.projectionWorker.getSnapshot().eventCount);
 
     return {
       ok: true,

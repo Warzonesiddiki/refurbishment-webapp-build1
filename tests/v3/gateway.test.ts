@@ -94,6 +94,8 @@ describe("v3 in-memory gateway", () => {
     const slo = gateway.getSloSnapshot();
     expect(slo.commandCount).toBe(1);
     expect(slo.projectionCoverageRatio).toBe(1);
+    expect(slo.projectionLagCount).toBe(0);
+    expect(slo.alertLevel).toBe("healthy");
   });
 
   it("rejects requests when role scope is missing", () => {

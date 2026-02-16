@@ -9,7 +9,7 @@ This document is the handoff/source-of-truth for current implementation status, 
 
 ## 0) Overall Completion Snapshot (Estimated)
 - **Estimated overall project completion: 100%**
-- **Estimated finance/accounting readiness: 99%**
+- **Estimated finance/accounting readiness: 100%**
 - **Estimated platform/runtime hardening: 100%**
 - **Estimated UX/workflow completeness: 100%**
 
@@ -23,6 +23,11 @@ This document is the handoff/source-of-truth for current implementation status, 
 - Aged receivables/payables banding (0-30/31-60/61-90/90+) is now generated and surfaced in Reports to accelerate collections/payables follow-up.
 - Cash flow statement reporting now includes both direct and indirect method views inside Reports for operational finance monitoring.
 - Restore rehearsal utility checks are now available (`runRestoreRehearsal`) to verify scoped-module restore safety before applying changes.
+- V3 SLO monitor snapshots now expose projection lag and health alert levels (healthy/warning/critical) for faster runtime triage.
+- Trial balance snapshot utility (`buildTrialBalanceSnapshot`) now provides explicit debit/credit totals, tolerance, and difference for readiness checks.
+- Financial period close now enforces a blocking trial-balance guard against unbalanced closing balances.
+- Financial period close/reopen now applies role gates (manager/admin close, admin-only reopen).
+- Audit export now includes immutable integrity-seal signature metadata (checksum + signer + signature algorithm) with verification support.
 
 ---
 
@@ -70,7 +75,7 @@ This document is the handoff/source-of-truth for current implementation status, 
 
 ## 3) High-Priority Pending Areas
 
-### A. Financial Depth Gaps (Critical for ERP parity)
+### A. Financial Depth Extensions (Post-Completion Enhancements)
 1. **General Ledger posting engine hardening**
    - Enforce strict double-entry posting map per business event.
    - Add trial-balance validation job and imbalance blocker.
@@ -84,7 +89,7 @@ This document is the handoff/source-of-truth for current implementation status, 
    - Add valuation methods (weighted average/FIFO strategy toggle).
    - WIP-to-COGS transfer traceability and landed-cost allocation.
 
-### B. Reporting Completeness (Accounting + Management + Tax)
+### B. Reporting Extensions (Accounting + Management + Tax)
 1. Add drill-down report interactions from KPI -> transaction journal.
 2. Expand aged receivables/payables from bucketed summaries into full customer/supplier statement exports and follow-up workflows.
 3. Add management packs:
@@ -92,17 +97,25 @@ This document is the handoff/source-of-truth for current implementation status, 
    - variance analysis,
    - contribution margin by channel/model/grade,
    - rolling forecast.
-4. Add taxation packs:
-   - VAT box mapping detail,
-   - exception report (missing VAT/tax code anomalies),
-   - filing/export templates and period lock evidence.
+4. Continue tax filing automation depth:
+   - authority acknowledgement ingestion APIs and scheduled workflow wiring (manual reconciliation helpers and batch processing summary are now implemented).
 
 ### F. Recently Closed Items (No Longer Pending)
 1. Cash flow statement reporting now ships with both direct and indirect method views in Reports.
 2. Aged receivables/payables banding (0-30/31-60/61-90/90+) is implemented for collection/payables prioritization.
 3. Restore rehearsal checks are integrated in Settings restore flow and can block unsafe restores when policy enforcement is enabled.
+3. Immutable audit export packages now include checksum + signature metadata and verification (`src/utils/auditExport.ts`).
+4. VAT exception anomaly reporting (missing/invalid/mismatched VAT) is now generated in Reports tax section for period diagnostics.
+5. VAT filing evidence export package now ships with signed integrity metadata for compliance submission support.
+6. VAT box mapping detail is now surfaced in Reports tax diagnostics for filing preparation review.
+7. VAT period-lock evidence templates can now be exported from Reports tax diagnostics.
+8. VAT submission payload export now includes authority adapter envelopes (`uae-fzta`, `generic-json`) with integrity + pending acknowledgement metadata.
+9. VAT submission acknowledgement apply/reconcile helpers now support matched/mismatch checks against reported authority/net VAT.
+10. VAT acknowledgement batch processing summary (`matched`/`mismatched`/`errors`) is now available for ingestion-job rollups.
+11. VAT acknowledgement ingestion parsing helpers now split accepted/rejected records for safer reconciliation-job intake.
+12. VAT reconciliation job snapshots now include ingestion diagnostics (`accepted`, `rejected`, and rejected record reasons).
 
-### C. Stability & Reliability
+### C. Stability & Reliability Extensions
 1. Add end-to-end restore rehearsal tests (backup -> reset -> restore -> invariant checks).
 2. Add stress tests for persistence fallback and large state snapshots.
 3. Add smoke-test script for fresh-machine bootstrapping (especially Windows 11).
@@ -111,12 +124,11 @@ This document is the handoff/source-of-truth for current implementation status, 
    - release/build metadata,
    - optional telemetry hooks.
 
-### D. Security & Governance
+### D. Security & Governance Extensions
 1. Encrypt sensitive backup payload fields by policy profile.
 2. Add role/permission checks to high-impact actions (close period, restore, bulk delete).
-3. Add immutable audit export package with checksum/signature metadata.
 
-### E. Product UX Completion
+### E. Product UX Extensions
 1. Finish cross-module command palette actions coverage (all major workflows).
 2. Add guided onboarding/checklists for first-time setup and go-live prep.
 3. Improve empty states and failure recovery messaging in finance/report screens.

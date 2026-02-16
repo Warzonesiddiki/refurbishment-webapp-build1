@@ -1,5 +1,5 @@
 import type { AppState } from "@/store/appState";
-import { generateBalanceSheet } from "@/utils/reportGenerator";
+import { buildTrialBalanceSnapshot } from "@/utils/trialBalance";
 
 export type FinanceReadinessCheck = {
   key: string;
@@ -22,7 +22,7 @@ function round2(n: number) {
 }
 
 export function evaluateFinanceReadiness(state: AppState, asOfDate = new Date()): FinanceReadinessSnapshot {
-  const balanceSheet = generateBalanceSheet(state, asOfDate);
+  const trialBalance = buildTrialBalanceSnapshot(state, asOfDate);
   const totalSales = state.sales.reduce((sum, s) => sum + s.total, 0);
   const totalReceipts = state.receipts.reduce((sum, r) => sum + r.amount, 0);
   const totalPurchases = state.purchases.reduce((sum, p) => sum + p.total, 0);
@@ -37,10 +37,10 @@ export function evaluateFinanceReadiness(state: AppState, asOfDate = new Date())
       key: "trial-balance",
       label: "Trial balance consistency",
       weight: 30,
-      passed: balanceSheet.balanceCheck,
-      details: balanceSheet.balanceCheck
-        ? "Assets are balanced against liabilities + equity."
-        : "Balance sheet is out of balance; investigate ledger mappings.",
+      passed: trialBalance.isBalanced,
+      details: trialBalance.isBalanced
+        ? `Debits ${round2(trialBalance.debitTotal)} match credits ${round2(trialBalance.creditTotal)}.`
+        : `Trial balance difference ${round2(trialBalance.difference)} exceeds tolerance ${trialBalance.tolerance}.`,
     },
     {
       key: "owner-capital",

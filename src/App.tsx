@@ -33,7 +33,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useAnnouncer } from "@/hooks/useAnnouncer";
 import { PersistenceProvider } from "@/store/persistence/PersistenceProvider";
-import { getBuildMetadata, recordRuntimeEvent } from "@/utils/runtimeDiagnostics";
+import { getBuildMetadata, installGlobalRuntimeExceptionHandlers, recordRuntimeEvent } from "@/utils/runtimeDiagnostics";
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -77,6 +77,9 @@ export function App() {
       message: "Application session started",
       context: `${build.appVersion}@${build.buildHash} (${build.mode})`,
     });
+
+    const cleanupRuntimeHandlers = installGlobalRuntimeExceptionHandlers();
+    return cleanupRuntimeHandlers;
   }, []);
 
   const renderPage = () => {

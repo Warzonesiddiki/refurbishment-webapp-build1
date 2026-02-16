@@ -67,6 +67,37 @@ export type TaxationSummary = {
   effectiveTaxRatePercent: number;
 };
 
+export type VatExceptionItem = {
+  source: "sale" | "purchase";
+  id: string;
+  reference: string;
+  date: string;
+  issue: "missing_vat_value" | "invalid_vat_value" | "unexpected_zero_vat" | "vat_mismatch";
+  expectedVat: number;
+  actualVat: number;
+  variance: number;
+};
+
+export type VatExceptionReport = {
+  periodStart: string;
+  periodEnd: string;
+  issueCount: number;
+  issues: VatExceptionItem[];
+};
+
+export type VatBoxMappingLine = {
+  box: number;
+  label: string;
+  amount: number;
+  source: "sales" | "purchases" | "derived";
+};
+
+export type VatBoxMappingReport = {
+  periodStart: string;
+  periodEnd: string;
+  lines: VatBoxMappingLine[];
+};
+
 export function generateProfitLossReport(
   state: AppState,
   periodStart: Date,
@@ -159,6 +190,150 @@ export function generateTaxationSummary(state: AppState, periodStart: Date, peri
     taxableRevenue,
     zeroRatedRevenue,
     effectiveTaxRatePercent: taxableRevenue ? round2((outputVAT / taxableRevenue) * 100) : 0,
+  };
+}
+
+
+function detectVatIssue(
+  source: "sale" | "purchase",
+  row: { id: string; reference: string; date: string; subtotal: number; vat: number },
+  vatRatePercent: number,
+  mismatchTolerance: number
+): VatExceptionItem | null {
+  if (row.vat === null || row.vat === undefined) {
+    return {
+      source,
+      id: row.id,
+      reference: row.reference,
+      date: row.date,
+      issue: "missing_vat_value",
+      expectedVat: round2((row.subtotal * vatRatePercent) / 100),
+      actualVat: 0,
+      variance: round2((row.subtotal * vatRatePercent) / 100),
+    };
+  }
+
+  if (!Number.isFinite(row.vat)) {
+    return {
+      source,
+      id: row.id,
+      reference: row.reference,
+      date: row.date,
+      issue: "invalid_vat_value",
+      expectedVat: round2((row.subtotal * vatRatePercent) / 100),
+      actualVat: Number.isFinite(row.vat) ? row.vat : 0,
+      variance: round2((row.subtotal * vatRatePercent) / 100),
+    };
+  }
+
+  const expectedVat = round2((row.subtotal * vatRatePercent) / 100);
+  const variance = round2(row.vat - expectedVat);
+
+  if (row.subtotal > 0 && vatRatePercent > 0 && row.vat === 0) {
+    return {
+      source,
+      id: row.id,
+      reference: row.reference,
+      date: row.date,
+      issue: "unexpected_zero_vat",
+      expectedVat,
+      actualVat: row.vat,
+      variance,
+    };
+  }
+
+  if (Math.abs(variance) > mismatchTolerance) {
+    return {
+      source,
+      id: row.id,
+      reference: row.reference,
+      date: row.date,
+      issue: "vat_mismatch",
+      expectedVat,
+      actualVat: row.vat,
+      variance,
+    };
+  }
+
+  return null;
+}
+
+export function generateVatExceptionReport(
+  state: AppState,
+  periodStart: Date,
+  periodEnd: Date,
+  options?: { mismatchTolerance?: number }
+): VatExceptionReport {
+  const mismatchTolerance = options?.mismatchTolerance ?? 0.05;
+  const vatRatePercent = Number(state.settings.vatRate) || 0;
+
+  const saleIssues = state.sales
+    .filter((sale) => inRange(sale.date, periodStart, periodEnd))
+    .map((sale) =>
+      detectVatIssue(
+        "sale",
+        {
+          id: sale.id,
+          reference: sale.invoice,
+          date: sale.date,
+          subtotal: Number(sale.subtotal || 0),
+          vat: sale.vat,
+        },
+        vatRatePercent,
+        mismatchTolerance
+      )
+    )
+    .filter((issue): issue is VatExceptionItem => issue !== null);
+
+  const purchaseIssues = state.purchases
+    .filter((purchase) => inRange(purchase.date, periodStart, periodEnd))
+    .map((purchase) =>
+      detectVatIssue(
+        "purchase",
+        {
+          id: purchase.id,
+          reference: purchase.purchase,
+          date: purchase.date,
+          subtotal: Number((purchase as { subtotal?: number }).subtotal ?? purchase.total - purchase.vat),
+          vat: purchase.vat,
+        },
+        vatRatePercent,
+        mismatchTolerance
+      )
+    )
+    .filter((issue): issue is VatExceptionItem => issue !== null);
+
+  const issues = [...saleIssues, ...purchaseIssues];
+
+  return {
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+    issueCount: issues.length,
+    issues,
+  };
+}
+
+
+export function generateVatBoxMappingReport(state: AppState, periodStart: Date, periodEnd: Date): VatBoxMappingReport {
+  const sales = state.sales.filter((sale) => inRange(sale.date, periodStart, periodEnd));
+  const purchases = state.purchases.filter((purchase) => inRange(purchase.date, periodStart, periodEnd));
+
+  const taxableSupplies = round2(sales.reduce((sum, sale) => sum + sale.subtotal, 0));
+  const outputVat = round2(sales.reduce((sum, sale) => sum + sale.vat, 0));
+  const inputVat = round2(purchases.reduce((sum, purchase) => sum + purchase.vat, 0));
+  const netVat = round2(outputVat - inputVat);
+
+  const lines: VatBoxMappingLine[] = [
+    { box: 1, label: "Taxable supplies (standard rate)", amount: taxableSupplies, source: "sales" },
+    { box: 2, label: "Output VAT due", amount: outputVat, source: "sales" },
+    { box: 4, label: "Input VAT recoverable", amount: inputVat, source: "purchases" },
+    { box: 5, label: "Net VAT payable/(reclaimable)", amount: netVat, source: "derived" },
+  ];
+
+  return {
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+    lines,
   };
 }
 

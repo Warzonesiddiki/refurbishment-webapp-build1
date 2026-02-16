@@ -7,6 +7,9 @@ export type IntegritySeal = {
   timestamp: string;
   recordCount: number;
   version: string;
+  signature: string;
+  signatureAlgorithm: "sha256";
+  signedBy: string;
 };
 
 export type ExportOptions = {
@@ -15,6 +18,7 @@ export type ExportOptions = {
   includeIntegritySeal?: boolean;
   dateRange?: { start: string; end: string };
   filters?: Partial<AuditFilter>;
+  exportedBy?: string;
 };
 
 export type AuditExport = {
@@ -56,13 +60,24 @@ function toCsv(logs: AuditLogRecord[]) {
   return [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
 }
 
-export async function generateIntegritySeal(data: unknown): Promise<IntegritySeal> {
+async function buildSignature(input: { checksum: string; timestamp: string; recordCount: number; version: string; signedBy: string }) {
+  return computeChecksum(input);
+}
+
+export async function generateIntegritySeal(data: unknown, signedBy = "system"): Promise<IntegritySeal> {
   const records = Array.isArray(data) ? data.length : 1;
+  const checksum = await computeChecksum(data);
+  const timestamp = new Date().toISOString();
+  const version = "1.1.0";
+
   return {
-    checksum: await computeChecksum(data),
-    timestamp: new Date().toISOString(),
+    checksum,
+    timestamp,
     recordCount: records,
-    version: "1.0.0",
+    version,
+    signatureAlgorithm: "sha256",
+    signedBy,
+    signature: await buildSignature({ checksum, timestamp, recordCount: records, version, signedBy }),
   };
 }
 
@@ -72,12 +87,13 @@ export async function exportAuditLogs(logs: AuditLogRecord[], options: ExportOpt
     filtered = filtered.filter((x) => +new Date(x.timestamp) >= +new Date(options.dateRange!.start) && +new Date(x.timestamp) <= +new Date(options.dateRange!.end));
   }
   const records = options.maskSensitive ? filtered.map(maskAuditLog) : filtered;
-  const integritySeal = options.includeIntegritySeal ? await generateIntegritySeal(records) : null;
+  const exportedBy = options.exportedBy ?? "system";
+  const integritySeal = options.includeIntegritySeal ? await generateIntegritySeal(records, exportedBy) : null;
   const out: AuditExport = {
     header: {
       exportId: crypto.randomUUID(),
       exportedAt: new Date().toISOString(),
-      exportedBy: "system",
+      exportedBy,
       filters: options.filters ?? {},
       recordCount: records.length,
       dateRange: { start: options.dateRange?.start ?? null, end: options.dateRange?.end ?? null },
@@ -95,9 +111,21 @@ export async function verifyExportIntegrity(exportData: AuditExport) {
     errors.push("Missing integrity seal");
     return { valid: false, errors };
   }
+  const seal = exportData.header.integritySeal;
   const checksum = await computeChecksum(exportData.records);
-  if (checksum !== exportData.header.integritySeal.checksum) errors.push("Checksum mismatch");
+  if (checksum !== seal.checksum) errors.push("Checksum mismatch");
   if (exportData.records.length !== exportData.header.recordCount) errors.push("Record count mismatch");
+
+  const expectedSignature = await buildSignature({
+    checksum: seal.checksum,
+    timestamp: seal.timestamp,
+    recordCount: seal.recordCount,
+    version: seal.version,
+    signedBy: seal.signedBy,
+  });
+  if (expectedSignature !== seal.signature) errors.push("Signature mismatch");
+  if (seal.signatureAlgorithm !== "sha256") errors.push("Unsupported signature algorithm");
+
   return { valid: errors.length === 0, errors };
 }
 
