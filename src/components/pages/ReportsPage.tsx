@@ -13,10 +13,15 @@ import {
   generateCashFlowStatement,
   generateTaxationSummary,
   generateVATReport,
+  generateVatExceptionReport,
+  generateVatBoxMappingReport,
 } from "@/utils/reportGenerator";
 import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
 import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 import { buildCompletionRoadmap } from "@/utils/completionRoadmap";
+import { buildVatFilingEvidencePackage, buildVatPeriodLockEvidenceTemplate } from "@/utils/vatEvidence";
+import { buildVatSubmissionEnvelope } from "@/utils/vatSubmission";
+import { runVatAcknowledgementReconciliationJob } from "@/utils/vatReconciliationJob";
 import {
   buildJournalDrilldownRows,
   filterJournalDrilldownRows,
@@ -168,6 +173,8 @@ export function ReportsPage() {
     const cashflow = generateCashFlowStatement(state, periodStart, periodEnd);
     const management = generateManagementAccountingSnapshot(state, periodStart, periodEnd);
     const tax = generateTaxationSummary(state, periodStart, periodEnd);
+    const taxExceptions = generateVatExceptionReport(state, periodStart, periodEnd);
+    const taxBoxMapping = generateVatBoxMappingReport(state, periodStart, periodEnd);
     const agedBalances = generateAgedBalanceSnapshot(state, periodEnd);
     const journalDrilldown = buildJournalDrilldownRows(state);
 
@@ -191,6 +198,12 @@ export function ReportsPage() {
       cashflow,
       management,
       tax,
+      taxExceptions,
+      taxBoxMapping,
+      reportingPeriod: {
+        start: periodStart,
+        end: periodEnd,
+      },
       agedBalances,
       summary,
       journalDrilldown,
@@ -230,6 +243,56 @@ export function ReportsPage() {
   const exportJournalDrilldownJson = () => {
     exportJson(`report-accounting-journal-${journalScope}-${journalWindow}-${new Date().toISOString().slice(0, 10)}.json`, filteredJournalRows);
     trigger("info", `Exported accounting journal JSON (${journalScope}, ${journalWindow})`);
+  };
+
+
+  const exportVatFilingEvidence = async () => {
+    const periodStart = data.reportingPeriod.start;
+    const periodEnd = data.reportingPeriod.end;
+    const evidence = await buildVatFilingEvidencePackage(state, periodStart, periodEnd, "system");
+    exportJson(`vat-filing-evidence-${new Date().toISOString().slice(0, 10)}.json`, evidence);
+    trigger("info", `Exported VAT filing evidence package (${evidence.exceptions.issueCount} exception(s))`);
+  };
+
+  const exportVatPeriodLockTemplate = () => {
+    const periodStart = data.reportingPeriod.start;
+    const periodEnd = data.reportingPeriod.end;
+    const template = buildVatPeriodLockEvidenceTemplate(periodStart, periodEnd, {
+      issueCount: data.taxExceptions.issueCount,
+      outputVat: data.tax.outputVAT,
+      inputVat: data.tax.inputVAT,
+      netVatPayable: data.tax.netVATPayable,
+      boxCount: data.taxBoxMapping.lines.length,
+    });
+    exportJson(`vat-period-lock-template-${new Date().toISOString().slice(0, 10)}.json`, template);
+    trigger("info", "Exported VAT period-lock evidence template");
+  };
+
+  const exportVatSubmissionPayload = async () => {
+    const periodStart = data.reportingPeriod.start;
+    const periodEnd = data.reportingPeriod.end;
+    const envelope = await buildVatSubmissionEnvelope(state, periodStart, periodEnd, "uae-fzta", "system");
+    exportJson(`vat-submission-uae-fzta-${new Date().toISOString().slice(0, 10)}.json`, envelope);
+    trigger("info", `Exported VAT submission payload (${envelope.diagnostics.issueCount} issue(s) flagged)`);
+  };
+
+  const exportVatReconciliationSnapshot = async () => {
+    const periodStart = data.reportingPeriod.start;
+    const periodEnd = data.reportingPeriod.end;
+    const envelope = await buildVatSubmissionEnvelope(state, periodStart, periodEnd, "uae-fzta", "system");
+
+    const report = runVatAcknowledgementReconciliationJob(envelope, [
+      {
+        authority: envelope.authority,
+        acknowledgementRef: `ACK-${new Date().toISOString().slice(0, 10)}`,
+        acceptedAt: new Date().toISOString(),
+        reportedNetVat: envelope.diagnostics.netVat,
+        reportedIssueCount: envelope.diagnostics.issueCount,
+      },
+    ]);
+
+    exportJson(`vat-ack-reconciliation-${new Date().toISOString().slice(0, 10)}.json`, report);
+    trigger("info", `Exported VAT reconciliation snapshot (${report.summary.matched} matched)`);
   };
 
   const handleExport = (format: "excel" | "csv" | "json") => {
@@ -551,15 +614,97 @@ export function ReportsPage() {
           )}
 
           {selected === "tax" && (
-            <table className="w-full text-sm">
-              <tbody>
-                <tr><td className="py-2 px-3">Taxable Revenue</td><td className="py-2 px-3">{formatMoney(data.tax.taxableRevenue)}</td></tr>
-                <tr><td className="py-2 px-3">Output VAT</td><td className="py-2 px-3">{formatMoney(data.tax.outputVAT)}</td></tr>
-                <tr><td className="py-2 px-3">Input VAT</td><td className="py-2 px-3">{formatMoney(data.tax.inputVAT)}</td></tr>
-                <tr><td className="py-2 px-3">Net VAT Payable</td><td className="py-2 px-3 text-yellow-300">{formatMoney(data.tax.netVATPayable)}</td></tr>
-                <tr><td className="py-2 px-3">Effective Tax Rate</td><td className="py-2 px-3">{data.tax.effectiveTaxRatePercent.toFixed(2)}%</td></tr>
-              </tbody>
-            </table>
+            <div className="space-y-4">
+              <table className="w-full text-sm">
+                <tbody>
+                  <tr><td className="py-2 px-3">Taxable Revenue</td><td className="py-2 px-3">{formatMoney(data.tax.taxableRevenue)}</td></tr>
+                  <tr><td className="py-2 px-3">Output VAT</td><td className="py-2 px-3">{formatMoney(data.tax.outputVAT)}</td></tr>
+                  <tr><td className="py-2 px-3">Input VAT</td><td className="py-2 px-3">{formatMoney(data.tax.inputVAT)}</td></tr>
+                  <tr><td className="py-2 px-3">Net VAT Payable</td><td className="py-2 px-3 text-yellow-300">{formatMoney(data.tax.netVATPayable)}</td></tr>
+                  <tr><td className="py-2 px-3">Effective Tax Rate</td><td className="py-2 px-3">{data.tax.effectiveTaxRatePercent.toFixed(2)}%</td></tr>
+                </tbody>
+              </table>
+
+              <div className="glass-card p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-cyan-500/40">VAT Box Mapping Detail</p>
+                  <p className="text-xs text-cyan-300/70">{data.taxBoxMapping.lines.length} box(es)</p>
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr>
+                        <th className="py-1 px-2 text-left">Box</th>
+                        <th className="py-1 px-2 text-left">Description</th>
+                        <th className="py-1 px-2 text-left">Source</th>
+                        <th className="py-1 px-2 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.taxBoxMapping.lines.map((line) => (
+                        <tr key={`vat-box-${line.box}`}>
+                          <td className="py-1 px-2">{line.box}</td>
+                          <td className="py-1 px-2">{line.label}</td>
+                          <td className="py-1 px-2">{line.source}</td>
+                          <td className="py-1 px-2 text-right">{formatMoney(line.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="glass-card p-3">
+                <div className="flex items-center justify-between mb-2 gap-3">
+                  <p className="text-xs text-cyan-500/40">VAT Exception Report</p>
+                  <div className="flex items-center gap-3">
+                    <p className={cn("text-xs", data.taxExceptions.issueCount === 0 ? "text-green-300" : "text-yellow-300")}>Issues: {data.taxExceptions.issueCount}</p>
+                    <button type="button" className="btn-ghost text-xs" onClick={() => void exportVatFilingEvidence()}>
+                      Export VAT Filing Evidence
+                    </button>
+                    <button type="button" className="btn-ghost text-xs" onClick={exportVatPeriodLockTemplate}>
+                      Export VAT Period-Lock Template
+                    </button>
+                    <button type="button" className="btn-ghost text-xs" onClick={() => void exportVatSubmissionPayload()}>
+                      Export VAT Submission Payload
+                    </button>
+                    <button type="button" className="btn-ghost text-xs" onClick={() => void exportVatReconciliationSnapshot()}>
+                      Export VAT Reconciliation Snapshot
+                    </button>
+                  </div>
+                </div>
+                {data.taxExceptions.issueCount === 0 ? (
+                  <p className="text-sm text-green-300">No VAT exceptions detected in selected period.</p>
+                ) : (
+                  <div className="overflow-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr>
+                          <th className="py-1 px-2 text-left">Source</th>
+                          <th className="py-1 px-2 text-left">Reference</th>
+                          <th className="py-1 px-2 text-left">Issue</th>
+                          <th className="py-1 px-2 text-right">Expected</th>
+                          <th className="py-1 px-2 text-right">Actual</th>
+                          <th className="py-1 px-2 text-right">Variance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.taxExceptions.issues.slice(0, 8).map((issue) => (
+                          <tr key={`${issue.source}-${issue.id}-${issue.issue}`}>
+                            <td className="py-1 px-2">{issue.source}</td>
+                            <td className="py-1 px-2">{issue.reference}</td>
+                            <td className="py-1 px-2">{issue.issue}</td>
+                            <td className="py-1 px-2 text-right">{formatMoney(issue.expectedVat)}</td>
+                            <td className="py-1 px-2 text-right">{formatMoney(issue.actualVat)}</td>
+                            <td className="py-1 px-2 text-right">{formatMoney(issue.variance)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>

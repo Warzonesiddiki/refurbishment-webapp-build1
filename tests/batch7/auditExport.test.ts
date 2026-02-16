@@ -9,9 +9,33 @@ const sample: AuditLogRecord = {
 
 describe("audit export", () => {
   it("exports and verifies seal", async () => {
-    const out = await exportAuditLogs([sample], { format: "json", includeIntegritySeal: true, maskSensitive: true });
+    const out = await exportAuditLogs([sample], { format: "json", includeIntegritySeal: true, maskSensitive: true, exportedBy: "auditor" });
     expect(out.header.recordCount).toBe(1);
+    expect(out.header.integritySeal?.signature).toBeTruthy();
+    expect(out.header.integritySeal?.signedBy).toBe("auditor");
     const verified = await verifyExportIntegrity(out);
     expect(verified.valid).toBe(true);
   });
+
+  it("fails verification when signature is tampered", async () => {
+    const out = await exportAuditLogs([sample], { format: "json", includeIntegritySeal: true });
+    if (!out.header.integritySeal) throw new Error("seal required");
+
+    out.header.integritySeal.signature = "tampered-signature";
+
+    const verified = await verifyExportIntegrity(out);
+    expect(verified.valid).toBe(false);
+    expect(verified.errors).toContain("Signature mismatch");
+  });
+  it("fails verification when signature algorithm is tampered", async () => {
+    const out = await exportAuditLogs([sample], { format: "json", includeIntegritySeal: true });
+    if (!out.header.integritySeal) throw new Error("seal required");
+
+    out.header.integritySeal.signatureAlgorithm = "sha256x" as never;
+
+    const verified = await verifyExportIntegrity(out);
+    expect(verified.valid).toBe(false);
+    expect(verified.errors).toContain("Unsupported signature algorithm");
+  });
+
 });

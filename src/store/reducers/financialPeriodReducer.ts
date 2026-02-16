@@ -4,6 +4,7 @@ import type {
   PeriodCloseChecklist,
   PeriodType,
 } from "@/store/types/FinancialPeriodTypes";
+import type { UserRole } from "@/store/types/SecurityTypes";
 
 export type FinancialPeriodState = {
   periods: Record<string, FinancialPeriod>;
@@ -15,8 +16,8 @@ export type FinancialPeriodState = {
 export type FinancialPeriodAction =
   | { type: "CREATE_FINANCIAL_PERIOD"; payload: { type: PeriodType; startDate: string } }
   | { type: "START_PERIOD_CLOSE"; payload: { periodId: string; checklist?: PeriodCloseChecklist } }
-  | { type: "COMPLETE_PERIOD_CLOSE"; payload: { periodId: string; closingBalances: PeriodBalances } }
-  | { type: "REOPEN_PERIOD"; payload: { periodId: string; reason: string; allowReopen?: boolean } };
+  | { type: "COMPLETE_PERIOD_CLOSE"; payload: { periodId: string; closingBalances: PeriodBalances; actorRole?: UserRole } }
+  | { type: "REOPEN_PERIOD"; payload: { periodId: string; reason: string; allowReopen?: boolean; actorRole?: UserRole } };
 
 const uid = () => crypto.randomUUID();
 
@@ -58,6 +59,35 @@ function periodName(type: PeriodType, start: Date) {
   if (type === "MONTH") return `${y}-${m}`;
   if (type === "QUARTER") return `${y}-Q${Math.floor(start.getMonth() / 3) + 1}`;
   return `${y}`;
+}
+
+
+function closingBalancesDifference(b: PeriodBalances) {
+  const debitTotal = b.cash + b.receivables + b.inventory;
+  const creditTotal = b.payables + b.ownerEquity + b.retainedEarnings;
+  return Number((debitTotal - creditTotal).toFixed(2));
+}
+
+function assertClosingTrialBalanceBalanced(balances: PeriodBalances, tolerance = 0.01) {
+  const difference = closingBalancesDifference(balances);
+  if (Math.abs(difference) > tolerance) {
+    throw new Error(`Trial balance guard blocked close: difference ${difference} exceeds tolerance ${tolerance}`);
+  }
+}
+
+
+function assertPeriodCloseRoleAllowed(actorRole?: UserRole) {
+  const role = actorRole ?? "ADMIN";
+  if (!["ADMIN", "MANAGER"].includes(role)) {
+    throw new Error(`Role ${role} cannot close financial periods`);
+  }
+}
+
+function assertPeriodReopenRoleAllowed(actorRole?: UserRole) {
+  const role = actorRole ?? "ADMIN";
+  if (role !== "ADMIN") {
+    throw new Error(`Role ${role} cannot reopen closed periods`);
+  }
 }
 
 export const createInitialFinancialPeriodState = (): FinancialPeriodState => ({
@@ -121,6 +151,8 @@ export function financialPeriodReducer(state: FinancialPeriodState, action: Fina
       const checklist = state.closeChecklist[period.id] ?? defaultChecklist();
       const done = Object.values(checklist).every(Boolean);
       if (!done) throw new Error("All checklist items must be complete");
+      assertPeriodCloseRoleAllowed(action.payload.actorRole);
+      assertClosingTrialBalanceBalanced(action.payload.closingBalances);
       return {
         ...state,
         periods: {
@@ -141,6 +173,7 @@ export function financialPeriodReducer(state: FinancialPeriodState, action: Fina
       const hasSubsequent = Object.values(state.periods).some((p) => +new Date(p.startDate) > +new Date(period.startDate));
       if (hasSubsequent) throw new Error("Subsequent period exists");
       if (!action.payload.allowReopen) throw new Error("Requires elevated permission");
+      assertPeriodReopenRoleAllowed(action.payload.actorRole);
       return { ...state, periods: { ...state.periods, [period.id]: { ...period, status: "OPEN", closedAt: null, closedBy: null } } };
     }
     default:
