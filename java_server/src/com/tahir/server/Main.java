@@ -52,6 +52,8 @@ public class Main {
   private static final String ENV_ADMIN_PASSWORD = "TAHIR_ADMIN_PASSWORD";
   private static final String ENV_DISABLE_DEFAULT_ADMIN = "TAHIR_DISABLE_DEFAULT_ADMIN";
   private static final String ENV_ALLOWED_ORIGIN = "TAHIR_ALLOWED_ORIGIN";
+  private static final int SEEDED_SKYLINE_USER_START = 2;
+  private static final int SEEDED_SKYLINE_USER_END = 31;
 
   private static final Map<String, UserRecord> usersByEmail = new ConcurrentHashMap<>();
   private static final Map<String, SessionRecord> sessionsByToken = new ConcurrentHashMap<>();
@@ -83,6 +85,7 @@ public class Main {
     initStorage();
     loadUsers();
     ensureDefaultAdminAccount();
+    ensureSeededSkylineUsers();
 
     HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
     server.createContext("/api/health", new SafeHandler("health", new HealthHandler()));
@@ -91,6 +94,8 @@ public class Main {
     server.createContext("/api/auth/me", new SafeHandler("me", new MeHandler()));
     server.createContext("/api/auth/logout", new SafeHandler("logout", new LogoutHandler()));
     server.createContext("/api/auth/change-password", new SafeHandler("change-password", new ChangePasswordHandler()));
+    server.createContext("/api/auth/users", new SafeHandler("users", new UsersHandler()));
+    server.createContext("/api/auth/reset-seeded-passwords", new SafeHandler("reset-seeded-passwords", new ResetSeededPasswordsHandler()));
     server.createContext("/api/state/snapshot", new SafeHandler("state-snapshot", new StateSnapshotHandler()));
 
     ExecutorService requestExecutor = Executors.newFixedThreadPool(8);
@@ -240,6 +245,61 @@ public class Main {
     );
     usersByEmail.put(adminEmail, admin);
     persistUser(admin);
+  }
+
+
+  private static void ensureSeededSkylineUsers() throws IOException {
+    boolean changed = false;
+    for (int i = SEEDED_SKYLINE_USER_START; i <= SEEDED_SKYLINE_USER_END; i++) {
+      String email = "id.skyline" + i + "@erp.com";
+      String normalizedEmail = email.toLowerCase();
+      if (usersByEmail.containsKey(normalizedEmail)) {
+        continue;
+      }
+
+      String password = "user" + i + "skylinein";
+      UserRecord seeded = new UserRecord(
+        UUID.randomUUID().toString(),
+        normalizedEmail,
+        "Skyline User " + i,
+        sha256(password),
+        Instant.now().toString()
+      );
+      usersByEmail.put(normalizedEmail, seeded);
+      persistUser(seeded);
+      changed = true;
+    }
+
+    if (changed) {
+      rewriteUsersCsv();
+    }
+  }
+
+  private static int resetSeededSkylinePasswords() throws IOException {
+    int updated = 0;
+    for (int i = SEEDED_SKYLINE_USER_START; i <= SEEDED_SKYLINE_USER_END; i++) {
+      String email = ("id.skyline" + i + "@erp.com").toLowerCase();
+      UserRecord current = usersByEmail.get(email);
+      if (current == null) {
+        continue;
+      }
+      String password = "user" + i + "skylinein";
+      UserRecord reset = new UserRecord(current.id, current.email, current.fullName, sha256(password), current.createdAt);
+      usersByEmail.put(email, reset);
+      updated += 1;
+    }
+    if (updated > 0) {
+      rewriteUsersCsv();
+    }
+    return updated;
+  }
+
+  private static boolean isPrivilegedSession(SessionRecord session) {
+    if (session == null) {
+      return false;
+    }
+    String adminEmail = normalizeSeedAdminEmail();
+    return !adminEmail.isBlank() && adminEmail.equalsIgnoreCase(session.email);
   }
 
   private static boolean isEnvFlagEnabled(String envKey) {
@@ -860,6 +920,75 @@ public class Main {
       rewriteUsersCsv();
 
       sendJson(exchange, 200, "{\"status\":\"password_updated\"}");
+    }
+  }
+
+
+  private static class UsersHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (handleCorsPreflight(exchange)) {
+        return;
+      }
+      if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+        sendJson(exchange, 405, "{\"error\":\"method_not_allowed\"}");
+        return;
+      }
+
+      cleanupExpiredSessions();
+      String token = extractBearerToken(exchange);
+      if (token.isBlank()) {
+        sendJson(exchange, 401, "{\"error\":\"missing_token\"}");
+        return;
+      }
+      SessionRecord session = sessionsByToken.get(token);
+      if (session == null) {
+        sendJson(exchange, 401, "{\"error\":\"invalid_token\"}");
+        return;
+      }
+
+      List<UserRecord> users = new ArrayList<>(usersByEmail.values());
+      users.sort((a, b) -> a.fullName.compareToIgnoreCase(b.fullName));
+      StringBuilder out = new StringBuilder("{\"users\":[");
+      for (int i = 0; i < users.size(); i++) {
+        UserRecord user = users.get(i);
+        if (i > 0) out.append(',');
+        out.append("{\"id\":\"").append(jsonEscape(user.id)).append("\",\"email\":\"").append(jsonEscape(user.email)).append("\",\"fullName\":\"").append(jsonEscape(user.fullName)).append("\"}");
+      }
+      out.append("]}");
+      sendJson(exchange, 200, out.toString());
+    }
+  }
+
+  private static class ResetSeededPasswordsHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (handleCorsPreflight(exchange)) {
+        return;
+      }
+      if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+        sendJson(exchange, 405, "{\"error\":\"method_not_allowed\"}");
+        return;
+      }
+
+      cleanupExpiredSessions();
+      String token = extractBearerToken(exchange);
+      if (token.isBlank()) {
+        sendJson(exchange, 401, "{\"error\":\"missing_token\"}");
+        return;
+      }
+      SessionRecord session = sessionsByToken.get(token);
+      if (session == null) {
+        sendJson(exchange, 401, "{\"error\":\"invalid_token\"}");
+        return;
+      }
+      if (!isPrivilegedSession(session)) {
+        sendJson(exchange, 403, "{\"error\":\"forbidden\",\"message\":\"admin access required\"}");
+        return;
+      }
+
+      int resetCount = resetSeededSkylinePasswords();
+      sendJson(exchange, 200, "{\"status\":\"ok\",\"resetCount\":" + resetCount + "}");
     }
   }
 

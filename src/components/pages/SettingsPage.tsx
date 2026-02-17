@@ -9,6 +9,7 @@ import { runRestoreRehearsal } from "@/utils/backup/restoreRehearsal";
 import { getSettingsSectionHint } from "@/components/pages/settingsHints";
 import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
 import { clearRuntimeEvents, getBuildMetadata, listRuntimeEvents, recordRuntimeEvent } from "@/utils/runtimeDiagnostics";
+import { resetSeededSkylinePasswords } from "@/utils/javaAuth";
 
 export function SettingsPage() {
   const state = useAppState();
@@ -335,6 +336,31 @@ export function SettingsPage() {
                       dispatch({ type: "CLEAR_ACTIVITY" });
                       recordRuntimeEvent({ level: "warning", source: "Settings.Diagnostics", message: "Activity log cleared" });
                       setDiagnosticsRefreshTick((v) => v + 1);
+                    },
+                  },
+                  {
+                    label: "Reset Seeded Skyline Passwords",
+                    desc: "Reset id.skyline2..id.skyline31 passwords to default userNskylinein",
+                    icon: "🔐",
+                    onRun: () => {
+                      void resetSeededSkylinePasswords()
+                        .then((result) => {
+                          dispatch({
+                            type: "ADD_ACTIVITY",
+                            payload: { action: `Reset seeded skyline passwords (${result.resetCount})`, time: "just now" },
+                          });
+                          recordRuntimeEvent({ level: "warning", source: "Settings.Diagnostics", message: `Seeded skyline passwords reset (${result.resetCount})` });
+                          setDiagnosticsRefreshTick((v) => v + 1);
+                        })
+                        .catch((error: unknown) => {
+                          const message = error instanceof Error ? error.message : "unknown error";
+                          dispatch({
+                            type: "ADD_ACTIVITY",
+                            payload: { action: `Seeded skyline reset failed: ${message}`, time: "just now" },
+                          });
+                          recordRuntimeEvent({ level: "error", source: "Settings.Diagnostics", message: `Seeded skyline reset failed: ${message}` });
+                          setDiagnosticsRefreshTick((v) => v + 1);
+                        });
                     },
                   },
                 ].map(tool => (

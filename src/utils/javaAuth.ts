@@ -4,6 +4,8 @@ export type AuthUser = {
   fullName: string;
 };
 
+export type AuthDirectoryUser = AuthUser;
+
 const TOKEN_KEY = "alm_auth_token";
 const API_BASE = (import.meta.env.VITE_JAVA_API_BASE as string | undefined) || "http://localhost:8085";
 const REQUEST_TIMEOUT_MS = 8000;
@@ -103,4 +105,38 @@ export async function fetchCurrentUser() {
     // Keep token on transient network failure; only clear on explicit unauthorized responses.
     return null;
   }
+}
+
+export async function fetchAuthUsers() {
+  const token = getAuthToken();
+  if (!token) return [] as AuthDirectoryUser[];
+
+  const data = await requestJson<{ users: AuthDirectoryUser[] }>(
+    "/api/auth/users",
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+    "load users"
+  );
+
+  return Array.isArray(data.users) ? data.users : [];
+}
+
+export async function resetSeededSkylinePasswords() {
+  const token = getAuthToken();
+  if (!token) throw new Error("Not authenticated");
+
+  return requestJson<{ status: string; resetCount: number }>(
+    "/api/auth/reset-seeded-passwords",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: "{}",
+    },
+    "reset seeded passwords"
+  );
 }
