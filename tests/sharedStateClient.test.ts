@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createInitialState } from "@/store/appState";
-import { fetchSharedState, pushSharedState } from "@/utils/sharedStateClient";
+import { fetchSharedState, pushSharedState, SharedStatePushError } from "@/utils/sharedStateClient";
 
 describe("sharedStateClient", () => {
   afterEach(() => {
@@ -38,4 +38,16 @@ describe("sharedStateClient", () => {
     expect(request?.method).toBe("PUT");
     expect(request?.body).toContain('"timestamp":42');
   });
+  it("throws SharedStatePushError with status on failed push", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 409 }));
+
+    try {
+      await pushSharedState({ timestamp: 42, state: createInitialState() });
+      throw new Error("expected pushSharedState to throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(SharedStatePushError);
+      expect((error as SharedStatePushError).status).toBe(409);
+    }
+  });
+
 });

@@ -68,6 +68,9 @@ export function WipJobs() {
   const createWip = () => {
     if (!newWip.laptop) return;
     const laptop = state.laptops.find(l => l.barcode === newWip.laptop);
+    const trackMatch = /Track\s*([A-E])/i.exec(newWip.track);
+    const trackKey = (trackMatch?.[1]?.toUpperCase() ?? "C") as keyof typeof trackStages;
+    const initialStage = trackStages[trackKey]?.[0] ?? "Queue";
     dispatch({
       type: "ADD_WIP",
       payload: {
@@ -75,7 +78,7 @@ export function WipJobs() {
         laptop: newWip.laptop,
         brand: laptop ? `${laptop.brand} ${laptop.model}` : newWip.laptop,
         track: newWip.track,
-        stage: "Queue",
+        stage: initialStage,
         assignedTo: newWip.assignedTo || "Unassigned",
         partsUsed: 0, partsCost: 0, laborHrs: 0,
         priority: newWip.priority,
@@ -206,20 +209,69 @@ export function WipJobs() {
   };
 
 
-  const moveToNextStage = () => {
+  const handleCompleteStatus = () => {
     if (!selectedJob) return;
     const m = /Track\s*([A-E])/i.exec(selectedJob.track);
     if (!m) return;
     const key = m[1].toUpperCase() as keyof typeof trackStages;
     const stages = trackStages[key];
     const idx = stages.indexOf(selectedJob.stage);
-    if (idx === -1 || idx >= stages.length - 1) return;
-    dispatch({ type: "WIP_MOVE_STAGE", wipId: selectedJob.id, toStage: stages[idx + 1] });
+    if (idx === -1) return;
+
+    if (idx < stages.length - 1) {
+      dispatch({ type: "WIP_MOVE_STAGE", wipId: selectedJob.id, toStage: stages[idx + 1] });
+      return;
+    }
+
+    const gate = evaluateWipCompletionGate(selectedJob);
+    if (gate.canComplete) {
+      dispatch({ type: "WIP_COMPLETE", wipId: selectedJob.id });
+    }
   };
 
   const laborCost = selectedJob ? selectedJob.laborEntries.reduce((a, l) => a + l.hours * l.rate, 0) : 0;
   const totalJobCost = selectedJob ? selectedJob.partsCost + laborCost : 0;
   const completionGate = selectedJob ? evaluateWipCompletionGate(selectedJob) : null;
+  const nextStepSuggestions = useMemo(() => {
+    if (!selectedJob) return [] as string[];
+    const suggestions: string[] = [];
+    const stageName = selectedJob.stage?.toLowerCase() || "";
+
+    if ((selectedJob.diagnosisNotes || "").trim().length < 8) {
+      suggestions.push("Add diagnosis notes so the next technician can continue without context loss.");
+    }
+
+    if (selectedJob.parts.length === 0 && !/queue|inspect|diagnos/i.test(stageName)) {
+      suggestions.push("Add at least one required part or mark this job as no-parts-required before completion.");
+    }
+
+    const pendingApprovals = selectedJob.laborEntries.filter((entry) => entry.approved === false).length;
+    if (pendingApprovals > 0) {
+      suggestions.push(`Approve ${pendingApprovals} pending labor entr${pendingApprovals > 1 ? "ies" : "y"} to satisfy completion quality checks.`);
+    }
+
+    const m = /Track\s*([A-E])/i.exec(selectedJob.track);
+    const key = (m?.[1]?.toUpperCase() ?? "C") as keyof typeof trackStages;
+    const stages = trackStages[key] || [];
+    const idx = stages.indexOf(selectedJob.stage);
+    if (idx >= 0 && idx < stages.length - 1) {
+      suggestions.push(`Move stage to ${stages[idx + 1]} using “✓ Complete Status”.`);
+    }
+
+    if (completionGate?.canComplete) {
+      suggestions.push("Quality gate passed. You can safely click “✓ Complete Job”.");
+    } else {
+      const failing = completionGate?.checks.filter((check) => !check.pass).map((check) => check.label) || [];
+      if (failing.length > 0) {
+        suggestions.push(`Resolve completion gate blockers: ${failing.join(", ")}.`);
+      }
+    }
+
+    if (suggestions.length === 0) {
+      suggestions.push("No blockers detected. Keep moving this job with “✓ Complete Status”.");
+    }
+    return suggestions.slice(0, 5);
+  }, [completionGate, selectedJob]);
 
   return (
     <div data-page="wip-jobs" data-testid="page-wip-jobs" className="space-y-6">
@@ -496,9 +548,17 @@ export function WipJobs() {
                 </div>
               </div>
             )}
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+              <p className="text-[11px] text-emerald-300/80 mb-2" style={{ fontFamily: "var(--font-mono)" }}>System suggested next steps</p>
+              <div className="space-y-1.5">
+                {nextStepSuggestions.map((item, idx) => (
+                  <p key={`${item}-${idx}`} className="text-xs text-emerald-100/85">• {item}</p>
+                ))}
+              </div>
+            </div>
             <div className="flex justify-end gap-3">
               <button className="btn-ghost" onClick={() => setSelectedJobId(null)}>Close</button>
-              <button className="btn-ghost" data-action="wip-move-stage" onClick={moveToNextStage}>→ Next Stage</button>
+              <button className="btn-ghost" data-action="wip-move-stage" onClick={handleCompleteStatus}>✓ Complete Status</button>
               <button className="btn-cyber disabled:opacity-50 disabled:cursor-not-allowed" onClick={completeJob} disabled={!completionGate?.canComplete}>✓ Complete Job</button>
             </div>
           </div>

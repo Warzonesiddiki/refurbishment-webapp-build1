@@ -12,6 +12,8 @@ import { KEYBOARD_SHORTCUT_MAP, ShortcutAction } from "@/utils/actionShortcuts";
 import { ActionCommandPalette } from "@/components/ui/ActionCommandPalette";
 import { InstallAppBanner, MobileOpsBanner, OfflineQueueBanner, OfflineReplayAuditPanel } from "@/components/mobile";
 import { buildLanHintUrl, isLocalhostHost } from "@/utils/network";
+import { evaluateProjectCompletion } from "@/utils/projectCompletion";
+import { appendSessionHistory, saveLastSessionSummary } from "@/utils/sessionSummary";
 
 export type LayoutProps = {
   activePage: string;
@@ -30,6 +32,30 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
   const [isLocalhostRuntime, setIsLocalhostRuntime] = useState(false);
   const [lanHintUrl, setLanHintUrl] = useState("http://192.168.x.x:5173");
   const { state, dispatch } = useStore();
+  const sessionCompletion = useMemo(() => {
+    const completion = evaluateProjectCompletion(state);
+    const completedPercent = Math.max(0, Math.min(100, Math.round(completion.overallPercent)));
+    return {
+      completedPercent,
+      pendingPercent: Math.max(0, 100 - completedPercent),
+    };
+  }, [state]);
+
+  const handleLogout = useCallback(() => {
+    if (!onLogout) return;
+    const proceed = window.confirm(
+      `End current session?\n\nCompletion: ${sessionCompletion.completedPercent}%\nPending: ${sessionCompletion.pendingPercent}%`
+    );
+    if (!proceed) return;
+    const summary = {
+      completedPercent: sessionCompletion.completedPercent,
+      pendingPercent: sessionCompletion.pendingPercent,
+      endedAt: new Date().toISOString(),
+    };
+    saveLastSessionSummary(summary);
+    appendSessionHistory(summary);
+    onLogout();
+  }, [onLogout, sessionCompletion.completedPercent, sessionCompletion.pendingPercent]);
 
   const createBackup = useCallback(() => {
     const filename = `tahir-erp-backup-${toLocalDateStamp()}.json`;
@@ -177,7 +203,7 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
                 >
                   TAHIR ERP
                 </p>
-                <p className={cn("text-[10px] tracking-widest uppercase", theme === "pro" ? "text-slate-500" : "text-cyan-500/50")}>Manager v2.0</p>
+                <p className={cn("text-[10px] tracking-widest uppercase", theme === "pro" ? "text-slate-500" : "text-cyan-500/50")}>{theme === "pro" ? "Ray-Ban.EXE Interface" : "Manager v2.0"}</p>
               </div>
             )}
           </div>
@@ -229,6 +255,12 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
                 {state.alerts.length}
               </span>
             </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className={theme === "pro" ? "text-slate-500" : "text-cyan-500/40"}>Session Progress</span>
+              <span className={cn("px-2 py-0.5 rounded text-[11px] font-bold", theme === "pro" ? "bg-emerald-50 text-emerald-700" : "cyber-badge-green")} style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}>
+                {sessionCompletion.completedPercent}% / {sessionCompletion.pendingPercent}%
+              </span>
+            </div>
             <div className="divider-cyber mt-2" />
             <div className={cn("text-[10px] text-center", theme === "pro" ? "text-slate-400" : "text-cyan-500/20")} style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}>
               v2.1.0 • {new Date().getFullYear()}
@@ -257,13 +289,18 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
                 <path d="M3 12h18M3 6h18M3 18h18" />
               </svg>
             </button>
-            <div>
+            <div className="space-y-1">
               <p className={cn("text-[10px] uppercase tracking-[0.2em]", theme === "pro" ? "text-slate-400" : "text-cyan-500/40")} style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}>
                 {activePage.replace(/-/g, " / ")}
               </p>
               <h1 className={cn("text-base font-bold capitalize", theme === "pro" ? "text-slate-900" : "text-cyan-100 tracking-wide")} style={{ fontFamily: theme === "pro" ? "Inter" : "Orbitron" }}>
                 {activePage.replace(/-/g, " ")}
               </h1>
+              {theme === "pro" ? (
+                <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-rose-700">
+                  Ray-Ban.EXE
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -279,6 +316,16 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
                 <span className={cn(theme === "pro" ? "text-slate-400" : "text-cyan-400/70")}>{item.label}:</span> {item.value}
               </span>
             ))}
+            {theme === "pro" ? (
+              <span className="rb-pill">Ray-Ban.EXE Active</span>
+            ) : null}
+          </div>
+
+          <div className="hidden lg:flex items-center gap-2">
+            <button className={cn("rb-quick", theme === "pro" ? "" : "btn-ghost")} onClick={() => onNavigate("dashboard")}>Dashboard</button>
+            <button className={cn("rb-quick", theme === "pro" ? "" : "btn-ghost")} onClick={() => onNavigate("processing-tracks")}>Tracks</button>
+            <button className={cn("rb-quick", theme === "pro" ? "" : "btn-ghost")} onClick={() => onNavigate("processing-wip")}>WIP</button>
+            <button className={cn("rb-quick", theme === "pro" ? "" : "btn-ghost")} onClick={() => onNavigate("sales-new")}>New Sale</button>
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
@@ -308,7 +355,7 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
             />
 
             {onLogout && (
-              <button className={cn("btn-ghost hidden md:flex items-center gap-2", theme === "pro" && "text-slate-600")} onClick={onLogout} data-action="logout">
+              <button className={cn("btn-ghost hidden md:flex items-center gap-2", theme === "pro" && "text-slate-600")} onClick={handleLogout} data-action="logout">
                 Logout
               </button>
             )}
@@ -326,12 +373,13 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
               <span className={cn("text-[10px] uppercase tracking-[0.14em]", theme === "pro" ? "text-slate-400" : "text-cyan-500/50")} style={{ fontFamily: theme === "pro" ? "Inter" : "Share Tech Mono" }}>
                 Theme
               </span>
-              <button className={cn("btn-ghost flex items-center gap-2 px-3 py-1", theme === "pro" && "text-slate-600")} data-action="toggle-theme" onClick={onToggleTheme} aria-label="Toggle theme">
+              <button className={cn("btn-ghost flex items-center gap-2 px-3 py-1", theme === "pro" && "text-slate-600")} data-action="toggle-theme" onClick={onToggleTheme} aria-label={theme === "pro" ? "Switch to cyber theme" : "Switch to Ray-Ban.EXE theme"}
+                title={theme === "pro" ? "Switch to cyber theme" : "Switch to Ray-Ban.EXE theme"}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364 6.364l-1.414-1.414M8.05 8.05 6.636 6.636m0 10.728 1.414-1.414m10.314-8.314-1.414 1.414" />
                 </svg>
                 <span className="text-xs font-semibold tracking-wide" style={{ fontFamily: theme === "pro" ? "Inter" : "Rajdhani" }}>
-                  {theme === "pro" ? "Cyber" : "Pro"}
+                  {theme === "pro" ? "Switch to Cyber" : "Switch to Ray-Ban.EXE"}
                 </span>
               </button>
               <span className={`w-2.5 h-2.5 rounded-full ${theme === "pro" ? "bg-blue-500" : "bg-cyan-400"}`} />

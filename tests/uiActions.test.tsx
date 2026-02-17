@@ -22,6 +22,7 @@ function renderWithStore(node: ReactElement) {
 describe("UI action wiring", () => {
   it("commits import lot", async () => {
     renderWithStore(<ReceivingImportLot />);
+    expect(screen.getByText("System suggested next steps")).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(screen.getByText("Next → Upload"));
     });
@@ -38,6 +39,7 @@ describe("UI action wiring", () => {
     });
 
     expect(btn).toBeInTheDocument();
+    expect(screen.getByText("System suggested next steps")).toBeInTheDocument();
   });
 
   it("completes verification", async () => {
@@ -69,6 +71,7 @@ describe("UI action wiring", () => {
       fireEvent.click(screen.getByText("ALM-WIP-20240115-0001"));
     });
     expect(screen.getByText("✓ Complete Job")).toBeInTheDocument();
+    expect(screen.getByText("System suggested next steps")).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByText("✕ Close"));

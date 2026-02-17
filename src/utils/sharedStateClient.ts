@@ -6,6 +6,16 @@ export type SharedStateSnapshot = {
   state: AppState;
 };
 
+export class SharedStatePushError extends Error {
+  status: number;
+
+  constructor(status: number) {
+    super(`Shared state push failed (${status})`);
+    this.name = "SharedStatePushError";
+    this.status = status;
+  }
+}
+
 const API_BASE = (import.meta.env.VITE_JAVA_API_BASE as string | undefined) || "http://localhost:8085";
 const DEFAULT_ENDPOINT = "/api/state/snapshot";
 
@@ -37,5 +47,5 @@ export async function pushSharedState(snapshot: SharedStateSnapshot, endpoint = 
     body: JSON.stringify(snapshot),
   });
 
-  if (!res.ok) throw new Error(`Shared state push failed (${res.status})`);
+  if (!res.ok) throw new SharedStatePushError(res.status);
 }

@@ -3,9 +3,9 @@ const THEME_CLASS_CYBER = "theme-cyber";
 const THEME_CLASS_PRO = "theme-pro";
 
 export function getInitialTheme(): ThemeMode {
-  if (typeof window === "undefined") return "cyber";
+  if (typeof window === "undefined") return "pro";
   const saved = window.localStorage.getItem("alm_theme");
-  return saved === "pro" ? "pro" : "cyber";
+  return saved === "cyber" ? "cyber" : "pro";
 }
 
 export function applyThemeClass(theme: ThemeMode) {

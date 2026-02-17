@@ -33,6 +33,18 @@ type ImportPreviewRow = {
   error: string;
 };
 
+type ImportMapping = {
+  barcode: string;
+  brand: string;
+  model: string;
+  cost: string;
+  ramType: string;
+  ramCapacityGb: string;
+  ssdType: string;
+  ssdCapacityGb: string;
+  graphicsType: string;
+};
+
 function parseCsv(text: string): ImportRow[] {
   const rows: string[][] = [];
   let current: string[] = [];
@@ -117,7 +129,7 @@ function splitSerials(value: string) {
     .filter(Boolean);
 }
 
-function buildImportUnits(rows: ImportRow[], mapping: Record<string, string>) {
+function buildImportUnits(rows: ImportRow[], mapping: ImportMapping) {
   return rows.flatMap<ImportUnit>((row) => {
     const qty = Number(row.qty || row.accepted_qty || row.received_qty || 1);
     const normalizedQty = Number.isFinite(qty) && qty > 0 ? Math.floor(qty) : 1;
@@ -142,13 +154,26 @@ export function ReceivingImportLot() {
   const [supplier, setSupplier] = useState(state.suppliers[0]?.name || "");
   const [lotNumber, setLotNumber] = useState(`ALM-LOT-${new Date().toISOString().slice(0, 7).replace("-", "")}-01`);
   const [totalCost, setTotalCost] = useState(0);
-  const [mapping, setMapping] = useState({ barcode: "serial_no", brand: "brand", model: "item_name", cost: "valuation_rate" });
+  const [mapping, setMapping] = useState<ImportMapping>({
+    barcode: "serial_no",
+    brand: "brand",
+    model: "item_name",
+    cost: "valuation_rate",
+    ramType: "ram_type",
+    ramCapacityGb: "ram_gb",
+    ssdType: "ssd_type",
+    ssdCapacityGb: "ssd_gb",
+    graphicsType: "gpu_type",
+  });
   const [defaultRamType, setDefaultRamType] = useState("DDR4");
   const [defaultRamCapacityGb, setDefaultRamCapacityGb] = useState(16);
   const [defaultSsdType, setDefaultSsdType] = useState("NVMe");
   const [defaultSsdCapacityGb, setDefaultSsdCapacityGb] = useState(256);
   const [defaultGraphicsType, setDefaultGraphicsType] = useState<"GPU" | "iGPU">("iGPU");
   const requiredMapped = Object.values(mapping).every((v) => v && v.trim().length > 0);
+  const missingMappings = Object.entries(mapping)
+    .filter(([, value]) => !value || value.trim().length === 0)
+    .map(([key]) => key);
 
   const { run: logCommit } = useIdempotentAction("import-lot-commit", "lot");
   const { trigger } = useUiActionFeedback();
@@ -169,14 +194,23 @@ export function ReceivingImportLot() {
       const brand = (r[mapping.brand] || itemName.split(/[-\s]/)[0] || "").trim();
       const model = itemName || (r[mapping.model] || "").trim();
       const cost = Number(r[mapping.cost] || r.rate || r.net_rate || r.cost || 0);
-      const searchable = `${itemName} ${desc}`;
-      const ramCapacityGb = parseCapacityGb(searchable.match(/(\d+\s*(?:gb|tb))\s*ram/i)?.[1] || "") || defaultRamCapacityGb;
-      const ssdCapacityGb = parseCapacityGb(searchable.match(/(\d+\s*(?:gb|tb))\s*ssd/i)?.[1] || "") || defaultSsdCapacityGb;
+      const mappedRamType = (r[mapping.ramType] || "").trim();
+      const mappedRamCapacity = (r[mapping.ramCapacityGb] || "").trim();
+      const mappedSsdType = (r[mapping.ssdType] || "").trim();
+      const mappedSsdCapacity = (r[mapping.ssdCapacityGb] || "").trim();
+      const mappedGraphicsType = (r[mapping.graphicsType] || "").trim();
+      const searchable = `${itemName} ${desc} ${mappedRamType} ${mappedRamCapacity} ${mappedSsdType} ${mappedSsdCapacity} ${mappedGraphicsType}`;
+      const ramCapacityGb = parseCapacityGb(mappedRamCapacity) || parseCapacityGb(searchable.match(/(\d+\s*(?:gb|tb))\s*ram/i)?.[1] || "") || defaultRamCapacityGb;
+      const ssdCapacityGb = parseCapacityGb(mappedSsdCapacity) || parseCapacityGb(searchable.match(/(\d+\s*(?:gb|tb))\s*ssd/i)?.[1] || "") || defaultSsdCapacityGb;
       const inferredRam = inferRamType(searchable);
       const inferredSsd = inferSsdType(searchable);
-      const ramType = inferredRam !== "Unknown" ? inferredRam : defaultRamType;
-      const ssdType = inferredSsd !== "Unknown" ? inferredSsd : defaultSsdType;
-      const graphicsType: "GPU" | "iGPU" = /\bgpu\b|nvidia|radeon|rtx|gtx/i.test(searchable) ? "GPU" : defaultGraphicsType;
+      const ramType = mappedRamType || (inferredRam !== "Unknown" ? inferredRam : defaultRamType);
+      const ssdType = mappedSsdType || (inferredSsd !== "Unknown" ? inferredSsd : defaultSsdType);
+      const graphicsType: "GPU" | "iGPU" = /^igpu$/i.test(mappedGraphicsType)
+        ? "iGPU"
+        : /^gpu$/i.test(mappedGraphicsType) || /\bgpu\b|nvidia|radeon|rtx|gtx/i.test(searchable)
+          ? "GPU"
+          : defaultGraphicsType;
 
       let error = "";
       if (!barcode || !brand || !model) error = "Missing required fields";
@@ -206,6 +240,40 @@ export function ReceivingImportLot() {
   }, [rawRows, mapping, state.laptops, defaultRamType, defaultRamCapacityGb, defaultSsdType, defaultSsdCapacityGb, defaultGraphicsType]);
 
   const validRows = previewRows.filter((r) => !r.error);
+  const invalidRows = previewRows.length - validRows.length;
+
+  const receivingNextSteps = useMemo(() => {
+    const tips: string[] = [];
+    if (activeStep <= 1) {
+      if (!supplier.trim()) tips.push("Select supplier name before moving to upload.");
+      if (!lotNumber.trim()) tips.push("Enter a lot number to avoid commit blocking.");
+      if (tips.length === 0) tips.push("Lot details are ready. Continue to Upload File.");
+      return tips;
+    }
+
+    if (activeStep === 2) {
+      if (!fileName) tips.push("Upload CSV first. Unit rows will be expanded automatically.");
+      if (fileName && rawRows.length === 0) tips.push("CSV loaded but has no usable rows. Check header row and delimiters.");
+      if (fileName && rawRows.length > 0) tips.push("Proceed to Map Columns and verify RAM/SSD/GPU fields.");
+      return tips;
+    }
+
+    if (activeStep === 3) {
+      if (missingMappings.length > 0) tips.push(`Complete missing mappings: ${missingMappings.join(", ")}.`);
+      else tips.push("Mappings complete. Continue to preview for duplicate/missing barcode checks.");
+      tips.push("Keep default RAM/SSD/GPU values for rows where supplier metadata is incomplete.");
+      return tips;
+    }
+
+    if (activeStep === 4) {
+      if (validRows.length === 0) tips.push("No valid rows found. Go back and fix mapping/data errors.");
+      else tips.push(`Ready to import ${validRows.length} rows. ${invalidRows} row(s) still need correction.`);
+      if (!lotNumber.trim()) tips.push("Set a lot number in Step 1 before import commit.");
+      return tips;
+    }
+
+    return ["Follow guided import steps in order."];
+  }, [activeStep, fileName, invalidRows, lotNumber, missingMappings, rawRows.length, supplier, validRows.length]);
 
   const handleFile = (file: File) => {
     setFileName(file.name);
@@ -277,6 +345,15 @@ export function ReceivingImportLot() {
               </button>
               {idx < steps.length - 1 && <div className="flex-1 h-[1px] mx-2 bg-cyan-500/10" />}
             </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="glass-card p-4 border border-emerald-500/20 bg-emerald-500/5">
+        <p className="text-xs font-bold text-emerald-200 mb-2" style={{ fontFamily: "Rajdhani" }}>System suggested next steps</p>
+        <div className="space-y-1.5">
+          {receivingNextSteps.map((tip, idx) => (
+            <p key={`${tip}-${idx}`} className="text-xs text-emerald-100/85">• {tip}</p>
           ))}
         </div>
       </div>

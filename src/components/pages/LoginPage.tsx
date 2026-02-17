@@ -1,5 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { loginUser, registerUser } from "@/utils/javaAuth";
+import {
+  clearLastSessionSummary,
+  clearSessionHistory,
+  loadLastSessionSummary,
+  loadSessionHistory,
+  evaluateSessionMomentum,
+  summarizeSessionHistory,
+  type LastSessionSummary,
+} from "@/utils/sessionSummary";
 
 type LoginPageProps = {
   onAuthenticated: () => void;
@@ -13,6 +22,27 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [lastSessionSummary, setLastSessionSummary] = useState<LastSessionSummary | null>(null);
+  const [sessionHistory, setSessionHistory] = useState<LastSessionSummary[]>([]);
+  const lastSessionEndedAtLabel = lastSessionSummary
+    ? new Date(lastSessionSummary.endedAt).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    })
+    : null;
+
+  useEffect(() => {
+    setLastSessionSummary(loadLastSessionSummary());
+    setSessionHistory(loadSessionHistory());
+  }, []);
+
+  const historyStats = summarizeSessionHistory(sessionHistory);
+  const sessionMomentum = evaluateSessionMomentum(sessionHistory);
+  const momentumLabel = sessionMomentum.direction === "up"
+    ? `↗ Improving (+${sessionMomentum.deltaPercent}%)`
+    : sessionMomentum.direction === "down"
+      ? `↘ Declining (${sessionMomentum.deltaPercent}%)`
+      : "→ Stable";
 
   const normalizedEmail = email.trim();
   const normalizedFullName = fullName.trim();
@@ -57,6 +87,53 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
           </h1>
           <p className="text-xs text-cyan-500/40 mt-1">Local network auth via Java API server</p>
         </div>
+
+        {lastSessionSummary && (
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-100/85">
+            <p className="font-semibold mb-1">Last session summary</p>
+            <p>
+              Completion: {lastSessionSummary.completedPercent}% • Pending: {lastSessionSummary.pendingPercent}%
+            </p>
+            {lastSessionEndedAtLabel && <p className="mt-1 text-emerald-200/70">Ended: {lastSessionEndedAtLabel}</p>}
+            <button
+              type="button"
+              className="mt-2 underline underline-offset-2 text-emerald-200/90 hover:text-emerald-100"
+              onClick={() => {
+                clearLastSessionSummary();
+                setLastSessionSummary(null);
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {historyStats.totalSessions > 0 && (
+          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs text-cyan-100/85">
+            <p className="font-semibold mb-1">Recent session trend ({historyStats.totalSessions})</p>
+            <p>
+              Avg completion: {historyStats.averageCompletionPercent}% • Best: {historyStats.bestCompletionPercent}% • Worst: {historyStats.worstCompletionPercent}%
+            </p>
+            <p className="mt-1 text-cyan-200/80">Momentum: {momentumLabel}</p>
+            <div className="mt-2 max-h-20 overflow-y-auto space-y-1 text-[11px] text-cyan-200/75">
+              {sessionHistory.slice(0, 5).map((entry, index) => (
+                <p key={`${entry.endedAt}-${index}`}>
+                  {new Date(entry.endedAt).toLocaleDateString()} — {entry.completedPercent}% complete / {entry.pendingPercent}% pending
+                </p>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="mt-2 underline underline-offset-2 text-cyan-200/90 hover:text-cyan-100"
+              onClick={() => {
+                clearSessionHistory();
+                setSessionHistory([]);
+              }}
+            >
+              Clear history
+            </button>
+          </div>
+        )}
 
         <form
           className="space-y-3"

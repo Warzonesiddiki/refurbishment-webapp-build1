@@ -847,3 +847,269 @@ tbody td {
     box-shadow: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════
+   RAY-BAN.EXE THEME (mapped to theme-pro)
+   High-contrast light UX refresh
+   ═══════════════════════════════════════════════ */
+
+:root.theme-pro {
+  --rb-bg: #f5f6f8;
+  --rb-surface: #ffffff;
+  --rb-surface-elev: #fbfbfc;
+  --rb-text: #111111;
+  --rb-text-muted: #475467;
+  --rb-border: #d6d9df;
+  --rb-brand: #111111;
+  --rb-accent: #e11d48;
+  --rb-accent-soft: #fff1f4;
+}
+
+.theme-pro body,
+body.theme-pro {
+  background: radial-gradient(circle at top, #ffffff 0%, var(--rb-bg) 56%, #eceef1 100%);
+  color: var(--rb-text);
+}
+
+.theme-pro .bg-grid {
+  background-image:
+    linear-gradient(rgba(17, 17, 17, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 17, 17, 0.04) 1px, transparent 1px),
+    radial-gradient(circle at top right, rgba(225, 29, 72, 0.08), transparent 45%);
+  background-size: 24px 24px, 24px 24px, auto;
+}
+
+.theme-pro .glass-panel,
+.theme-pro .glass-card,
+.theme-pro .erp-card {
+  background: linear-gradient(180deg, var(--rb-surface) 0%, var(--rb-surface-elev) 100%);
+  border: 1px solid var(--rb-border);
+  box-shadow: 0 10px 24px rgba(17, 17, 17, 0.08);
+}
+
+.theme-pro .glass-card:hover,
+.theme-pro .erp-card:hover {
+  border-color: #bfc5d0;
+  box-shadow: 0 16px 30px rgba(17, 17, 17, 0.12);
+}
+
+.theme-pro .erp-sidebar,
+.theme-pro .erp-header {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+}
+
+.theme-pro .erp-nav-item-active {
+  background: linear-gradient(90deg, #111111 0%, #2a2a2a 100%);
+  color: #ffffff;
+  border-color: #111111;
+}
+
+.theme-pro .erp-nav-item,
+.theme-pro .text-cyan-500\/30,
+.theme-pro .text-cyan-500\/40,
+.theme-pro .text-cyan-500\/50,
+.theme-pro .text-cyan-300\/30,
+.theme-pro .text-cyan-300\/40,
+.theme-pro .text-cyan-300\/50,
+.theme-pro .text-cyan-200\/60,
+.theme-pro .text-cyan-200\/70,
+.theme-pro .text-cyan-200\/80,
+.theme-pro .text-cyan-100\/60,
+.theme-pro .text-cyan-100\/70,
+.theme-pro .text-cyan-100\/80 {
+  color: var(--rb-text-muted) !important;
+}
+
+.theme-pro .neon-text-cyan,
+.theme-pro .neon-text-magenta,
+.theme-pro .neon-text-purple,
+.theme-pro .neon-text-green,
+.theme-pro .neon-text-yellow,
+.theme-pro .neon-text-red {
+  color: var(--rb-brand) !important;
+  text-shadow: none !important;
+}
+
+.theme-pro .btn-cyber,
+.theme-pro .btn-cyber-magenta,
+.theme-pro .btn-cyber-green {
+  background: linear-gradient(135deg, #111111 0%, #2c2c2c 100%);
+  color: #ffffff;
+  border: 1px solid #111111;
+}
+
+.theme-pro .btn-cyber:hover,
+.theme-pro .btn-cyber-magenta:hover,
+.theme-pro .btn-cyber-green:hover {
+  background: linear-gradient(135deg, #262626 0%, #3a3a3a 100%);
+}
+
+.theme-pro .btn-ghost {
+  color: #1f2937;
+  border: 1px solid var(--rb-border);
+  background: #fff;
+}
+
+.theme-pro .btn-ghost:hover {
+  border-color: #111111;
+  color: #111111;
+  background: #f8fafc;
+}
+
+.theme-pro .cyber-chip,
+.theme-pro .cyber-badge-purple,
+.theme-pro .cyber-badge-yellow,
+.theme-pro .cyber-badge-magenta,
+.theme-pro .cyber-badge-green,
+.theme-pro .cyber-badge-red {
+  background: var(--rb-accent-soft) !important;
+  border-color: #fecdd3 !important;
+  color: #9f1239 !important;
+}
+
+.theme-pro input,
+.theme-pro select,
+.theme-pro textarea {
+  background: #fff;
+  color: #111111;
+  border: 1px solid #cfd4dc;
+}
+
+.theme-pro input:focus,
+.theme-pro select:focus,
+.theme-pro textarea:focus {
+  border-color: var(--rb-accent);
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.2);
+}
+
+.theme-pro table thead tr {
+  background: #f3f4f6 !important;
+}
+
+.theme-pro table thead th {
+  color: #374151 !important;
+}
+
+.theme-pro table tbody td {
+  color: #111111 !important;
+}
+
+.theme-pro .theme-switch {
+  border-color: #d1d5db !important;
+  background: #ffffff !important;
+}
+
+.theme-pro code {
+  background: #f3f4f6;
+  color: #111111;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+
+/* Ray-Ban.EXE hardening: normalize legacy cyan utility remnants in light mode */
+.theme-pro [class*="text-cyan-"] { color: var(--rb-text-muted) !important; }
+.theme-pro [class*="border-cyan-"] { border-color: var(--rb-border) !important; }
+.theme-pro [class*="bg-cyan-"] { background-color: #f4f6f9 !important; }
+.theme-pro [class*="text-green-"] { color: #166534 !important; }
+.theme-pro [class*="text-yellow-"] { color: #92400e !important; }
+.theme-pro [class*="text-red-"] { color: #b91c1c !important; }
+.theme-pro .card-title,
+.theme-pro .section-header,
+.theme-pro .erp-section-title { color: #111827 !important; }
+.theme-pro .card-subtitle,
+.theme-pro .erp-subtle { color: #4b5563 !important; }
+.theme-pro .neon-border,
+.theme-pro .neon-border-green,
+.theme-pro .neon-border-magenta,
+.theme-pro .neon-border-purple {
+  border-color: #d1d5db !important;
+  box-shadow: 0 8px 20px rgba(17, 17, 17, 0.06) !important;
+}
+.theme-pro .glass-card.fixed {
+  background: #ffffff !important;
+  border-color: #d1d5db !important;
+}
+
+/* Ray-Ban.EXE UX pass 2: improve affordance density + readability */
+.theme-pro .glass-panel,
+.theme-pro .glass-card,
+.theme-pro .erp-card,
+.theme-pro .btn-ghost,
+.theme-pro .btn-cyber,
+.theme-pro input,
+.theme-pro select,
+.theme-pro textarea,
+.theme-pro table,
+.theme-pro .cyber-chip {
+  transition: all 160ms ease;
+}
+
+.theme-pro ::placeholder {
+  color: #6b7280 !important;
+  opacity: 1;
+}
+
+.theme-pro a {
+  color: #111111;
+  text-decoration-color: rgba(17, 17, 17, 0.35);
+}
+
+.theme-pro a:hover {
+  color: #7f1d1d;
+  text-decoration-color: rgba(127, 29, 29, 0.55);
+}
+
+.theme-pro .status-dot-online {
+  background: #16a34a !important;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18) !important;
+}
+
+.theme-pro .status-dot-warning {
+  background: #d97706 !important;
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18) !important;
+}
+
+.theme-pro .status-dot-danger {
+  background: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18) !important;
+}
+
+.theme-pro .erp-nav-item-active [class*="text-"] {
+  color: #ffffff !important;
+}
+
+/* Ray-Ban.EXE quick actions */
+.theme-pro .rb-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid #fecdd3;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 4px 10px;
+}
+
+.rb-quick {
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.theme-pro .rb-quick {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+}
+
+.theme-pro .rb-quick:hover {
+  border-color: #9ca3af;
+  background: #f8fafc;
+}

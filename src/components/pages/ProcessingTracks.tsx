@@ -15,6 +15,11 @@ const trackConfig: Record<string, { label: string; color: string; stages: string
 
 type AddPartPayload = Extract<Action, { type: "ADD_PART" }>["payload"];
 
+function normalizeTrackLabel(track: string) {
+  const match = /(?:Track\s*)?([A-E])/i.exec(track.trim());
+  return match ? `Track ${match[1].toUpperCase()}` : track.trim();
+}
+
 export function ProcessingTracks() {
   const state = useAppState();
   const dispatch = useDispatch();
@@ -29,12 +34,36 @@ export function ProcessingTracks() {
   const { trigger } = useUiActionFeedback();
 
   const config = trackConfig[activeTrack];
-  const trackLaptops = state.laptops.filter(l => l.track === activeTrack);
   const trackLetter = activeTrack.split(" ")[1] as "A" | "B" | "C" | "D" | "E";
 
+  const getActiveTrackWip = (barcode: string) => {
+    const jobs = state.wipJobs.filter(
+      (w) => w.laptop === barcode && normalizeTrackLabel(w.track) === activeTrack && w.status !== "Completed"
+    );
+    if (jobs.length > 0) return jobs[jobs.length - 1];
+    const fallback = state.wipJobs.filter((w) => w.laptop === barcode && normalizeTrackLabel(w.track) === activeTrack);
+    return fallback.length > 0 ? fallback[fallback.length - 1] : undefined;
+  };
+
+  const trackBarcodes = new Set<string>();
+  state.laptops.forEach((l) => {
+    if (normalizeTrackLabel(l.track) === activeTrack) {
+      trackBarcodes.add(l.barcode);
+    }
+  });
+  state.wipJobs.forEach((w) => {
+    if (normalizeTrackLabel(w.track) === activeTrack && w.status !== "Completed") {
+      trackBarcodes.add(w.laptop);
+    }
+  });
+
+  const trackLaptops = Array.from(trackBarcodes)
+    .map((barcode) => state.laptops.find((l) => l.barcode === barcode))
+    .filter((laptop): laptop is NonNullable<typeof laptop> => Boolean(laptop));
+
   const getLaptopsForStage = (stage: string) => {
-    return trackLaptops.filter(l => {
-      const wip = state.wipJobs.find(w => w.laptop === l.barcode);
+    return trackLaptops.filter((l) => {
+      const wip = getActiveTrackWip(l.barcode);
       const currentStage = wip?.stage ?? config.stages[0];
       return currentStage === stage;
     });
@@ -43,7 +72,7 @@ export function ProcessingTracks() {
   const moveLaptop = (laptopId: string, toStage: string) => {
     const laptop = state.laptops.find(l => l.id === laptopId);
     if (!laptop) return;
-    const wip = state.wipJobs.find(w => w.laptop === laptop.barcode);
+    const wip = getActiveTrackWip(laptop.barcode);
     const currentStage = wip?.stage ?? config.stages[0];
 
     if (!canAdvance(trackLetter, currentStage, toStage)) {

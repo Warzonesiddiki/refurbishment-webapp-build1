@@ -8,6 +8,7 @@ Local GUI launcher for TAHIR ERP demo stack.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import queue
 import shlex
@@ -138,12 +139,39 @@ class LauncherApp:
         self.log_text.configure(yscrollcommand=scroll.set)
 
     def _detect_host_ip(self) -> str:
+        candidates: list[str] = []
+
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                s.connect(("8.8.8.8", 80))
-                return s.getsockname()[0]
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                sock.connect(("8.8.8.8", 80))
+                candidates.append(sock.getsockname()[0])
         except OSError:
-            return "127.0.0.1"
+            pass
+
+        hostname = socket.gethostname()
+        for value in [hostname, f"{hostname}.local"]:
+            try:
+                info = socket.getaddrinfo(value, None, socket.AF_INET, socket.SOCK_DGRAM)
+            except socket.gaierror:
+                continue
+            for entry in info:
+                candidates.append(entry[4][0])
+
+        try:
+            candidates.append(socket.gethostbyname(hostname))
+        except socket.gaierror:
+            pass
+
+        for ip in candidates:
+            try:
+                parsed = ipaddress.ip_address(ip)
+            except ValueError:
+                continue
+            if parsed.version != 4 or parsed.is_loopback or parsed.is_unspecified:
+                continue
+            return ip
+
+        return "127.0.0.1"
 
     def _write_header(self):
         self._log(f"Project root: {ROOT}")
@@ -347,8 +375,8 @@ class LauncherApp:
                 self._log("[preflight] docker compose MISSING/UNUSABLE — install Docker Compose plugin")
                 all_required_ok = False
 
-        if java_required and not (ROOT / "tools" / "run_java_server.sh").exists():
-            self._log("[preflight] tools/run_java_server.sh MISSING — required to launch Java API")
+        if java_required and not (ROOT / "tools" / "run_java_server.py").exists():
+            self._log("[preflight] tools/run_java_server.py MISSING — required to launch Java API")
             all_required_ok = False
 
         if docker_required and not (ROOT / "docker-compose.yml").exists():
@@ -420,7 +448,12 @@ class LauncherApp:
             self._log("[java-api] Java tooling missing. Install a JDK and retry.")
             self.status_var.set("Failed: java-api")
             return
-        self._run_background("java-api", "bash tools/run_java_server.sh 8085", keep_running=True)
+        python_cmd = shutil.which("python3") or shutil.which("python")
+        if not python_cmd:
+            self._log("[java-api] Python runtime missing. Install Python 3 and retry.")
+            self.status_var.set("Failed: java-api")
+            return
+        self._run_background("java-api", f"{shlex.quote(python_cmd)} tools/run_java_server.py 8085", keep_running=True)
 
     def stop_java_api(self):
         proc = self.running.get("java-api")

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { LoginPage } from "@/components/pages/LoginPage";
+import { LAST_SESSION_SUMMARY_KEY, SESSION_HISTORY_KEY, SESSION_SUMMARY_TTL_MS } from "@/utils/sessionSummary";
 
 vi.mock("@/utils/javaAuth", () => ({
   loginUser: vi.fn(),
@@ -12,6 +13,69 @@ import { loginUser, registerUser } from "@/utils/javaAuth";
 describe("LoginPage UX", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
+  });
+
+  it("shows last session completion/pending summary when available", () => {
+    sessionStorage.setItem(
+      LAST_SESSION_SUMMARY_KEY,
+      JSON.stringify({ completedPercent: 92, pendingPercent: 8, endedAt: new Date().toISOString() })
+    );
+
+    render(<LoginPage onAuthenticated={vi.fn()} />);
+
+    expect(screen.getByText("Last session summary")).toBeInTheDocument();
+    expect(screen.getByText("Completion: 92% • Pending: 8%")).toBeInTheDocument();
+    expect(screen.getByText(/Ended:/)).toBeInTheDocument();
+  });
+
+  it("hides stale session summaries older than TTL", () => {
+    sessionStorage.setItem(
+      LAST_SESSION_SUMMARY_KEY,
+      JSON.stringify({
+        completedPercent: 55,
+        pendingPercent: 45,
+        endedAt: new Date(Date.now() - SESSION_SUMMARY_TTL_MS - 1_000).toISOString(),
+      })
+    );
+
+    render(<LoginPage onAuthenticated={vi.fn()} />);
+
+    expect(screen.queryByText("Last session summary")).not.toBeInTheDocument();
+    expect(sessionStorage.getItem(LAST_SESSION_SUMMARY_KEY)).toBeNull();
+  });
+
+  it("dismisses last session summary and clears storage", () => {
+    sessionStorage.setItem(
+      LAST_SESSION_SUMMARY_KEY,
+      JSON.stringify({ completedPercent: 75, pendingPercent: 25, endedAt: new Date().toISOString() })
+    );
+
+    render(<LoginPage onAuthenticated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    expect(screen.queryByText("Last session summary")).not.toBeInTheDocument();
+    expect(sessionStorage.getItem(LAST_SESSION_SUMMARY_KEY)).toBeNull();
+  });
+
+  it("shows recent session trend and clears history", () => {
+    localStorage.setItem(
+      SESSION_HISTORY_KEY,
+      JSON.stringify([
+        { completedPercent: 90, pendingPercent: 10, endedAt: new Date().toISOString() },
+        { completedPercent: 70, pendingPercent: 30, endedAt: new Date().toISOString() },
+      ])
+    );
+
+    render(<LoginPage onAuthenticated={vi.fn()} />);
+
+    expect(screen.getByText(/Recent session trend/)).toBeInTheDocument();
+    expect(screen.getByText(/Avg completion: 80%/)).toBeInTheDocument();
+    expect(screen.getByText(/Momentum:/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear history" }));
+    expect(screen.queryByText(/Recent session trend/)).not.toBeInTheDocument();
+    expect(localStorage.getItem(SESSION_HISTORY_KEY)).toBeNull();
   });
 
   it("disables submit until required fields are complete", () => {
