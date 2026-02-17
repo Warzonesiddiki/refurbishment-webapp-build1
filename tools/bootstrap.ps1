@@ -75,7 +75,18 @@ function Install-ProjectDependencies {
     }
 
     if (Test-Path "package-lock.json") {
-      Invoke-Step "npm ci"
+      if ($DryRun) {
+        Invoke-Step "npm ci"
+      }
+      else {
+        try {
+          Invoke-Step "npm ci"
+        }
+        catch {
+          Write-WarnMsg "npm ci failed (lock mismatch or registry policy). Falling back to npm install..."
+          Invoke-Step "npm install"
+        }
+      }
     }
     else {
       Invoke-Step "npm install"

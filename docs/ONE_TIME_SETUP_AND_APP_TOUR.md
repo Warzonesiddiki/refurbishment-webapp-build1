@@ -2,23 +2,39 @@
 
 This guide is written for first-time operators and admins.
 
-## 1) One-Time Setup
+## 1) One-Time Setup (Recommended Order)
 
 ## Step 1 — Prerequisites
-- Node 18+
+- Node 20+ (recommended; 18+ minimum)
 - npm
 - Python 3
 - Optional: Docker + Docker Compose plugin
-- Optional: JDK (for Java LAN API)
+- Optional: JDK 17+ (for Java LAN API)
 
 ## Step 2 — Configure environment
 ```bash
 cp .env.example .env
 ```
 
-Open launcher and edit `.env` if needed.
+Review `.env` values before first run (especially network host/port and API settings).
 
-## Step 3 — Start through launcher (recommended)
+## Step 3 — Run bootstrap (first-time only)
+
+### Linux / macOS
+```bash
+bash tools/bootstrap.sh
+```
+
+### Windows 11 (PowerShell)
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/bootstrap.ps1
+```
+
+Notes:
+- Bootstrap now attempts `npm ci` first, and automatically falls back to `npm install` when lock mismatch/policy errors occur.
+- Use `--skip-system` / `-SkipSystem` if dependencies are already installed.
+
+## Step 4 — Start through launcher (recommended)
 ```bash
 npm run launcher
 ```
@@ -28,9 +44,36 @@ In launcher:
 2. Click **One-click Setup + Launch**
 3. Share LAN URL shown in logs (example: `http://192.168.1.20:4173`)
 
+## Step 5 — First-time production checklist
+Before onboarding live users, confirm:
+- [ ] Company profile and TRN are configured in **Settings → Company Info**.
+- [ ] VAT/date/labor defaults are configured in **Settings → Financial/Inventory**.
+- [ ] At least one supplier and lot import have been validated.
+- [ ] Backup export/import drill was run once.
+- [ ] One daily report export was generated successfully.
+
 ---
 
-## 2) Visual System Flow
+
+## Step 6 — Default seeded operator logins
+The local Java auth server seeds Skyline users for quick first-time access:
+- `id.skyline2@erp.com` ... `id.skyline31@erp.com`
+- Password format: `userNskylinein` (for example, `id.skyline20@erp.com` uses `user20skylinein`)
+
+Password reset for seeded users is available from **Settings → Diagnostics → Reset Seeded Skyline Passwords**.
+
+## 2) First Shift Quick Validation (10 minutes)
+1. Import a small test lot (2–5 units).
+2. Verify units in Receiving Verification (scan + complete).
+3. Grade units and ensure Track routing appears.
+4. Open Processing Tracks and move one unit across a valid stage transition.
+5. Create one WIP job, add labor/part, and export drilldown CSV.
+6. Run Reports in **Daily** mode and export CSV/Excel/JSON.
+7. Create a backup.
+
+---
+
+## 3) Visual System Flow
 
 ```mermaid
 flowchart LR
@@ -46,7 +89,7 @@ flowchart LR
 
 ---
 
-## 3) App Navigation Tour
+## 4) App Navigation Tour
 
 ## A. Dashboard
 **Purpose**: KPI snapshot, alerts, activity, quick actions.
@@ -94,7 +137,7 @@ flowchart LR
 
 ---
 
-## 4) Keyboard Shortcuts (Global)
+## 5) Keyboard Shortcuts (Global)
 
 - `Ctrl+/` → Scanner
 - `Ctrl+S` → New Sale
@@ -109,7 +152,7 @@ flowchart LR
 
 ---
 
-## 5) Operator Best Practices
+## 6) Operator Best Practices
 
 1. Run preflight before shift start.
 2. Keep DB + Java API enabled for multi-user LAN sessions.
@@ -119,9 +162,11 @@ flowchart LR
 
 ---
 
-## 6) Troubleshooting Quick Map
+## 7) Troubleshooting Quick Map
 
 - App not reachable on LAN → verify host IP + firewall + launcher URL.
 - DB actions failing → verify Docker Compose plugin and `docker-compose.yml`.
 - Java login failing → verify JDK installed and Java API service running.
 - Slow behavior → run local build mode and verify machine resources.
+- Bootstrap failed on `npm ci` → rerun bootstrap; it now falls back to `npm install` automatically.
+- Reports export empty → verify selected period mode (Daily/Monthly) and source transactions exist in that range.

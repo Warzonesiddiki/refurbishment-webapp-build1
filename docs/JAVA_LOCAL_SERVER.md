@@ -15,6 +15,8 @@ This project now includes a lightweight Java API service for LAN usage with per-
 - `GET /api/auth/me` — current user from `Authorization: Bearer <token>`
 - `POST /api/auth/logout` — invalidate current bearer session
 - `POST /api/auth/change-password` — rotate password for authenticated user
+- `GET /api/auth/users` — list registered users (for assignment dropdowns)
+- `POST /api/auth/reset-seeded-passwords` — reset seeded Skyline user passwords
 - `GET /api/state/snapshot` — fetch latest shared app-state snapshot (`204` if empty)
 - `PUT /api/state/snapshot` — publish latest shared app-state snapshot with `{ timestamp, state }`
 
@@ -77,4 +79,16 @@ curl -X POST http://localhost:8085/api/auth/change-password \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <token>" \
   -d '{"currentPassword":"StrongPass@123","newPassword":"StrongerPass@456"}'
+```
+
+
+## Seeded operator accounts
+On startup, the server ensures seeded users exist:
+- `id.skyline2@erp.com` ... `id.skyline31@erp.com`
+- password pattern: `userNskylinein` (example: skyline2 -> `user2skylinein`)
+
+To reset all seeded Skyline user passwords back to defaults, call:
+```bash
+curl -X POST http://localhost:8085/api/auth/reset-seeded-passwords \
+  -H "Authorization: Bearer <token>"
 ```

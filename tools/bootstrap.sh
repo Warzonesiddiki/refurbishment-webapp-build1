@@ -119,7 +119,18 @@ install_project_dependencies() {
   cd "$ROOT_DIR"
 
   if [[ -f package-lock.json ]]; then
-    run_cmd "npm ci"
+    if [[ "$DRY_RUN" == "true" ]]; then
+      run_cmd "npm ci"
+    else
+      set +e
+      npm ci
+      ci_status=$?
+      set -e
+      if [[ $ci_status -ne 0 ]]; then
+        warn "npm ci failed (lock mismatch or registry policy). Falling back to npm install..."
+        run_cmd "npm install"
+      fi
+    fi
   else
     run_cmd "npm install"
   fi
