@@ -109,6 +109,29 @@ describe("UI action wiring", () => {
     expect(screen.getByText("System suggested next steps")).toBeInTheDocument();
     expect(screen.getAllByText("ALM-WIP-20240115-0001")).toHaveLength(2);
   });
+
+  it("keeps WIP details closed after dismissing modal", async () => {
+    renderWithStore(<WipJobs />);
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByText("Detail")[0]);
+    });
+    expect(screen.getByText("✓ Complete Job")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /✕ Close/i }));
+    });
+
+    expect(screen.queryByText("✓ Complete Job")).not.toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText(/Search WIP, laptop, brand/i);
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: "ALM" } });
+    });
+
+    expect(screen.queryByText("✓ Complete Job")).not.toBeInTheDocument();
+  });
+
   it("warns when verifying a laptop that is already verified", async () => {
     renderWithStore(<ReceivingVerification />);
 

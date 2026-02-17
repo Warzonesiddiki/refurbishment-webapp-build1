@@ -79,7 +79,11 @@ export function WipJobs() {
       return;
     }
 
-    if (selectedJobId && filtered.some((job) => job.id === selectedJobId)) return;
+    if (!selectedJobId) {
+      return;
+    }
+
+    if (filtered.some((job) => job.id === selectedJobId)) return;
     setSelectedJobId(filtered[0].id);
   }, [filtered, selectedJobId]);
 

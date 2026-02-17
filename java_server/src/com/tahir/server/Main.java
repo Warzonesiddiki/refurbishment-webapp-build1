@@ -294,6 +294,14 @@ public class Main {
     return updated;
   }
 
+  private static boolean isPrivilegedSession(SessionRecord session) {
+    if (session == null) {
+      return false;
+    }
+    String adminEmail = normalizeSeedAdminEmail();
+    return !adminEmail.isBlank() && adminEmail.equalsIgnoreCase(session.email);
+  }
+
   private static boolean isEnvFlagEnabled(String envKey) {
     String value = System.getenv(envKey);
     if (value == null) {
@@ -972,6 +980,10 @@ public class Main {
       SessionRecord session = sessionsByToken.get(token);
       if (session == null) {
         sendJson(exchange, 401, "{\"error\":\"invalid_token\"}");
+        return;
+      }
+      if (!isPrivilegedSession(session)) {
+        sendJson(exchange, 403, "{\"error\":\"forbidden\",\"message\":\"admin access required\"}");
         return;
       }
 
