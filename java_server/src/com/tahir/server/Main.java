@@ -30,11 +30,13 @@ import java.util.concurrent.ExecutorService;
 public class Main {
   private static final int DEFAULT_PORT = 8085;
   private static final int MAX_REQUEST_BODY_BYTES = 8 * 1024;
+  private static final int MAX_STATE_SNAPSHOT_BODY_BYTES = 5 * 1024 * 1024;
   private static final long SESSION_TTL_SECONDS = TimeUnit.HOURS.toSeconds(8);
   private static final long CLEANUP_INTERVAL_SECONDS = TimeUnit.MINUTES.toSeconds(5);
   private static final String ENV_SESSION_TTL_SECONDS = "TAHIR_SESSION_TTL_SECONDS";
   private static final String ENV_MAX_REQUEST_BODY_BYTES = "TAHIR_MAX_REQUEST_BODY_BYTES";
   private static final String ENV_RELEASE_VERSION = "TAHIR_RELEASE_VERSION";
+  private static final String ENV_STATE_SNAPSHOT_MAX_BODY_BYTES = "TAHIR_STATE_SNAPSHOT_MAX_BODY_BYTES";
   private static final String ENV_LOGIN_MAX_ATTEMPTS = "TAHIR_LOGIN_MAX_ATTEMPTS";
   private static final String ENV_LOGIN_ATTEMPT_WINDOW_SECONDS = "TAHIR_LOGIN_ATTEMPT_WINDOW_SECONDS";
   private static final String ENV_LOGIN_LOCKOUT_SECONDS = "TAHIR_LOGIN_LOCKOUT_SECONDS";
@@ -43,6 +45,7 @@ public class Main {
   private static final long LOGIN_LOCKOUT_MS = TimeUnit.MINUTES.toMillis(15);
   private static final Path DATA_DIR = Path.of("java_server", "data");
   private static final Path USER_FILE = DATA_DIR.resolve("users.csv");
+  private static final Path STATE_SNAPSHOT_FILE = DATA_DIR.resolve("state_snapshot.json");
   private static final String DEFAULT_ADMIN_EMAIL = "siddikitahir@gmail.com";
   private static final String DEFAULT_ADMIN_PASSWORD = "W@rzone786";
   private static final String ENV_ADMIN_EMAIL = "TAHIR_ADMIN_EMAIL";
@@ -60,9 +63,11 @@ public class Main {
   private static final AtomicLong cumulativeResponseBytes = new AtomicLong(0);
   private static final AtomicLong housekeepingRuns = new AtomicLong(0);
   private static final AtomicLong lastHousekeepingEpochMs = new AtomicLong(0);
+  private static volatile StateSnapshotRecord stateSnapshot = null;
   private static final Instant SERVER_STARTED_AT = Instant.now();
   private static final long EFFECTIVE_SESSION_TTL_SECONDS = resolvePositiveLong(ENV_SESSION_TTL_SECONDS, SESSION_TTL_SECONDS);
   private static final int EFFECTIVE_MAX_REQUEST_BODY_BYTES = resolvePositiveInt(ENV_MAX_REQUEST_BODY_BYTES, MAX_REQUEST_BODY_BYTES);
+  private static final int EFFECTIVE_STATE_SNAPSHOT_MAX_BODY_BYTES = resolvePositiveInt(ENV_STATE_SNAPSHOT_MAX_BODY_BYTES, MAX_STATE_SNAPSHOT_BODY_BYTES);
   private static final String RELEASE_VERSION = resolveReleaseVersion();
   private static final int EFFECTIVE_LOGIN_MAX_ATTEMPTS = resolvePositiveInt(ENV_LOGIN_MAX_ATTEMPTS, LOGIN_MAX_ATTEMPTS);
   private static final long EFFECTIVE_LOGIN_ATTEMPT_WINDOW_MS = TimeUnit.SECONDS.toMillis(resolvePositiveLong(ENV_LOGIN_ATTEMPT_WINDOW_SECONDS, TimeUnit.MILLISECONDS.toSeconds(LOGIN_ATTEMPT_WINDOW_MS)));
@@ -86,6 +91,7 @@ public class Main {
     server.createContext("/api/auth/me", new SafeHandler("me", new MeHandler()));
     server.createContext("/api/auth/logout", new SafeHandler("logout", new LogoutHandler()));
     server.createContext("/api/auth/change-password", new SafeHandler("change-password", new ChangePasswordHandler()));
+    server.createContext("/api/state/snapshot", new SafeHandler("state-snapshot", new StateSnapshotHandler()));
 
     ExecutorService requestExecutor = Executors.newFixedThreadPool(8);
     server.setExecutor(requestExecutor);
@@ -118,6 +124,23 @@ public class Main {
     if (!Files.exists(USER_FILE)) {
       Files.writeString(USER_FILE, "id,email,full_name,password_hash,created_at\n", StandardCharsets.UTF_8);
     }
+    loadStateSnapshot();
+  }
+
+  private static synchronized void loadStateSnapshot() throws IOException {
+    if (!Files.exists(STATE_SNAPSHOT_FILE)) {
+      stateSnapshot = null;
+      return;
+    }
+    String body = Files.readString(STATE_SNAPSHOT_FILE, StandardCharsets.UTF_8).trim();
+    long timestamp = jsonLongValue(body, "timestamp");
+    String stateObject = jsonObjectValue(body, "state");
+    if (timestamp <= 0 || stateObject.isBlank()) {
+      stateSnapshot = null;
+      return;
+    }
+    String normalizedJson = "{\"timestamp\":" + timestamp + ",\"state\":" + stateObject + "}";
+    stateSnapshot = new StateSnapshotRecord(timestamp, normalizedJson);
   }
 
   private static void runHousekeeping() {
@@ -293,11 +316,15 @@ public class Main {
   }
 
   private static String readBody(HttpExchange exchange) throws IOException {
+    return readBodyWithLimit(exchange, EFFECTIVE_MAX_REQUEST_BODY_BYTES);
+  }
+
+  private static String readBodyWithLimit(HttpExchange exchange, int maxBytes) throws IOException {
     String contentLengthHeader = exchange.getRequestHeaders().getFirst("Content-Length");
     if (contentLengthHeader != null) {
       try {
         int contentLength = Integer.parseInt(contentLengthHeader);
-        if (contentLength > EFFECTIVE_MAX_REQUEST_BODY_BYTES) {
+        if (contentLength > maxBytes) {
           throw new IOException("Request body too large");
         }
       } catch (NumberFormatException ignored) {
@@ -306,7 +333,7 @@ public class Main {
     }
     try (InputStream in = exchange.getRequestBody()) {
       byte[] bytes = in.readAllBytes();
-      if (bytes.length > EFFECTIVE_MAX_REQUEST_BODY_BYTES) {
+      if (bytes.length > maxBytes) {
         throw new IOException("Request body too large");
       }
       return new String(bytes, StandardCharsets.UTF_8);
@@ -336,6 +363,15 @@ public class Main {
     }
   }
 
+  private static String readBodyOrRespond(HttpExchange exchange, int maxBytes) throws IOException {
+    try {
+      return readBodyWithLimit(exchange, maxBytes);
+    } catch (IOException e) {
+      sendJson(exchange, 413, "{\"error\":\"payload_too_large\"}");
+      return null;
+    }
+  }
+
   private static boolean handleCorsPreflight(HttpExchange exchange) throws IOException {
     if (!"OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
       return false;
@@ -350,7 +386,7 @@ public class Main {
     exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
     exchange.getResponseHeaders().set("Access-Control-Allow-Origin", allowedOrigin);
     exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
     exchange.getResponseHeaders().set("X-Request-Id", requestId);
     exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
     byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
@@ -442,6 +478,59 @@ public class Main {
       return "";
     }
     return jsonUnescape(m.group(1)).trim();
+  }
+
+  private static long jsonLongValue(String json, String key) {
+    Pattern p = Pattern.compile("\\\"" + Pattern.quote(key) + "\\\"\\s*:\\s*(-?\\d+)");
+    Matcher m = p.matcher(json);
+    if (!m.find()) {
+      return -1;
+    }
+    try {
+      return Long.parseLong(m.group(1));
+    } catch (NumberFormatException ignored) {
+      return -1;
+    }
+  }
+
+  private static String jsonObjectValue(String json, String key) {
+    Pattern p = Pattern.compile("\\\"" + Pattern.quote(key) + "\\\"\\s*:\\s*\\{");
+    Matcher m = p.matcher(json);
+    if (!m.find()) {
+      return "";
+    }
+
+    int start = m.end() - 1;
+    int depth = 0;
+    boolean inString = false;
+    boolean escaped = false;
+
+    for (int i = start; i < json.length(); i++) {
+      char c = json.charAt(i);
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (c == '\\') {
+          escaped = true;
+        } else if (c == '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (c == '"') {
+        inString = true;
+      } else if (c == '{') {
+        depth++;
+      } else if (c == '}') {
+        depth--;
+        if (depth == 0) {
+          return json.substring(start, i + 1).trim();
+        }
+      }
+    }
+
+    return "";
   }
 
   private static String jsonUnescape(String value) {
@@ -562,7 +651,7 @@ public class Main {
       cleanupExpiredSessions();
       cleanupExpiredLoginRateLimits();
       long uptimeSec = Math.max(0, TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis() - SERVER_STARTED_AT.toEpochMilli()));
-      sendJson(exchange, 200, "{\"status\":\"ok\",\"service\":\"tahir-erp-java-server\",\"version\":\"" + jsonEscape(RELEASE_VERSION) + "\",\"uptimeSec\":" + uptimeSec + ",\"activeSessions\":" + sessionsByToken.size() + ",\"registeredUsers\":" + usersByEmail.size() + ",\"loginRateLimitedPrincipals\":" + failedLoginByPrincipal.size() + ",\"metrics\":{\"totalRequests\":" + totalRequests.get() + ",\"responses4xx\":" + status4xxResponses.get() + ",\"responses5xx\":" + status5xxResponses.get() + ",\"avgResponseBytes\":" + (totalRequests.get() == 0 ? 0 : (cumulativeResponseBytes.get() / totalRequests.get())) + "},\"housekeeping\":{\"runs\":" + housekeepingRuns.get() + ",\"lastRunEpochMs\":" + lastHousekeepingEpochMs.get() + "},\"config\":{\"sessionTtlSec\":" + EFFECTIVE_SESSION_TTL_SECONDS + ",\"maxRequestBodyBytes\":" + EFFECTIVE_MAX_REQUEST_BODY_BYTES + ",\"loginMaxAttempts\":" + EFFECTIVE_LOGIN_MAX_ATTEMPTS + ",\"loginAttemptWindowSec\":" + TimeUnit.MILLISECONDS.toSeconds(EFFECTIVE_LOGIN_ATTEMPT_WINDOW_MS) + ",\"loginLockoutSec\":" + TimeUnit.MILLISECONDS.toSeconds(EFFECTIVE_LOGIN_LOCKOUT_MS) + "}}");
+      sendJson(exchange, 200, "{\"status\":\"ok\",\"service\":\"tahir-erp-java-server\",\"version\":\"" + jsonEscape(RELEASE_VERSION) + "\",\"uptimeSec\":" + uptimeSec + ",\"activeSessions\":" + sessionsByToken.size() + ",\"registeredUsers\":" + usersByEmail.size() + ",\"loginRateLimitedPrincipals\":" + failedLoginByPrincipal.size() + ",\"metrics\":{\"totalRequests\":" + totalRequests.get() + ",\"responses4xx\":" + status4xxResponses.get() + ",\"responses5xx\":" + status5xxResponses.get() + ",\"avgResponseBytes\":" + (totalRequests.get() == 0 ? 0 : (cumulativeResponseBytes.get() / totalRequests.get())) + "},\"housekeeping\":{\"runs\":" + housekeepingRuns.get() + ",\"lastRunEpochMs\":" + lastHousekeepingEpochMs.get() + "},\"config\":{\"sessionTtlSec\":" + EFFECTIVE_SESSION_TTL_SECONDS + ",\"maxRequestBodyBytes\":" + EFFECTIVE_MAX_REQUEST_BODY_BYTES + ",\"loginMaxAttempts\":" + EFFECTIVE_LOGIN_MAX_ATTEMPTS + ",\"loginAttemptWindowSec\":" + TimeUnit.MILLISECONDS.toSeconds(EFFECTIVE_LOGIN_ATTEMPT_WINDOW_MS) + ",\"loginLockoutSec\":" + TimeUnit.MILLISECONDS.toSeconds(EFFECTIVE_LOGIN_LOCKOUT_MS) + ",\"snapshotMaxBodyBytes\":" + EFFECTIVE_STATE_SNAPSHOT_MAX_BODY_BYTES + "}}");
     }
   }
 
@@ -774,6 +863,75 @@ public class Main {
     }
   }
 
+  private static class StateSnapshotHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (handleCorsPreflight(exchange)) {
+        return;
+      }
+
+      cleanupExpiredSessions();
+      String token = extractBearerToken(exchange);
+      if (token.isBlank()) {
+        sendJson(exchange, 401, "{\"error\":\"missing_token\"}");
+        return;
+      }
+      SessionRecord session = sessionsByToken.get(token);
+      if (session == null) {
+        sendJson(exchange, 401, "{\"error\":\"invalid_token\"}");
+        return;
+      }
+
+      if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+        StateSnapshotRecord snapshot = stateSnapshot;
+        if (snapshot == null) {
+          sendJson(exchange, 204, "{}");
+          return;
+        }
+        sendJson(exchange, 200, snapshot.rawJson);
+        return;
+      }
+
+      if ("PUT".equalsIgnoreCase(exchange.getRequestMethod())) {
+        if (!requireJsonContentType(exchange)) {
+          return;
+        }
+        String body = readBodyOrRespond(exchange, EFFECTIVE_STATE_SNAPSHOT_MAX_BODY_BYTES);
+        if (body == null) {
+          return;
+        }
+
+        long timestamp = jsonLongValue(body, "timestamp");
+        String stateObject = jsonObjectValue(body, "state");
+        if (timestamp <= 0 || stateObject.isBlank()) {
+          sendJson(exchange, 400, "{\"error\":\"invalid_input\",\"message\":\"timestamp and state are required\"}");
+          return;
+        }
+
+        String normalizedJson = "{\"timestamp\":" + timestamp + ",\"state\":" + stateObject + "}";
+        StateSnapshotRecord current = stateSnapshot;
+        if (current != null && timestamp < current.timestamp) {
+          sendJson(exchange, 409, "{\"error\":\"stale_snapshot\"}");
+          return;
+        }
+
+        synchronized (Main.class) {
+          StateSnapshotRecord latest = stateSnapshot;
+          if (latest != null && timestamp < latest.timestamp) {
+            sendJson(exchange, 409, "{\"error\":\"stale_snapshot\"}");
+            return;
+          }
+          stateSnapshot = new StateSnapshotRecord(timestamp, normalizedJson);
+          Files.writeString(STATE_SNAPSHOT_FILE, normalizedJson + "\n", StandardCharsets.UTF_8);
+        }
+        sendJson(exchange, 200, "{\"status\":\"ok\",\"timestamp\":" + timestamp + "}");
+        return;
+      }
+
+      sendJson(exchange, 405, "{\"error\":\"method_not_allowed\"}");
+    }
+  }
+
   private static synchronized void rewriteUsersCsv() throws IOException {
     StringBuilder data = new StringBuilder("id,email,full_name,password_hash,created_at\n");
     for (UserRecord user : usersByEmail.values()) {
@@ -847,4 +1005,6 @@ public class Main {
   private record SessionRecord(String token, String userId, String email, String fullName, String issuedAt) {}
 
   private record FailedLoginState(int attempts, long windowStartMs, long lockedUntilMs) {}
+
+  private record StateSnapshotRecord(long timestamp, String rawJson) {}
 }

@@ -15,6 +15,8 @@ This project now includes a lightweight Java API service for LAN usage with per-
 - `GET /api/auth/me` — current user from `Authorization: Bearer <token>`
 - `POST /api/auth/logout` — invalidate current bearer session
 - `POST /api/auth/change-password` — rotate password for authenticated user
+- `GET /api/state/snapshot` — fetch latest shared app-state snapshot (`204` if empty)
+- `PUT /api/state/snapshot` — publish latest shared app-state snapshot with `{ timestamp, state }`
 
 ## Auth hardening included
 - Strong password policy enforced on registration and password-change.
@@ -31,6 +33,7 @@ This project now includes a lightweight Java API service for LAN usage with per-
 - `TAHIR_DISABLE_DEFAULT_ADMIN` — set `true/1/yes` to skip default admin auto-seed
 - `TAHIR_SESSION_TTL_SECONDS` — override bearer session time-to-live in seconds (default `28800`)
 - `TAHIR_MAX_REQUEST_BODY_BYTES` — override maximum accepted JSON body size in bytes (default `8192`)
+- `TAHIR_STATE_SNAPSHOT_MAX_BODY_BYTES` — optional cap for snapshot payloads (default `5242880`)
 - `TAHIR_RELEASE_VERSION` — value returned by `/api/health` as `version` (default `dev`)
 - `TAHIR_LOGIN_MAX_ATTEMPTS` — failed login attempts before lockout (default `5`)
 - `TAHIR_LOGIN_ATTEMPT_WINDOW_SECONDS` — rolling attempt window in seconds (default `600`)
@@ -51,7 +54,7 @@ Health endpoint sample fields:
 - `loginRateLimitedPrincipals`: principals currently in lockout/tracking window
 - `metrics`: cumulative request counters (`totalRequests`, `responses4xx`, `responses5xx`, `avgResponseBytes`)
 - `housekeeping`: scheduler telemetry (`runs`, `lastRunEpochMs`)
-- `config`: active runtime guardrails (`sessionTtlSec`, request-size limit, login throttle limits)
+- `config`: active runtime guardrails (`sessionTtlSec`, `maxRequestBodyBytes`, `snapshotMaxBodyBytes`, login throttle limits)
 
 ## Example usage
 Register:

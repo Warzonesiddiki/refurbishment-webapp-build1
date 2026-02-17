@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Action, AppState } from "@/store/appState";
-import { fetchSharedState, pushSharedState } from "@/utils/sharedStateClient";
+import { fetchSharedState, pushSharedState, SharedStatePushError } from "@/utils/sharedStateClient";
 import { debounce } from "@/utils/debounce";
 import { deepEqual } from "@/utils/deepEqual";
 
@@ -91,7 +91,17 @@ export function useRemoteStateSync(state: AppState, dispatch: React.Dispatch<Act
       try {
         await pushSharedState({ timestamp: ts, state });
         lastPublishedStateRef.current = state;
-      } catch {
+      } catch (error) {
+        if (error instanceof SharedStatePushError && error.status === 409) {
+          const remote = await fetchSharedState();
+          if (remote && !deepEqual(remote.state, stateRef.current)) {
+            latestTimestampRef.current = remote.timestamp;
+            skipNextPublishRef.current = true;
+            lastPublishedStateRef.current = remote.state;
+            dispatch({ type: "RESTORE_STATE", payload: remote.state });
+          }
+          return;
+        }
         // Remote sync is optional; local persistence remains primary fallback.
       }
     }, 400);

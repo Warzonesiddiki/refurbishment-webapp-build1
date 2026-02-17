@@ -70,4 +70,38 @@ describe("useRemoteStateSync", () => {
 
     expect(pushSpy).not.toHaveBeenCalled();
   });
+
+  it("restores remote snapshot after stale publish conflict", async () => {
+    vi.useFakeTimers();
+    const initialRemote = createInitialState();
+    const localChanged = createInitialState();
+    localChanged.activity = [{ action: "local", time: "1" }];
+
+    const remoteState = createInitialState();
+    remoteState.activity = [{ action: "remote-after-conflict", time: "2" }];
+
+    const fetchSpy = vi.spyOn(sharedStateClient, "fetchSharedState");
+    fetchSpy.mockResolvedValueOnce({ timestamp: 100, state: initialRemote });
+    fetchSpy.mockResolvedValueOnce({ timestamp: 5_000, state: remoteState });
+
+    vi.spyOn(sharedStateClient, "pushSharedState").mockRejectedValue(new sharedStateClient.SharedStatePushError(409));
+    const dispatch = vi.fn();
+
+    const { rerender } = renderHook(({ state }) => useRemoteStateSync(state, dispatch, 60_000), {
+      initialProps: { state: initialRemote },
+    });
+
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+
+    rerender({ state: localChanged });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({ type: "RESTORE_STATE", payload: remoteState });
+  });
+
 });

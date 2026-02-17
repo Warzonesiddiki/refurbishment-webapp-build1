@@ -15,13 +15,17 @@
 - `GET /api/auth/me`
 - `POST /api/auth/logout`
 - `POST /api/auth/change-password`
+- `GET /api/state/snapshot`
+- `PUT /api/state/snapshot`
 
 Behavior notes:
 - `X-Request-Id` is accepted and echoed (or generated if missing).
 - Login lockout returns `429 too_many_attempts` after repeated failed attempts and includes `Retry-After` seconds.
 - Request bodies beyond the configured size limit return `413 payload_too_large`.
 - JSON endpoints require `Content-Type: application/json`; otherwise they return `415 unsupported_media_type`.
-- `GET /api/health` returns `version`, `uptimeSec`, `activeSessions`, `registeredUsers`, `loginRateLimitedPrincipals`, plus `metrics`, `housekeeping`, and a `config` object for runtime telemetry.
+- `GET /api/health` returns `version`, `uptimeSec`, `activeSessions`, `registeredUsers`, `loginRateLimitedPrincipals`, plus `metrics`, `housekeeping`, and a `config` object for runtime telemetry (including `snapshotMaxBodyBytes`).
+- Snapshot sync endpoint requires bearer auth and uses optimistic timestamp ordering: stale `PUT` writes are rejected with `409 stale_snapshot`.
+- Snapshot `GET` returns `204` when no shared state is available yet.
 - Auth handlers are wrapped in a server-side safety boundary: unexpected runtime exceptions emit structured error events and return `500 internal_server_error` without crashing the process.
 
 ## Inventory
