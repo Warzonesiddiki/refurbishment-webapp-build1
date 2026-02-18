@@ -51,7 +51,11 @@ public class Main {
   private static final String ENV_ADMIN_EMAIL = "TAHIR_ADMIN_EMAIL";
   private static final String ENV_ADMIN_PASSWORD = "TAHIR_ADMIN_PASSWORD";
   private static final String ENV_DISABLE_DEFAULT_ADMIN = "TAHIR_DISABLE_DEFAULT_ADMIN";
+  private static final String ENV_ENABLE_DEFAULT_ADMIN = "TAHIR_ENABLE_DEFAULT_ADMIN";
+  private static final String ENV_ENABLE_SEEDED_USERS = "TAHIR_ENABLE_SEEDED_USERS";
   private static final String ENV_ALLOWED_ORIGIN = "TAHIR_ALLOWED_ORIGIN";
+  private static final int SEEDED_SKYLINE_USER_START = 2;
+  private static final int SEEDED_SKYLINE_USER_END = 31;
 
   private static final Map<String, UserRecord> usersByEmail = new ConcurrentHashMap<>();
   private static final Map<String, SessionRecord> sessionsByToken = new ConcurrentHashMap<>();
@@ -83,6 +87,7 @@ public class Main {
     initStorage();
     loadUsers();
     ensureDefaultAdminAccount();
+    ensureSeededSkylineUsers();
 
     HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
     server.createContext("/api/health", new SafeHandler("health", new HealthHandler()));
@@ -91,6 +96,8 @@ public class Main {
     server.createContext("/api/auth/me", new SafeHandler("me", new MeHandler()));
     server.createContext("/api/auth/logout", new SafeHandler("logout", new LogoutHandler()));
     server.createContext("/api/auth/change-password", new SafeHandler("change-password", new ChangePasswordHandler()));
+    server.createContext("/api/auth/users", new SafeHandler("users", new UsersHandler()));
+    server.createContext("/api/auth/reset-seeded-passwords", new SafeHandler("reset-seeded-passwords", new ResetSeededPasswordsHandler()));
     server.createContext("/api/state/snapshot", new SafeHandler("state-snapshot", new StateSnapshotHandler()));
 
     ExecutorService requestExecutor = Executors.newFixedThreadPool(8);
@@ -122,7 +129,7 @@ public class Main {
       Files.createDirectories(DATA_DIR);
     }
     if (!Files.exists(USER_FILE)) {
-      Files.writeString(USER_FILE, "id,email,full_name,password_hash,created_at\n", StandardCharsets.UTF_8);
+      Files.writeString(USER_FILE, "id,email,full_name,password_hash,created_at,role\n", StandardCharsets.UTF_8);
     }
     loadStateSnapshot();
   }
@@ -201,7 +208,9 @@ public class Main {
       if (line.isBlank()) continue;
       String[] parts = parseCsvRow(line);
       if (parts.length < 5) continue;
-      UserRecord user = new UserRecord(parts[0], parts[1], parts[2], parts[3], parts[4]);
+      String email = parts[1].toLowerCase();
+      String role = parts.length >= 6 ? normalizeUserRole(parts[5]) : inferLegacyUserRole(email);
+      UserRecord user = new UserRecord(parts[0], email, parts[2], parts[3], parts[4], role);
       usersByEmail.put(user.email.toLowerCase(), user);
     }
   }
@@ -212,18 +221,28 @@ public class Main {
       toCsvField(user.email),
       toCsvField(user.fullName),
       toCsvField(user.passwordHash),
-      toCsvField(user.createdAt)
+      toCsvField(user.createdAt),
+      toCsvField(user.role)
     ) + "\n";
     Files.writeString(USER_FILE, row, StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.APPEND);
   }
 
   private static void ensureDefaultAdminAccount() throws IOException {
-    if (isEnvFlagEnabled(ENV_DISABLE_DEFAULT_ADMIN)) {
+    if (isEnvFlagEnabled(ENV_DISABLE_DEFAULT_ADMIN) || !isEnvFlagEnabled(ENV_ENABLE_DEFAULT_ADMIN)) {
       return;
     }
 
     String adminEmail = normalizeSeedAdminEmail();
-    if (adminEmail.isBlank() || usersByEmail.containsKey(adminEmail)) {
+    if (adminEmail.isBlank()) {
+      return;
+    }
+
+    UserRecord existing = usersByEmail.get(adminEmail);
+    if (existing != null) {
+      if (!"ADMIN".equals(existing.role)) {
+        usersByEmail.put(adminEmail, new UserRecord(existing.id, existing.email, existing.fullName, existing.passwordHash, existing.createdAt, "ADMIN"));
+        rewriteUsersCsv();
+      }
       return;
     }
     String adminPassword = resolveSeedAdminPassword();
@@ -236,10 +255,67 @@ public class Main {
       adminEmail,
       "Tahir Admin",
       sha256(adminPassword),
-      Instant.now().toString()
+      Instant.now().toString(),
+      "ADMIN"
     );
     usersByEmail.put(adminEmail, admin);
     persistUser(admin);
+  }
+
+
+  private static void ensureSeededSkylineUsers() throws IOException {
+    if (!isEnvFlagEnabled(ENV_ENABLE_SEEDED_USERS)) {
+      return;
+    }
+
+    boolean changed = false;
+    for (int i = SEEDED_SKYLINE_USER_START; i <= SEEDED_SKYLINE_USER_END; i++) {
+      String email = "id.skyline" + i + "@erp.com";
+      String normalizedEmail = email.toLowerCase();
+      if (usersByEmail.containsKey(normalizedEmail)) {
+        continue;
+      }
+
+      String password = "user" + i + "skylinein";
+      UserRecord seeded = new UserRecord(
+        UUID.randomUUID().toString(),
+        normalizedEmail,
+        "Skyline User " + i,
+        sha256(password),
+        Instant.now().toString(),
+        "USER"
+      );
+      usersByEmail.put(normalizedEmail, seeded);
+      persistUser(seeded);
+      changed = true;
+    }
+
+    if (changed) {
+      rewriteUsersCsv();
+    }
+  }
+
+  private static int resetSeededSkylinePasswords() throws IOException {
+    if (!isEnvFlagEnabled(ENV_ENABLE_SEEDED_USERS)) {
+      return 0;
+    }
+
+    int updated = 0;
+    for (int i = SEEDED_SKYLINE_USER_START; i <= SEEDED_SKYLINE_USER_END; i++) {
+      String email = ("id.skyline" + i + "@erp.com").toLowerCase();
+      UserRecord current = usersByEmail.get(email);
+      if (current == null) {
+        continue;
+      }
+      String password = "user" + i + "skylinein";
+      UserRecord reset = new UserRecord(current.id, current.email, current.fullName, sha256(password), current.createdAt, current.role);
+      usersByEmail.put(email, reset);
+      updated += 1;
+    }
+    if (updated > 0) {
+      rewriteUsersCsv();
+    }
+    return updated;
   }
 
   private static boolean isEnvFlagEnabled(String envKey) {
@@ -249,6 +325,18 @@ public class Main {
     }
     String normalized = value.trim().toLowerCase();
     return "1".equals(normalized) || "true".equals(normalized) || "yes".equals(normalized);
+  }
+
+
+  private static String normalizeUserRole(String candidate) {
+    if (candidate == null) return "USER";
+    String normalized = candidate.trim().toUpperCase();
+    return "ADMIN".equals(normalized) ? "ADMIN" : "USER";
+  }
+
+  private static String inferLegacyUserRole(String email) {
+    String normalizedEmail = email == null ? "" : email.trim().toLowerCase();
+    return normalizeSeedAdminEmail().equalsIgnoreCase(normalizedEmail) ? "ADMIN" : "USER";
   }
 
   private static String normalizeSeedAdminEmail() {
@@ -409,7 +497,11 @@ public class Main {
 
   private static String resolveAllowedOrigin() {
     String configured = System.getenv(ENV_ALLOWED_ORIGIN);
-    return configured == null || configured.isBlank() ? "*" : configured.trim();
+    return configured == null || configured.isBlank() ? "http://localhost:4173" : configured.trim();
+  }
+
+  private static boolean isSessionAdmin(SessionRecord session) {
+    return session != null && "ADMIN".equals(session.role);
   }
 
   private static String ensureRequestId(HttpExchange exchange) {
@@ -701,7 +793,8 @@ public class Main {
         email,
         fullName,
         sha256(password),
-        Instant.now().toString()
+        Instant.now().toString(),
+        "USER"
       );
 
       usersByEmail.put(email, user);
@@ -752,10 +845,10 @@ public class Main {
       clearFailedLogin(principal);
 
       String token = UUID.randomUUID().toString();
-      sessionsByToken.put(token, new SessionRecord(token, user.id, user.email, user.fullName, Instant.now().toString()));
+      sessionsByToken.put(token, new SessionRecord(token, user.id, user.email, user.fullName, user.role, Instant.now().toString()));
 
       sendJson(exchange, 200,
-        "{\"token\":\"" + token + "\",\"user\":{\"id\":\"" + user.id + "\",\"email\":\"" + jsonEscape(user.email) + "\",\"fullName\":\"" + jsonEscape(user.fullName) + "\"}}"
+        "{\"token\":\"" + token + "\",\"user\":{\"id\":\"" + user.id + "\",\"email\":\"" + jsonEscape(user.email) + "\",\"fullName\":\"" + jsonEscape(user.fullName) + "\",\"role\":\"" + jsonEscape(user.role) + "\"}}"
       );
     }
   }
@@ -784,7 +877,7 @@ public class Main {
       }
 
       sendJson(exchange, 200,
-        "{\"id\":\"" + session.userId + "\",\"email\":\"" + jsonEscape(session.email) + "\",\"fullName\":\"" + jsonEscape(session.fullName) + "\",\"issuedAt\":\"" + session.issuedAt + "\"}"
+        "{\"id\":\"" + session.userId + "\",\"email\":\"" + jsonEscape(session.email) + "\",\"fullName\":\"" + jsonEscape(session.fullName) + "\",\"role\":\"" + jsonEscape(session.role) + "\",\"issuedAt\":\"" + session.issuedAt + "\"}"
       );
     }
   }
@@ -855,11 +948,81 @@ public class Main {
         return;
       }
 
-      UserRecord updated = new UserRecord(user.id, user.email, user.fullName, sha256(newPassword), user.createdAt);
+      UserRecord updated = new UserRecord(user.id, user.email, user.fullName, sha256(newPassword), user.createdAt, user.role);
       usersByEmail.put(user.email.toLowerCase(), updated);
       rewriteUsersCsv();
 
       sendJson(exchange, 200, "{\"status\":\"password_updated\"}");
+    }
+  }
+
+
+  private static class UsersHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (handleCorsPreflight(exchange)) {
+        return;
+      }
+      if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+        sendJson(exchange, 405, "{\"error\":\"method_not_allowed\"}");
+        return;
+      }
+
+      cleanupExpiredSessions();
+      String token = extractBearerToken(exchange);
+      if (token.isBlank()) {
+        sendJson(exchange, 401, "{\"error\":\"missing_token\"}");
+        return;
+      }
+      SessionRecord session = sessionsByToken.get(token);
+      if (session == null) {
+        sendJson(exchange, 401, "{\"error\":\"invalid_token\"}");
+        return;
+      }
+
+      List<UserRecord> users = new ArrayList<>(usersByEmail.values());
+      users.sort((a, b) -> a.fullName.compareToIgnoreCase(b.fullName));
+      StringBuilder out = new StringBuilder("{\"users\":[");
+      for (int i = 0; i < users.size(); i++) {
+        UserRecord user = users.get(i);
+        if (i > 0) out.append(',');
+        out.append("{\"id\":\"").append(jsonEscape(user.id)).append("\",\"email\":\"").append(jsonEscape(user.email)).append("\",\"fullName\":\"").append(jsonEscape(user.fullName)).append("\",\"role\":\"").append(jsonEscape(user.role)).append("\"}");
+      }
+      out.append("]}");
+      sendJson(exchange, 200, out.toString());
+    }
+  }
+
+  private static class ResetSeededPasswordsHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (handleCorsPreflight(exchange)) {
+        return;
+      }
+      if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+        sendJson(exchange, 405, "{\"error\":\"method_not_allowed\"}");
+        return;
+      }
+
+      cleanupExpiredSessions();
+      String token = extractBearerToken(exchange);
+      if (token.isBlank()) {
+        sendJson(exchange, 401, "{\"error\":\"missing_token\"}");
+        return;
+      }
+      SessionRecord session = sessionsByToken.get(token);
+      if (session == null) {
+        sendJson(exchange, 401, "{\"error\":\"invalid_token\"}");
+        return;
+      }
+
+      if (!isSessionAdmin(session)) {
+        sendJson(exchange, 403, "{\"error\":\"forbidden\",\"message\":\"admin role required\"}");
+        return;
+      }
+
+      int resetCount = resetSeededSkylinePasswords();
+      sendJson(exchange, 200, "{\"status\":\"ok\",\"resetCount\":" + resetCount + "}");
     }
   }
 
@@ -933,14 +1096,15 @@ public class Main {
   }
 
   private static synchronized void rewriteUsersCsv() throws IOException {
-    StringBuilder data = new StringBuilder("id,email,full_name,password_hash,created_at\n");
+    StringBuilder data = new StringBuilder("id,email,full_name,password_hash,created_at,role\n");
     for (UserRecord user : usersByEmail.values()) {
       data.append(String.join(",",
         toCsvField(user.id),
         toCsvField(user.email),
         toCsvField(user.fullName),
         toCsvField(user.passwordHash),
-        toCsvField(user.createdAt)
+        toCsvField(user.createdAt),
+        toCsvField(user.role)
       )).append("\n");
     }
     Files.writeString(USER_FILE, data.toString(), StandardCharsets.UTF_8);
@@ -1000,9 +1164,9 @@ public class Main {
     failedLoginByPrincipal.remove(principal);
   }
 
-  private record UserRecord(String id, String email, String fullName, String passwordHash, String createdAt) {}
+  private record UserRecord(String id, String email, String fullName, String passwordHash, String createdAt, String role) {}
 
-  private record SessionRecord(String token, String userId, String email, String fullName, String issuedAt) {}
+  private record SessionRecord(String token, String userId, String email, String fullName, String role, String issuedAt) {}
 
   private record FailedLoginState(int attempts, long windowStartMs, long lockedUntilMs) {}
 
