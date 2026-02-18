@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useAppState } from "@/context/StoreContext";
 import { useIdempotentAction } from "@/hooks/useIdempotentAction";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
-import { exportCsv, exportJson } from "@/utils/exporters";
+import { exportCsv, exportExcel, exportJson } from "@/utils/exporters";
 import { ProfitSummaryWidget } from "@/components/Dashboard/ProfitSummaryWidget";
 import { cn } from "@/utils/cn";
 import {
@@ -64,6 +64,12 @@ type ReportDataKey =
   | "management"
   | "tax";
 
+type ReportPeriodMode = "daily" | "monthly";
+
+const reportPeriodModes: { key: ReportPeriodMode; label: string }[] = [
+  { key: "daily", label: "Daily" },
+  { key: "monthly", label: "Monthly" },
+];
 
 const journalScopes: JournalDrilldownScope[] = ["all", "sales", "purchases", "receipts", "payments"];
 const journalWindows: { key: JournalWindow; label: string }[] = [
@@ -87,6 +93,41 @@ const dataKeyByReport: Record<ReportKey, ReportDataKey> = {
   tax: "tax",
 };
 
+function toExportRows(payload: unknown, selected: ReportKey, generatedAtIso: string): (string | number)[][] {
+  const baseRows: (string | number)[][] = [
+    ["Report", selected],
+    ["Generated", generatedAtIso],
+  ];
+
+  if (Array.isArray(payload)) {
+    if (payload.length === 0) {
+      return [...baseRows, ["Rows", 0]];
+    }
+
+    const objectRows = payload.filter((row): row is Record<string, unknown> => !!row && typeof row === "object" && !Array.isArray(row));
+    if (objectRows.length !== payload.length) {
+      return [...baseRows, ["Rows", payload.length], ["Payload", JSON.stringify(payload)]];
+    }
+
+    const keys = Array.from(new Set(objectRows.flatMap((row) => Object.keys(row))));
+    const dataRows = objectRows.map((row) => keys.map((key) => {
+      const value = row[key];
+      if (value === null || value === undefined) return "";
+      if (typeof value === "object") return JSON.stringify(value);
+      return String(value);
+    }));
+
+    return [...baseRows, ["Rows", payload.length], keys, ...dataRows];
+  }
+
+  if (payload && typeof payload === "object") {
+    const entries = Object.entries(payload as Record<string, unknown>).map(([key, value]) => [key, typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "")]);
+    return [...baseRows, ["Rows", 1], ["Field", "Value"], ...entries];
+  }
+
+  return [...baseRows, ["Rows", 1], ["Value", String(payload ?? "")]];
+}
+
 export function ReportsPage() {
   const state = useAppState();
   const { run: logExport } = useIdempotentAction("export-reports", "report");
@@ -94,6 +135,7 @@ export function ReportsPage() {
   const [selected, setSelected] = useState<ReportKey>("inventory");
   const [journalScope, setJournalScope] = useState<JournalDrilldownScope>("all");
   const [journalWindow, setJournalWindow] = useState<JournalWindow>("all-time");
+  const [reportPeriodMode, setReportPeriodMode] = useState<ReportPeriodMode>("daily");
 
   const completionRoadmap = useMemo(() => buildCompletionRoadmap(state), [state]);
 
@@ -163,8 +205,12 @@ export function ReportsPage() {
       };
     });
 
-    const periodStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const periodEnd = new Date();
+    const now = new Date();
+    const periodStart =
+      reportPeriodMode === "daily"
+        ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        : new Date(now.getFullYear(), now.getMonth(), 1);
+    const periodEnd = now;
     const accounting = {
       profitLoss: generateProfitLossReport(state, periodStart, periodEnd),
       balanceSheet: generateBalanceSheet(state, periodEnd),
@@ -208,7 +254,7 @@ export function ReportsPage() {
       summary,
       journalDrilldown,
     };
-  }, [state]);
+  }, [reportPeriodMode, state]);
 
   const filteredJournalRows = useMemo(
     () => filterJournalDrilldownRows(data.journalDrilldown, journalScope, journalWindow),
@@ -298,18 +344,25 @@ export function ReportsPage() {
   const handleExport = (format: "excel" | "csv" | "json") => {
     logExport(`report-${format}`, { format, report: selected });
     const payload = data[dataKeyByReport[selected]] ?? data;
+    const generatedAtIso = new Date().toISOString();
+    const dateStamp = generatedAtIso.slice(0, 10);
 
     if (format === "json") {
-      exportJson(`report-${selected}-${new Date().toISOString().slice(0, 10)}.json`, payload);
+      exportJson(`report-${selected}-${dateStamp}.json`, payload);
     } else {
-      const rows = [
-        ["Report", selected],
-        ["Generated", new Date().toISOString()],
-        ["Rows", Array.isArray(payload) ? String(payload.length) : "1"],
-      ];
-      exportCsv(`report-${selected}-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+      const rows = toExportRows(payload, selected, generatedAtIso);
+      if (format === "excel") {
+        exportExcel(`report-${selected}-${dateStamp}.xls`, rows);
+      } else {
+        exportCsv(`report-${selected}-${dateStamp}.csv`, rows);
+      }
     }
     trigger("info", `Exported ${selected} (${format})`);
+  };
+
+  const handlePrint = () => {
+    window.print();
+    trigger("info", `Opened print dialog for ${selected}`);
   };
 
   return (
@@ -326,9 +379,27 @@ export function ReportsPage() {
             Inventory + Accounting + Management Accounting + Taxation
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-1">
+            {reportPeriodModes.map((mode) => (
+              <button
+                key={mode.key}
+                type="button"
+                className={cn(
+                  "px-3 py-1 text-xs rounded-md transition-colors",
+                  reportPeriodMode === mode.key ? "bg-cyan-500/20 text-cyan-200" : "text-cyan-400/70 hover:text-cyan-200"
+                )}
+                aria-pressed={reportPeriodMode === mode.key}
+                onClick={() => setReportPeriodMode(mode.key)}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+          <button className="btn-ghost" onClick={() => handleExport("excel")}>Excel</button>
           <button className="btn-ghost" onClick={() => handleExport("csv")}>CSV</button>
           <button className="btn-ghost" onClick={() => handleExport("json")}>JSON</button>
+          <button className="btn-ghost" onClick={handlePrint}>Print</button>
         </div>
       </div>
 

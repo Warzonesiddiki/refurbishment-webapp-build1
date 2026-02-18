@@ -285,6 +285,10 @@ export function ReceivingImportLot() {
       trigger("error", "Lot number is required");
       return;
     }
+    if (!supplier.trim()) {
+      trigger("error", "Supplier is required");
+      return;
+    }
     if (state.lots.some((l) => l.lot.toUpperCase() === lotNumber.trim().toUpperCase())) {
       trigger("error", `Lot ${lotNumber} already exists`);
       return;
@@ -294,8 +298,11 @@ export function ReceivingImportLot() {
       return;
     }
 
-    logCommit(lotNumber, { validRows: validRows.length, totalRows: previewRows.length });
-    dispatch({ type: "ADD_LOT", payload: { lot: lotNumber, supplier, received: new Date().toISOString().slice(0, 10), status: "Pending", items: validRows.length, verified: 0, graded: 0, cost: totalCost } });
+    const normalizedLot = lotNumber.trim();
+    const computedLotCost = totalCost > 0 ? totalCost : Number(validRows.reduce((sum, row) => sum + row.cost, 0).toFixed(2));
+
+    logCommit(normalizedLot, { validRows: validRows.length, totalRows: previewRows.length });
+    dispatch({ type: "ADD_LOT", payload: { lot: normalizedLot, supplier: supplier.trim(), received: new Date().toISOString().slice(0, 10), status: "Pending", items: validRows.length, verified: 0, graded: 0, cost: computedLotCost } });
     validRows.forEach((r) => {
       const specs = `${r.ramCapacityGb}GB ${r.ramType} / ${r.ssdCapacityGb}GB ${r.ssdType} / ${r.graphicsType}`;
       dispatch({
@@ -310,7 +317,7 @@ export function ReceivingImportLot() {
           track: "-",
           cost: r.cost,
           date: new Date().toISOString().slice(0, 10),
-          lot: lotNumber,
+          lot: normalizedLot,
           ramType: r.ramType,
           ramCapacityGb: r.ramCapacityGb,
           ssdType: r.ssdType,
@@ -320,7 +327,10 @@ export function ReceivingImportLot() {
         },
       });
     });
-    trigger("success", `Imported ${validRows.length} laptops`);
+    trigger("success", `Imported ${validRows.length} laptops into ${normalizedLot}`);
+    setActiveStep(1);
+    setRawRows([]);
+    setFileName("");
   };
 
   return (
