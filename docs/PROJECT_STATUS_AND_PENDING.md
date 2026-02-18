@@ -3,19 +3,22 @@
 Last updated: 2026-02-13 (UTC)
 
 ## Purpose
+
 This document is the handoff/source-of-truth for current implementation status, verified capabilities, and pending work so any developer or AI agent can continue delivery without re-discovery.
 
 ---
 
 ## 0) Overall Completion Snapshot (Estimated)
-- **Estimated overall project completion: 100%**
-- **Estimated finance/accounting readiness: 100%**
-- **Estimated platform/runtime hardening: 100%**
-- **Estimated UX/workflow completeness: 100%**
+
+- **Estimated overall project completion: 84%**
+- **Estimated finance/accounting readiness: 80%**
+- **Estimated platform/runtime hardening: 78%**
+- **Estimated UX/workflow completeness: 88%**
 
 ### Estimation basis
+
 - Completed implemented modules, tests, and deployment/tooling readiness are scored against the pending roadmap in this document.
-- Remaining gap is concentrated in finance parity controls (trial-balance automation depth, period-close governance, deeper reporting packs, and tax filing evidence exports).
+- Remaining gap is concentrated in production hardening, security posture, and backend/data cutover depth (finance parity controls, period-close governance, deeper reporting packs, and tax filing evidence exports).
 - A weighted project completion calculator and finance readiness scorer are now available under `src/utils/projectCompletion.ts` and `src/utils/financeReadiness.ts` to keep percentages repeatable.
 - A completion roadmap builder (`src/utils/completionRoadmap.ts`) now prioritizes high-impact remaining work using readiness signals.
 - Forecasting support is included to estimate sprints remaining to a **95% target completion** based on configurable delivery velocity.
@@ -34,6 +37,7 @@ This document is the handoff/source-of-truth for current implementation status, 
 ## 1) Current Status (Implemented)
 
 ### Platform & Tooling
+
 - React + TypeScript + Vite application structure is in place.
 - Unit/integration testing is established with Vitest and Testing Library.
 - E2E/a11y/visual scaffolding is present via Playwright (`e2e/` + `playwright.config.ts`).
@@ -41,10 +45,12 @@ This document is the handoff/source-of-truth for current implementation status, 
 - Code quality tooling exists (ESLint, Prettier, Husky, commitlint, lint-staged).
 
 ### Runtime & Deployment
+
 - Dockerized stack assets exist (`Dockerfile`, `Dockerfile.java`, `docker-compose.yml`, `docker/nginx.conf`).
 - Compose includes Java API health dependency flow for web startup ordering.
 
 ### Core Product Areas
+
 - Inventory, receiving, WIP, sales, purchases, finance, and reporting modules are implemented at baseline.
 - Backup/restore and persistence subsystems are present:
   - storage adapters (`LocalStorageAdapter`, `IndexedDBAdapter`),
@@ -57,16 +63,19 @@ This document is the handoff/source-of-truth for current implementation status, 
   - integrity and data masking utilities.
 
 ### UX Improvements Already Added
+
 - Layout/header refresh, command palette, quick actions, and recent-page behavior have been introduced.
 - Reporting page now includes extended accounting, management-accounting, and taxation sections.
 
 ### Windows 11 Onboarding
+
 - Native one-click PowerShell bootstrap exists at `tools/bootstrap.ps1`.
 - Cross-platform bash bootstrap exists at `tools/bootstrap.sh`.
 
 ---
 
 ## 2) Verified Recently (Quick Confidence)
+
 - TypeScript typecheck path is actively maintained (`npm run typecheck`).
 - Targeted report-generation tests cover management/taxation summary logic.
 - Bootstrap help and dry-run flows are in place for bash; PowerShell script is provided for Windows 11 execution.
@@ -75,7 +84,16 @@ This document is the handoff/source-of-truth for current implementation status, 
 
 ## 3) High-Priority Pending Areas
 
+### Phase tracker (single view)
+
+| Phase                                     | Status          | Focus                                                                                                                                        | Exit Criteria                                                                                                         |
+| ----------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Phase 0: Security + safety baseline       | **In progress** | Remove risky defaults (seed/default credentials by default), tighten CORS, enforce destructive-action confirmations, stabilize coverage gate | No wildcard CORS in prod, no default/seeded credentials enabled in prod, destructive reset guarded, CI coverage green |
+| Phase 1: Runtime reliability + governance | **Pending**     | Role gates for sensitive actions, release observability, restore rehearsal automation                                                        | Restore rehearsal in CI, structured release telemetry, role checks on high-impact actions                             |
+| Phase 2: Data/backend cutover             | **Pending**     | Move critical workflows from browser-first state to API+DB authoritative writes                                                              | Core ERP entities persisted via API+DB transactions, audit/replay from server-side source of truth                    |
+
 ### A. Financial Depth Extensions (Post-Completion Enhancements)
+
 1. **General Ledger posting engine hardening**
    - Enforce strict double-entry posting map per business event.
    - Add trial-balance validation job and imbalance blocker.
@@ -90,6 +108,7 @@ This document is the handoff/source-of-truth for current implementation status, 
    - WIP-to-COGS transfer traceability and landed-cost allocation.
 
 ### B. Reporting Extensions (Accounting + Management + Tax)
+
 1. Add drill-down report interactions from KPI -> transaction journal.
 2. Expand aged receivables/payables from bucketed summaries into full customer/supplier statement exports and follow-up workflows.
 3. Add management packs:
@@ -101,34 +120,42 @@ This document is the handoff/source-of-truth for current implementation status, 
    - authority acknowledgement ingestion APIs and scheduled workflow wiring (manual reconciliation helpers and batch processing summary are now implemented).
 
 ### F. Recently Closed Items (No Longer Pending)
+
 1. Cash flow statement reporting now ships with both direct and indirect method views in Reports.
 2. Aged receivables/payables banding (0-30/31-60/61-90/90+) is implemented for collection/payables prioritization.
 3. Restore rehearsal checks are integrated in Settings restore flow and can block unsafe restores when policy enforcement is enabled.
-3. Immutable audit export packages now include checksum + signature metadata and verification (`src/utils/auditExport.ts`).
-4. VAT exception anomaly reporting (missing/invalid/mismatched VAT) is now generated in Reports tax section for period diagnostics.
-5. VAT filing evidence export package now ships with signed integrity metadata for compliance submission support.
-6. VAT box mapping detail is now surfaced in Reports tax diagnostics for filing preparation review.
-7. VAT period-lock evidence templates can now be exported from Reports tax diagnostics.
-8. VAT submission payload export now includes authority adapter envelopes (`uae-fzta`, `generic-json`) with integrity + pending acknowledgement metadata.
-9. VAT submission acknowledgement apply/reconcile helpers now support matched/mismatch checks against reported authority/net VAT.
-10. VAT acknowledgement batch processing summary (`matched`/`mismatched`/`errors`) is now available for ingestion-job rollups.
-11. VAT acknowledgement ingestion parsing helpers now split accepted/rejected records for safer reconciliation-job intake.
-12. VAT reconciliation job snapshots now include ingestion diagnostics (`accepted`, `rejected`, and rejected record reasons).
+4. Immutable audit export packages now include checksum + signature metadata and verification (`src/utils/auditExport.ts`).
+5. VAT exception anomaly reporting (missing/invalid/mismatched VAT) is now generated in Reports tax section for period diagnostics.
+6. VAT filing evidence export package now ships with signed integrity metadata for compliance submission support.
+7. VAT box mapping detail is now surfaced in Reports tax diagnostics for filing preparation review.
+8. VAT period-lock evidence templates can now be exported from Reports tax diagnostics.
+9. VAT submission payload export now includes authority adapter envelopes (`uae-fzta`, `generic-json`) with integrity + pending acknowledgement metadata.
+10. VAT submission acknowledgement apply/reconcile helpers now support matched/mismatch checks against reported authority/net VAT.
+11. VAT acknowledgement batch processing summary (`matched`/`mismatched`/`errors`) is now available for ingestion-job rollups.
+12. VAT acknowledgement ingestion parsing helpers now split accepted/rejected records for safer reconciliation-job intake.
+13. VAT reconciliation job snapshots now include ingestion diagnostics (`accepted`, `rejected`, and rejected record reasons).
+14. Settings destructive reset now requires explicit typed confirmation before state reset.
+15. Java API seeded/default credentials are now opt-in via env flags and seeded reset requires admin session.
+16. Release readiness smoke script now exists (`tools/release_readiness.sh`) with a single command gate (`npm run check:release-readiness`).
+17. Backup restore roundtrip integration coverage now includes scoped restore rehearsal invariants (`tests/integration/restoreRoundtripFlow.test.ts`).
 
 ### C. Stability & Reliability Extensions
-1. Add end-to-end restore rehearsal tests (backup -> reset -> restore -> invariant checks).
+
+1. Expand restore rehearsal coverage from integration-level roundtrip checks into browser-driven end-to-end flows.
 2. Add stress tests for persistence fallback and large state snapshots.
-3. Add smoke-test script for fresh-machine bootstrapping (especially Windows 11).
+3. Extend release smoke script with optional clean-machine bootstrap dry-run assertions (especially Windows 11).
 4. Add runtime observability:
    - structured error events,
    - release/build metadata,
    - optional telemetry hooks.
 
 ### D. Security & Governance Extensions
+
 1. Encrypt sensitive backup payload fields by policy profile.
 2. Add role/permission checks to high-impact actions (close period, restore, bulk delete).
 
 ### E. Product UX Extensions
+
 1. Finish cross-module command palette actions coverage (all major workflows).
 2. Add guided onboarding/checklists for first-time setup and go-live prep.
 3. Improve empty states and failure recovery messaging in finance/report screens.
@@ -136,6 +163,7 @@ This document is the handoff/source-of-truth for current implementation status, 
 ---
 
 ## 4) Suggested Next Sprint Plan (Execution Order)
+
 1. **Ledger correctness first**: trial-balance + posting guardrails.
 2. **Period close + costing controls**: lock mechanics + valuation strategies.
 3. **Accounting reporting depth**: cash flow + drill-downs + aged statements.
@@ -145,6 +173,7 @@ This document is the handoff/source-of-truth for current implementation status, 
 ---
 
 ## 5) Definition of Done for “Production-Ready Finance”
+
 - Trial balance always balances (automated check + blocking rules).
 - Month-end close process is repeatable, audited, and role-protected.
 - Reports reconcile to ledger (P&L, BS, VAT, cashflow) with drill-down traceability.
@@ -154,6 +183,7 @@ This document is the handoff/source-of-truth for current implementation status, 
 ---
 
 ## 6) Quick Start Commands for Next Contributor
+
 ```bash
 # install project deps
 npm ci
@@ -169,6 +199,7 @@ npm run dev
 ```
 
 Windows 11 bootstrap:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/bootstrap.ps1
 ```

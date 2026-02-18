@@ -5,6 +5,7 @@ import { ReportsPage } from "@/components/pages/ReportsPage";
 
 const exportCsvMock = vi.fn();
 const exportJsonMock = vi.fn();
+const exportExcelMock = vi.fn();
 
 vi.mock("@/hooks/useUiActionFeedback", () => ({
   useUiActionFeedback: () => ({ trigger: vi.fn(), feedback: null }),
@@ -17,6 +18,7 @@ vi.mock("@/hooks/useIdempotentAction", () => ({
 vi.mock("@/utils/exporters", () => ({
   exportCsv: (...args: unknown[]) => exportCsvMock(...args),
   exportJson: (...args: unknown[]) => exportJsonMock(...args),
+  exportExcel: (...args: unknown[]) => exportExcelMock(...args),
 }));
 
 describe("ReportsPage completion readiness panel", () => {
@@ -35,6 +37,29 @@ describe("ReportsPage completion readiness panel", () => {
   });
 
 
+
+  it("supports daily and monthly report period toggles", async () => {
+    await act(async () => {
+      render(
+        <StoreProvider>
+          <ReportsPage />
+        </StoreProvider>
+      );
+    });
+
+    const dailyButton = screen.getByRole("button", { name: /^Daily$/i });
+    const monthlyButton = screen.getByRole("button", { name: /^Monthly$/i });
+
+    expect(dailyButton).toHaveAttribute("aria-pressed", "true");
+    expect(monthlyButton).toHaveAttribute("aria-pressed", "false");
+
+    await act(async () => {
+      fireEvent.click(monthlyButton);
+    });
+
+    expect(monthlyButton).toHaveAttribute("aria-pressed", "true");
+    expect(dailyButton).toHaveAttribute("aria-pressed", "false");
+  });
   it("shows aged balance summaries in payables and receivables tabs", async () => {
     await act(async () => {
       render(
@@ -357,5 +382,35 @@ describe("ReportsPage completion readiness panel", () => {
     expect(screen.getByText("VAT Box Mapping Detail")).toBeInTheDocument();
     expect(screen.getByText(/box\(es\)/i)).toBeInTheDocument();
   });
+  it("exports report summary to excel and opens print dialog", async () => {
+    exportExcelMock.mockClear();
+    const printSpy = vi.spyOn(window, "print").mockImplementation(() => undefined);
+
+    await act(async () => {
+      render(
+        <StoreProvider>
+          <ReportsPage />
+        </StoreProvider>
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Excel$/i }));
+    });
+
+    expect(exportExcelMock).toHaveBeenCalledTimes(1);
+    const fileName = exportExcelMock.mock.calls[0][0] as string;
+    const rows = exportExcelMock.mock.calls[0][1] as string[][];
+    expect(fileName).toContain("report-inventory-");
+    expect(rows[0]).toEqual(["Report", "inventory"]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Print$/i }));
+    });
+
+    expect(printSpy).toHaveBeenCalledTimes(1);
+    printSpy.mockRestore();
+  });
+
 
 });

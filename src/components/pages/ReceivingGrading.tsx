@@ -63,6 +63,17 @@ export function ReceivingGrading() {
 
   const recommendation = useMemo(() => getRecommendedGrading(checklistState), [checklistState]);
 
+
+  useEffect(() => {
+    if (queue.length === 0) {
+      setSelected(null);
+      return;
+    }
+
+    if (selected && queue.some((item) => item.id === selected.id)) return;
+    setSelected(queue[0]);
+  }, [queue, selected]);
+
   useEffect(() => {
     if (!selectedGrade) {
       setSelectedGrade(recommendation.grade);
@@ -83,35 +94,61 @@ export function ReceivingGrading() {
     logGrade(selected.barcode, { grade: selectedGrade, track: selectedTrack });
     dispatch({ type: "UPDATE_LAPTOP", id: selected.id, payload: { grade: selectedGrade, track: selectedTrack, status: "In Processing" } });
     if (selectedTrack === "Track C") {
-      dispatch({
-        type: "ADD_WIP",
-        payload: {
-          wip: `ALM-WIP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${String(state.wipJobs.length + 1).padStart(4, "0")}`,
-          laptop: selected.barcode,
-          brand: `${selected.brand} ${selected.model}`,
-          track: selectedTrack,
-          stage: "Queue",
-          assignedTo: "Unassigned",
-          partsUsed: 0,
-          partsCost: 0,
-          laborHrs: 0,
-          priority: "Normal",
-          status: "Active",
-          opened: new Date().toLocaleDateString("en-GB", { month: "short", day: "numeric" }),
-          diagnosisNotes: "",
-          parts: [],
-          laborEntries: [],
-          history: [{ ts: new Date().toLocaleString(), action: "WIP auto-created from grading", user: "system" }],
-        },
-      });
+      const existingWip = state.wipJobs.find((job) => job.laptop === selected.barcode && job.status !== "Completed");
+      if (!existingWip) {
+        dispatch({
+          type: "ADD_WIP",
+          payload: {
+            wip: `ALM-WIP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${String(state.wipJobs.length + 1).padStart(4, "0")}`,
+            laptop: selected.barcode,
+            brand: `${selected.brand} ${selected.model}`,
+            track: selectedTrack,
+            stage: "Queue",
+            assignedTo: "Unassigned",
+            partsUsed: 0,
+            partsCost: 0,
+            laborHrs: 0,
+            priority: "Normal",
+            status: "Active",
+            opened: new Date().toLocaleDateString("en-GB", { month: "short", day: "numeric" }),
+            diagnosisNotes: "",
+            parts: [],
+            laborEntries: [],
+            history: [{ ts: new Date().toLocaleString(), action: "WIP auto-created from grading", user: "system" }],
+          },
+        });
+      }
     }
     dispatch({ type: "ADD_ACTIVITY", payload: { action: `Graded ${selected.barcode} → ${selectedGrade} / ${selectedTrack}`, time: "just now" } });
     trigger("success", `Graded ${selected.barcode}`);
+
+    const remaining = queue.filter((item) => item.id !== selected.id);
+    setSelected(remaining[0] ?? null);
   };
 
   const handleLoad = () => {
     const laptop = queue.find((item) => item.barcode === barcodeInput.trim());
     setSelected(laptop || queue[0] || null);
+  };
+
+  const handleSkip = () => {
+    if (queue.length === 0) {
+      setSelected(null);
+      return;
+    }
+
+    if (!selected) {
+      setSelected(queue[0]);
+      return;
+    }
+
+    const currentIndex = queue.findIndex((item) => item.id === selected.id);
+    if (currentIndex < 0 || currentIndex === queue.length - 1) {
+      setSelected(queue[0]);
+      return;
+    }
+
+    setSelected(queue[currentIndex + 1]);
   };
 
   return (
@@ -125,7 +162,7 @@ export function ReceivingGrading() {
           <p className="text-sm text-cyan-500/40" style={{ fontFamily: "Share Tech Mono" }}>Scan laptop • Run checklist • Assign grade & track</p>
         </div>
         <div className="flex gap-3">
-          <button className="btn-ghost" onClick={() => setSelected(queue[1] || null)}>⟲ Skip</button>
+          <button className="btn-ghost" onClick={handleSkip}>⟲ Skip</button>
           <button className="btn-ghost" onClick={() => setSelected(null)}>✕ Cancel</button>
         </div>
       </div>
@@ -228,7 +265,7 @@ export function ReceivingGrading() {
           <div className="divider-cyber" />
           <div className="flex flex-col gap-2">
             <button data-testid="grading-save" data-action="grading-save" className="btn-cyber-green w-full py-3 rounded-lg border border-green-500/40 bg-green-500/10 text-green-400 hover:bg-green-500/20 font-bold transition-all uppercase tracking-wider text-[13px]" onClick={handleSave}>✓ Save Grade</button>
-            <button className="btn-ghost w-full text-xs">Save Draft</button>
+            <button className="btn-ghost w-full text-xs" onClick={() => trigger("info", "Draft captured locally. Complete with Save Grade to commit.")}>Save Draft</button>
           </div>
         </div>
       </div>
