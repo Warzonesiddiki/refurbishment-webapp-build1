@@ -9,6 +9,7 @@
   API client generated from this contract.
 
 ## Local Java Auth API (implemented)
+
 - `GET /api/health`
 - `POST /api/auth/register`
 - `POST /api/auth/login`
@@ -19,6 +20,7 @@
 - `PUT /api/state/snapshot`
 
 Behavior notes:
+
 - `X-Request-Id` is accepted and echoed (or generated if missing).
 - Login lockout returns `429 too_many_attempts` after repeated failed attempts and includes `Retry-After` seconds.
 - Request bodies beyond the configured size limit return `413 payload_too_large`.
@@ -27,14 +29,17 @@ Behavior notes:
 - Snapshot sync endpoint requires bearer auth and uses optimistic timestamp ordering: stale `PUT` writes are rejected with `409 stale_snapshot`.
 - Snapshot `GET` returns `204` when no shared state is available yet.
 - Auth handlers are wrapped in a server-side safety boundary: unexpected runtime exceptions emit structured error events and return `500 internal_server_error` without crashing the process.
+- Auth identity responses (`/api/auth/login`, `/api/auth/me`, `/api/auth/users`) now include role metadata (`ADMIN`/`USER`) so frontend governance checks are role-aware.
 
 ## Inventory
+
 - GET/POST /api/laptops
 - GET/PUT/DELETE /api/laptops/:id
 - GET/POST /api/parts
 - GET/PUT/DELETE /api/parts/:id
 
 ## Receiving
+
 - POST /api/lots/import/upload
 - POST /api/lots/import/map
 - POST /api/lots/import/preview
@@ -43,6 +48,7 @@ Behavior notes:
 - POST /api/laptops/grade
 
 ## Processing/WIP
+
 - POST /api/wip
 - POST /api/wip/:id/parts/add
 - POST /api/wip/:id/parts/remove
@@ -50,16 +56,19 @@ Behavior notes:
 - POST /api/wip/:id/stage
 
 ## Sales
+
 - POST /api/sales
 - POST /api/sales/:id/receipts
 - GET /api/sales
 
 ## Purchases
+
 - POST /api/purchases
 - POST /api/purchases/:id/payments
 - GET /api/purchases
 
 ## Finance
+
 - GET /api/cash
 - POST /api/cash/entries
 - GET /api/owner-ledger
