@@ -420,7 +420,7 @@ export function ReportsPage() {
           </h2>
           <span className="cyber-chip">TARGET 95%</span>
         </div>
-        <div className="grid md:grid-cols-3 gap-3 text-sm">
+        <div className="grid md:grid-cols-5 gap-3 text-sm">
           <div className="glass-card p-3">
             <p className="text-xs text-cyan-500/40">Overall Completion</p>
             <p className="text-xl neon-text-cyan">{completionRoadmap.overallPercent.toFixed(2)}%</p>
@@ -435,6 +435,28 @@ export function ReportsPage() {
               {completionRoadmap.forecastToTarget.estimatedSprintsRemaining} sprint(s)
             </p>
           </div>
+          <div className="glass-card p-3">
+            <p className="text-xs text-cyan-500/40">Pending Areas</p>
+            <p className="text-xl text-fuchsia-300">{completionRoadmap.pendingAreaCount}</p>
+          </div>
+          <div className="glass-card p-3">
+            <p className="text-xs text-cyan-500/40">Velocity Source</p>
+            <p className="text-sm text-cyan-200 capitalize">{completionRoadmap.forecastToTarget.velocitySource.replace("-", " ")}</p>
+            <p className="text-[11px] text-cyan-500/50">{completionRoadmap.forecastToTarget.assumedVelocityPerSprint.toFixed(2)}% / sprint</p>
+          </div>
+        </div>
+
+        <div className="glass-card p-3 space-y-2">
+          <p className="text-xs text-cyan-500/40 uppercase tracking-wider">Pending Area Keys</p>
+          {completionRoadmap.pendingAreaKeys.length === 0 ? (
+            <p className="text-xs text-cyan-300/60">No pending areas below threshold.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {completionRoadmap.pendingAreaKeys.map((key) => (
+                <span key={key} className="cyber-chip text-[10px]">{key}</span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="overflow-auto">
