@@ -10,8 +10,18 @@ const args = process.argv.slice(2);
 const lanMode = args.includes('--lan');
 const cwd = process.cwd();
 
+function quoteShellArg(value) {
+  if (/^[A-Za-z0-9_./:-]+$/.test(value)) return value;
+  return `"${String(value).replace(/"/g, '\"')}"`;
+}
+
 function startProcess(command, commandArgs, name) {
-  const proc = spawn(command, commandArgs, { cwd, stdio: 'inherit' });
+  const options = { cwd, stdio: 'inherit' };
+
+  const proc = isWin
+    ? spawn([command, ...commandArgs].map(quoteShellArg).join(' '), { ...options, shell: true })
+    : spawn(command, commandArgs, options);
+
   proc.on('error', (error) => {
     console.error(`[dev-with-java] failed to start ${name}:`, error.message);
   });
@@ -20,7 +30,7 @@ function startProcess(command, commandArgs, name) {
 
 function findPython() {
   for (const candidate of pythonCandidates) {
-    const probe = spawnSync(candidate, ['--version'], { stdio: 'ignore' });
+    const probe = spawnSync(candidate, ['--version'], { stdio: 'ignore', shell: isWin });
     if (!probe.error && probe.status === 0) return candidate;
   }
   return null;
