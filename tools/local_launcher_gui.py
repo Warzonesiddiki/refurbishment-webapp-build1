@@ -383,7 +383,6 @@ class LauncherApp:
         java_required = strict_optional and self.start_java_var.get()
         docker_required = strict_optional and self.start_db_var.get()
         checks = [
-            ("python3", "required for launcher", True),
             ("node", "required for frontend runtime", True),
             ("npm", "required for dependency install", True),
             ("java", "required for Java API if enabled", java_required),
@@ -394,10 +393,18 @@ class LauncherApp:
         self._log("[preflight] checking required tools")
         self._log(f"[preflight] target LAN URL: http://{self.host_var.get().strip() or '127.0.0.1'}:{port}")
         all_required_ok = True
+
+        python_cmd = shutil.which("python3") or shutil.which("python")
+        python_level = "OK" if python_cmd else "MISSING"
+        python_label = "python3/python"
+        self._log(f"[preflight] {python_label:14s} {python_level:16s} — required for launcher")
+        if not python_cmd:
+            all_required_ok = False
+
         for cmd, desc, required in checks:
             available = self._command_exists(cmd)
             level = "OK" if available else ("MISSING" if required else "OPTIONAL-MISSING")
-            self._log(f"[preflight] {cmd:7s} {level:16s} — {desc}")
+            self._log(f"[preflight] {cmd:14s} {level:16s} — {desc}")
             if required and not available:
                 all_required_ok = False
 
