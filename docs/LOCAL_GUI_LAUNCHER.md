@@ -3,10 +3,11 @@
 This project includes a **desktop GUI launcher** for non-technical operators to bootstrap and run the stack with minimal manual steps.
 
 ## What it does
+
 - Run a **preflight tool check** (Python, Node, npm, optional Java/JDK, optional Docker)
 - Run a strict prerequisites validation based on selected one-click options (Java/DB)
 - Validate launch port input before each setup/start action (must be `1-65535`)
-- Install frontend dependencies automatically (`npm install`)
+- Install frontend dependencies automatically (`npm run deps:install`)
 - Run full non-watch test suite (`npm run test:run`) with the same preflight validation used for install
 - Run focused operations core tests for inventory/parts + WIP pipelines
 - Build the app (`npm run build`)
@@ -24,6 +25,7 @@ This project includes a **desktop GUI launcher** for non-technical operators to 
 - Provide a **One-click Setup + Launch** pipeline with install → full tests → inventory/WIP core checks → build → launch order
 
 ## Run the launcher
+
 From project root:
 
 ```bash
@@ -37,6 +39,7 @@ python3 tools/local_launcher_gui.py
 ```
 
 ## Recommended operator workflow
+
 1. Select one-click options:
    - keep **Start Java API in one-click** enabled for login/auth flow,
    - enable **Start DB in one-click** only when Docker is installed.
@@ -47,12 +50,14 @@ python3 tools/local_launcher_gui.py
 6. Share displayed URL with employees, e.g. `http://192.168.1.20:4173`.
 
 ## LAN usage
+
 1. Run the launcher on your office server machine.
 2. Click **One-click Setup + Launch**.
 3. Share displayed URL with employees.
 4. Employees can access from browsers on same local network.
 
 ## Notes
+
 - The one-click pipeline stops automatically if install/tests/build fail, including process start failures; preview launch is blocked when build did not start successfully.
 - One-click preflight treats Java and Docker as required only if their one-click checkboxes are enabled.
 - One-click now prevents duplicate pipeline runs while an existing run is still in progress and disables the one-click button during active pipeline execution.

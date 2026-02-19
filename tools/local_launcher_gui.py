@@ -454,7 +454,7 @@ class LauncherApp:
     def install_dependencies(self):
         if not self.preflight_check():
             return
-        self._run_background("install", "npm install")
+        self._run_background("install", "npm run deps:install")
 
     def run_tests(self):
         if not self.preflight_check():
@@ -597,11 +597,11 @@ class LauncherApp:
             return
 
         self._log("[one-click] step 1/6 install dependencies")
-        self._run_background("install", "npm install")
+        self._run_background("install", "npm run deps:install")
 
         def after_install(proc: subprocess.Popen | None):
             if proc is None or proc.returncode != 0:
-                self._log("[one-click] stopped: npm install failed")
+                self._log("[one-click] stopped: npm run deps:install failed")
                 self._set_pipeline_active(False)
                 return
 

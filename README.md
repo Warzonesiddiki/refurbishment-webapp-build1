@@ -37,7 +37,7 @@ Tahir ERP is a React + TypeScript ERP workflow application for laptop refurbishm
 ### Installation
 
 ```bash
-npm install
+npm run deps:install
 ```
 
 ### Prerequisites Validation

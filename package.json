@@ -27,7 +27,7 @@
     "test:a11y": "playwright test --grep @a11y",
     "test:visual": "playwright test --grep @visual",
     "test:all": "npm run test:run && npm run test:e2e",
-    "prepare": "husky install",
+    "prepare": "husky",
     "release": "standard-version",
     "release:dry": "standard-version --dry-run",
     "start:local": "npm run build && npm run preview",
@@ -45,7 +45,9 @@
     "check:prerequisites": "python tools/preflight_check.py || python3 tools/preflight_check.py",
     "check:core-areas": "vitest run tests/integration/inventoryFlow.test.ts tests/integration/wipFlow.test.ts tests/batch4/partReducer.test.ts tests/wipStageTransition.test.ts tests/wipPartReplacement.test.ts tests/wipQualityGate.test.ts",
     "dev:with-java": "node tools/dev_with_java.mjs",
-    "dev:lan:with-java": "node tools/dev_with_java.mjs --lan"
+    "dev:lan:with-java": "node tools/dev_with_java.mjs --lan",
+    "deps:install": "npm install --legacy-peer-deps --no-audit --no-fund",
+    "deps:ci": "npm ci --legacy-peer-deps --no-audit --no-fund"
   },
   "dependencies": {
     "clsx": "2.1.1",
