@@ -88,7 +88,7 @@ function Install-SystemDependencies {
 function Install-NpmDependencies {
   if (Test-Path "package-lock.json") {
     try {
-      Invoke-Step "npm ci"
+      Invoke-Step "npm ci --legacy-peer-deps --no-audit --no-fund"
       return
     }
     catch {
@@ -97,7 +97,7 @@ function Install-NpmDependencies {
   }
 
   try {
-    Invoke-Step "npm install"
+    Invoke-Step "npm install --legacy-peer-deps --no-audit --no-fund"
   }
   catch {
     Write-WarnMsg "npm install failed. Attempting node_modules cleanup + reinstall..."
@@ -106,10 +106,10 @@ function Install-NpmDependencies {
     }
 
     if (Test-Path "package-lock.json") {
-      Invoke-Step "npm ci"
+      Invoke-Step "npm ci --legacy-peer-deps --no-audit --no-fund"
     }
     else {
-      Invoke-Step "npm install"
+      Invoke-Step "npm install --legacy-peer-deps --no-audit --no-fund"
     }
   }
 }
