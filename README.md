@@ -80,6 +80,12 @@ Useful bash options:
 npm run dev
 ```
 
+If login shows network errors because the Java API is not running, start both together:
+
+```bash
+npm run dev:with-java
+```
+
 ### Building
 
 ```bash
@@ -92,6 +98,12 @@ Run the dev server bound to all interfaces:
 
 ```bash
 npm run dev:lan
+```
+
+Or run LAN frontend + Java API together:
+
+```bash
+npm run dev:lan:with-java
 ```
 
 Then open from another device using your computer IP, for example:
