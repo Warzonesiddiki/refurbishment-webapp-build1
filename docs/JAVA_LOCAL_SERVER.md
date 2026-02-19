@@ -33,8 +33,9 @@ This project now includes a lightweight Java API service for LAN usage with per-
 ## Environment configuration
 
 - `PORT` — server port (default `8085`)
-- `TAHIR_ALLOWED_ORIGIN` — explicit CORS allow origin (default `http://localhost:4173`)
+- `TAHIR_ALLOWED_ORIGIN` — explicit CORS allow origin (`*` or comma-separated origins; default allows localhost + private LAN origins)
 - `TAHIR_ADMIN_EMAIL` — override seeded admin email
+- `TAHIR_TRUST_PRIVATE_NETWORK_ORIGINS` — when `true/1/yes`, private-network browser origins (10.x/172.16-31.x/192.168.x/localhost) are auto-allowed when not explicitly listed
 - `TAHIR_ADMIN_PASSWORD` — override seeded admin password
 - `TAHIR_DISABLE_DEFAULT_ADMIN` — set `true/1/yes` to skip default admin auto-seed
 - `TAHIR_ENABLE_DEFAULT_ADMIN` — set `true/1/yes` to allow default-admin seeding (disabled by default)
@@ -54,6 +55,8 @@ npm run java:server
 ```
 
 Server listens on `0.0.0.0:8085` by default so it is reachable by devices in the same local network.
+
+Frontend clients should prefer `VITE_JAVA_API_BASE=/api` with reverse proxy (Docker Nginx / Vite proxy) for same-origin access. If no proxy is used, set `VITE_JAVA_API_BASE` to your reachable Java host (e.g., `http://192.168.1.10:8085`).
 
 Health endpoint sample fields:
 

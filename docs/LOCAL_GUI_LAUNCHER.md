@@ -4,21 +4,24 @@ This project includes a **desktop GUI launcher** for non-technical operators to 
 
 ## What it does
 - Run a **preflight tool check** (Python, Node, npm, optional Java/JDK, optional Docker)
+- Run a strict prerequisites validation based on selected one-click options (Java/DB)
 - Validate launch port input before each setup/start action (must be `1-65535`)
 - Install frontend dependencies automatically (`npm install`)
-- Run test suite (`npm test`) with the same preflight validation used for install
+- Run full non-watch test suite (`npm run test:run`) with the same preflight validation used for install
+- Run focused operations core tests for inventory/parts + WIP pipelines
 - Build the app (`npm run build`)
 - Launch preview server on LAN (`npm run preview -- --host 0.0.0.0 --port <port>`)
 - Start/stop frontend dev server on LAN (`npm run dev -- --host 0.0.0.0 --port <port>`)
 - Start/stop Java API server (local multi-user auth service)
+- Check Java API health endpoint directly from launcher (`/api/health`)
 - Optionally start/stop PostgreSQL stack via Docker Compose (`docker compose pull`, `up -d`, `down`)
 - Configure one-click options with checkboxes:
   - **Start Java API in one-click**
   - **Start DB in one-click**
 - Show live logs in one window
 - Show live service status indicators (Dev/Preview/Java API/DB)
-- Load/edit/save `.env` directly from launcher UI
-- Provide a **One-click Setup + Launch** pipeline with install → test → build → launch order
+- Load/edit/save `.env` directly from launcher UI (adds `VITE_JAVA_API_BASE=/api` if missing on save)
+- Provide a **One-click Setup + Launch** pipeline with install → full tests → inventory/WIP core checks → build → launch order
 
 ## Run the launcher
 From project root:
@@ -38,8 +41,10 @@ python3 tools/local_launcher_gui.py
    - keep **Start Java API in one-click** enabled for login/auth flow,
    - enable **Start DB in one-click** only when Docker is installed.
 2. Click **0) Preflight Check**.
-3. Click **One-click Setup + Launch**.
-4. Share displayed URL with employees, e.g. `http://192.168.1.20:4173`.
+3. Click **Check Prerequisites** for full prerequisite validation.
+4. Click **Run Ops Core Tests** to validate Inventory/Parts and WIP flows before rollout.
+5. Click **One-click Setup + Launch**.
+6. Share displayed URL with employees, e.g. `http://192.168.1.20:4173`.
 
 ## LAN usage
 1. Run the launcher on your office server machine.
@@ -57,3 +62,5 @@ python3 tools/local_launcher_gui.py
 - Frontend dev and preview modes are mutually guarded to avoid port conflicts.
 - If Java/JDK is unavailable, Java API start will be skipped with a clear log message.
 - Java API health default: `http://<server-ip>:8085/api/health`
+
+- Ops core button executes `npm run check:core-areas` for critical Inventory/Parts + WIP regression coverage.

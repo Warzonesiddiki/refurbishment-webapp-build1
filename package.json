@@ -41,7 +41,9 @@
     "check:offline-queue": "vitest run tests/offlineQueueUtils.test.ts tests/useOfflineQueue.test.ts tests/offlineQueueBanner.test.tsx",
     "check:labor-flow": "vitest run tests/wipLaborApproval.test.ts tests/wipQualityGate.test.ts tests/laborTimerUtils.test.ts tests/useLaborTimer.test.ts",
     "check:replay-analytics": "vitest run tests/browserStorage.test.ts tests/offlineReplayAuditUtils.test.ts tests/offlineReplayAuditPanel.test.tsx tests/wipQualityAnalytics.test.ts tests/wipLaborEfficiency.test.ts tests/wipProductivity.test.ts tests/wipLaborDrilldown.test.ts tests/offlineConflictPolicy.test.ts tests/wipTrackTrend.test.ts tests/offlineEscalation.test.ts tests/useOfflineEscalation.test.ts",
-    "check:release-readiness": "bash tools/release_readiness.sh"
+    "check:release-readiness": "bash tools/release_readiness.sh",
+    "check:prerequisites": "python3 tools/preflight_check.py",
+    "check:core-areas": "vitest run tests/integration/inventoryFlow.test.ts tests/integration/wipFlow.test.ts tests/batch4/partReducer.test.ts tests/wipStageTransition.test.ts tests/wipPartReplacement.test.ts tests/wipQualityGate.test.ts"
   },
   "dependencies": {
     "clsx": "2.1.1",
