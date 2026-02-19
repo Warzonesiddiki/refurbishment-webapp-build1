@@ -7,6 +7,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -561,6 +562,14 @@ public class Main {
     return session != null && "ADMIN".equals(session.role);
   }
 
+
+  private static String remoteClientIdentity(HttpExchange exchange) {
+    if (exchange == null || exchange.getRemoteAddress() == null) return "unknown";
+    InetAddress address = exchange.getRemoteAddress().getAddress();
+    if (address == null) return String.valueOf(exchange.getRemoteAddress());
+    return address.getHostAddress();
+  }
+
   private static String ensureRequestId(HttpExchange exchange) {
     String incoming = exchange.getRequestHeaders().getFirst("X-Request-Id");
     if (incoming == null || incoming.isBlank()) {
@@ -884,7 +893,7 @@ public class Main {
       }
       String email = jsonValue(body, "email").toLowerCase();
       String password = jsonValue(body, "password");
-      String principal = email + "|" + exchange.getRemoteAddress();
+      String principal = email + "|" + remoteClientIdentity(exchange);
 
       if (isLoginRateLimited(principal)) {
         long retryAfterSeconds = loginRetryAfterSeconds(principal);

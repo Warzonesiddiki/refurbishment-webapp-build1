@@ -36,6 +36,11 @@ function startProcess(command, commandArgs, name) {
   }
 }
 
+function hasCommand(command) {
+  const probe = spawnSync(command, ['--version'], { stdio: 'ignore', shell: isWin });
+  return !probe.error && probe.status === 0;
+}
+
 function findPython() {
   for (const candidate of pythonCandidates) {
     const probe = spawnSync(candidate, ['--version'], { stdio: 'ignore', shell: isWin });
@@ -65,6 +70,11 @@ async function waitForJavaHealth(timeoutMs = 20000) {
 const javaServerScript = join('tools', 'run_java_server.py');
 if (!existsSync(javaServerScript)) {
   console.error(`[dev-with-java] missing ${javaServerScript}`);
+  process.exit(1);
+}
+
+if (!hasCommand(npmCmd)) {
+  console.error(`[dev-with-java] ${npmCmd} is not available in PATH.`);
   process.exit(1);
 }
 
