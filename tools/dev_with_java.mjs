@@ -18,14 +18,20 @@ function quoteShellArg(value) {
 function startProcess(command, commandArgs, name) {
   const options = { cwd, stdio: 'inherit' };
 
-  const proc = isWin
-    ? spawn([command, ...commandArgs].map(quoteShellArg).join(' '), { ...options, shell: true })
-    : spawn(command, commandArgs, options);
+  try {
+    const proc = isWin
+      ? spawn([command, ...commandArgs].map(quoteShellArg).join(' '), { ...options, shell: true })
+      : spawn(command, commandArgs, options);
 
-  proc.on('error', (error) => {
-    console.error(`[dev-with-java] failed to start ${name}:`, error.message);
-  });
-  return proc;
+    proc.on('error', (error) => {
+      console.error(`[dev-with-java] failed to start ${name}:`, error.message);
+    });
+    return proc;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[dev-with-java] failed to spawn ${name}: ${message}`);
+    return null;
+  }
 }
 
 function findPython() {
@@ -49,8 +55,14 @@ if (!python) {
 }
 
 const javaProc = startProcess(python, [javaServerScript, '8085'], 'java server');
+if (!javaProc) process.exit(1);
+
 const webScript = lanMode ? 'dev:lan' : 'dev';
 const webProc = startProcess(npmCmd, ['run', webScript], 'vite dev server');
+if (!webProc) {
+  javaProc.kill('SIGTERM');
+  process.exit(1);
+}
 
 let shuttingDown = false;
 function shutdown(signal) {
