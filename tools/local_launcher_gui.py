@@ -104,6 +104,7 @@ class LauncherApp:
         buttons.pack(fill=tk.X)
 
         ttk.Button(buttons, text="0) Preflight Check", command=self.preflight_check).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(buttons, text="Check Prerequisites", command=self.check_prerequisites).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons, text="1) Install Dependencies", command=self.install_dependencies).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons, text="2) Run Tests", command=self.run_tests).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons, text="Run Ops Core Tests", command=self.run_ops_core_tests).pack(side=tk.LEFT, padx=(0, 8))
@@ -418,6 +419,14 @@ class LauncherApp:
             self.status_var.set("Failed: preflight")
         return all_required_ok
 
+    def check_prerequisites(self):
+        python_cmd = shutil.which("python3") or shutil.which("python")
+        if not python_cmd:
+            self._log("[prerequisites] Python runtime missing. Install Python 3 and retry.")
+            self.status_var.set("Failed: prerequisites")
+            return
+        self._run_background("prerequisites", f"{shlex.quote(python_cmd)} tools/preflight_check.py")
+
     def install_dependencies(self):
         if not self.preflight_check():
             return
@@ -551,7 +560,7 @@ class LauncherApp:
             self._log("[one-click] setup pipeline already running")
             return
 
-        if self._is_any_running(["install", "tests", "build"]):
+        if self._is_any_running(["install", "tests", "ops-core-tests", "build"]):
             self._log("[one-click] install/tests/build already running. Wait for current tasks to finish.")
             return
 
@@ -563,7 +572,7 @@ class LauncherApp:
             self._set_pipeline_active(False)
             return
 
-        self._log("[one-click] step 1/5 install dependencies")
+        self._log("[one-click] step 1/6 install dependencies")
         self._run_background("install", "npm install")
 
         def after_install(proc: subprocess.Popen | None):
@@ -572,7 +581,7 @@ class LauncherApp:
                 self._set_pipeline_active(False)
                 return
 
-            self._log("[one-click] step 2/5 run tests")
+            self._log("[one-click] step 2/6 run tests")
             self._run_background("tests", "npm run test:run")
 
             def after_tests(test_proc: subprocess.Popen | None):
@@ -581,31 +590,42 @@ class LauncherApp:
                     self._set_pipeline_active(False)
                     return
 
-                self._log("[one-click] step 3/5 build frontend")
-                self._run_background("build", "npm run build")
+                self._log("[one-click] step 3/6 run inventory+wip core checks")
+                self._run_background("ops-core-tests", "npm run check:core-areas")
 
-                def after_build(build_proc: subprocess.Popen | None):
-                    if build_proc is None or build_proc.returncode != 0:
-                        self._log("[one-click] stopped: build failed")
+                def after_ops_core(ops_proc: subprocess.Popen | None):
+                    if ops_proc is None or ops_proc.returncode != 0:
+                        self._log("[one-click] stopped: inventory/wip core checks failed")
                         self._set_pipeline_active(False)
                         return
 
-                    self._log("[one-click] step 4/5 start optional backend services")
-                    if self.start_db_var.get():
-                        self.start_db()
-                    if self.start_java_var.get():
-                        self.start_java_api()
+                    self._log("[one-click] step 4/6 build frontend")
+                    self._run_background("build", "npm run build")
 
-                    self._log("[one-click] step 5/5 start preview server")
-                    port = self._parse_port()
-                    if port is None:
+                    def after_build(build_proc: subprocess.Popen | None):
+                        if build_proc is None or build_proc.returncode != 0:
+                            self._log("[one-click] stopped: build failed")
+                            self._set_pipeline_active(False)
+                            return
+
+                        self._log("[one-click] step 5/6 start optional backend services")
+                        if self.start_db_var.get():
+                            self.start_db()
+                        if self.start_java_var.get():
+                            self.start_java_api()
+
+                        self._log("[one-click] step 6/6 start preview server")
+                        port = self._parse_port()
+                        if port is None:
+                            self._set_pipeline_active(False)
+                            return
+                        self._run_background("preview", f"npm run preview -- --host 0.0.0.0 --port {port}", keep_running=True)
+                        self._log(f"[one-click] ready: {self.current_url()}")
                         self._set_pipeline_active(False)
-                        return
-                    self._run_background("preview", f"npm run preview -- --host 0.0.0.0 --port {port}", keep_running=True)
-                    self._log(f"[one-click] ready: {self.current_url()}")
-                    self._set_pipeline_active(False)
 
-                self._wait_for_process("build", after_build)
+                    self._wait_for_process("build", after_build)
+
+                self._wait_for_process("ops-core-tests", after_ops_core)
 
             self._wait_for_process("tests", after_tests)
 

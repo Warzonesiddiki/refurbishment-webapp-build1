@@ -20,7 +20,7 @@ This project includes a **desktop GUI launcher** for non-technical operators to 
 - Show live logs in one window
 - Show live service status indicators (Dev/Preview/Java API/DB)
 - Load/edit/save `.env` directly from launcher UI (adds `VITE_JAVA_API_BASE=/api` if missing on save)
-- Provide a **One-click Setup + Launch** pipeline with install → test → build → launch order
+- Provide a **One-click Setup + Launch** pipeline with install → full tests → inventory/WIP core checks → build → launch order
 
 ## Run the launcher
 From project root:
@@ -40,8 +40,10 @@ python3 tools/local_launcher_gui.py
    - keep **Start Java API in one-click** enabled for login/auth flow,
    - enable **Start DB in one-click** only when Docker is installed.
 2. Click **0) Preflight Check**.
-3. Click **One-click Setup + Launch**.
-4. Share displayed URL with employees, e.g. `http://192.168.1.20:4173`.
+3. Click **Check Prerequisites** for full prerequisite validation.
+4. Click **Run Ops Core Tests** to validate Inventory/Parts and WIP flows before rollout.
+5. Click **One-click Setup + Launch**.
+6. Share displayed URL with employees, e.g. `http://192.168.1.20:4173`.
 
 ## LAN usage
 1. Run the launcher on your office server machine.
@@ -59,3 +61,5 @@ python3 tools/local_launcher_gui.py
 - Frontend dev and preview modes are mutually guarded to avoid port conflicts.
 - If Java/JDK is unavailable, Java API start will be skipped with a clear log message.
 - Java API health default: `http://<server-ip>:8085/api/health`
+
+- Ops core button executes `npm run check:core-areas` for critical Inventory/Parts + WIP regression coverage.

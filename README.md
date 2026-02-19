@@ -40,6 +40,12 @@ Tahir ERP is a React + TypeScript ERP workflow application for laptop refurbishm
 npm install
 ```
 
+### Prerequisites Validation
+
+```bash
+npm run check:prerequisites
+```
+
 ### One-click bootstrap (installs software + project deps)
 
 **Windows 11 (PowerShell, recommended):**
@@ -137,6 +143,7 @@ Services:
 - E2E: `npm run test:e2e`
 - A11y: `npm run test:a11y`
 - Visual: `npm run test:visual`
+- Core inventory/WIP gate: `npm run check:core-areas`
 - Release smoke gate: `npm run check:release-readiness`
 
 ## Keyboard Shortcuts
