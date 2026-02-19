@@ -10,11 +10,24 @@ describe("javaApiBase", () => {
     expect(joinJavaApiPath("http://localhost:8085/api", "/api/health")).toBe("http://localhost:8085/api/health");
   });
 
+  it("does not duplicate when path is exactly /api", () => {
+    expect(joinJavaApiPath("/api", "/api")).toBe("/api");
+    expect(joinJavaApiPath("http://localhost:8085/api", "/api")).toBe("http://localhost:8085/api");
+  });
+
   it("joins normal URL base and path", () => {
     expect(joinJavaApiPath("http://localhost:8085", "/api/health")).toBe("http://localhost:8085/api/health");
   });
 
+  it("normalizes root base and path", () => {
+    expect(joinJavaApiPath("/", "/api/health")).toBe("/api/health");
+  });
+
   it("trims trailing slash from configured base", () => {
     expect(resolveJavaApiBase("http://localhost:8085/")).toBe("http://localhost:8085");
+  });
+
+  it("keeps root base when configured base is slash", () => {
+    expect(resolveJavaApiBase("/")).toBe("/");
   });
 });
