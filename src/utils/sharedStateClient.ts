@@ -16,8 +16,16 @@ export class SharedStatePushError extends Error {
   }
 }
 
-const API_BASE = (import.meta.env.VITE_JAVA_API_BASE as string | undefined) || "http://localhost:8085";
+const API_BASE = resolveApiBase();
 const DEFAULT_ENDPOINT = "/api/state/snapshot";
+
+function resolveApiBase() {
+  const configured = import.meta.env.VITE_JAVA_API_BASE as string | undefined;
+  if (configured && configured.trim()) {
+    return configured.trim();
+  }
+  return window.location.origin;
+}
 
 function buildHeaders() {
   const token = getAuthToken();

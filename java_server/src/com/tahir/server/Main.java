@@ -54,6 +54,7 @@ public class Main {
   private static final String ENV_ENABLE_DEFAULT_ADMIN = "TAHIR_ENABLE_DEFAULT_ADMIN";
   private static final String ENV_ENABLE_SEEDED_USERS = "TAHIR_ENABLE_SEEDED_USERS";
   private static final String ENV_ALLOWED_ORIGIN = "TAHIR_ALLOWED_ORIGIN";
+  private static final String ENV_TRUST_PRIVATE_NETWORK_ORIGINS = "TAHIR_TRUST_PRIVATE_NETWORK_ORIGINS";
   private static final int SEEDED_SKYLINE_USER_START = 2;
   private static final int SEEDED_SKYLINE_USER_END = 31;
 
@@ -469,10 +470,13 @@ public class Main {
   }
 
   private static void sendJson(HttpExchange exchange, int status, String body) throws IOException {
-    String allowedOrigin = resolveAllowedOrigin();
+    String allowedOrigin = resolveAllowedOrigin(exchange);
     String requestId = ensureRequestId(exchange);
     exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
-    exchange.getResponseHeaders().set("Access-Control-Allow-Origin", allowedOrigin);
+    if (!allowedOrigin.isBlank()) {
+      exchange.getResponseHeaders().set("Access-Control-Allow-Origin", allowedOrigin);
+      exchange.getResponseHeaders().set("Vary", "Origin");
+    }
     exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization");
     exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
     exchange.getResponseHeaders().set("X-Request-Id", requestId);
@@ -495,9 +499,62 @@ public class Main {
     sendJson(exchange, status, body);
   }
 
-  private static String resolveAllowedOrigin() {
+  private static String resolveAllowedOrigin(HttpExchange exchange) {
     String configured = System.getenv(ENV_ALLOWED_ORIGIN);
-    return configured == null || configured.isBlank() ? "http://localhost:4173" : configured.trim();
+    String requestOrigin = exchange.getRequestHeaders().getFirst("Origin");
+
+    if (configured == null || configured.isBlank()) {
+      return defaultAllowedOriginForRequest(requestOrigin);
+    }
+
+    String trimmed = configured.trim();
+    if ("*".equals(trimmed)) {
+      return "*";
+    }
+
+    if (requestOrigin == null || requestOrigin.isBlank()) {
+      return trimmed;
+    }
+
+    for (String value : trimmed.split(",")) {
+      String allowed = value == null ? "" : value.trim();
+      if (!allowed.isBlank() && allowed.equalsIgnoreCase(requestOrigin.trim())) {
+        return requestOrigin.trim();
+      }
+    }
+
+    if (isEnvFlagEnabled(ENV_TRUST_PRIVATE_NETWORK_ORIGINS) && isPrivateNetworkOrigin(requestOrigin.trim())) {
+      return requestOrigin.trim();
+    }
+
+    return "";
+  }
+
+  private static String defaultAllowedOriginForRequest(String requestOrigin) {
+    if (requestOrigin != null && !requestOrigin.isBlank() && isPrivateNetworkOrigin(requestOrigin.trim())) {
+      return requestOrigin.trim();
+    }
+    return "http://localhost:4173";
+  }
+
+  private static boolean isPrivateNetworkOrigin(String origin) {
+    if (origin == null || origin.isBlank()) {
+      return false;
+    }
+    String normalized = origin.trim().toLowerCase();
+    if (normalized.startsWith("http://localhost") || normalized.startsWith("https://localhost")) {
+      return true;
+    }
+    if (normalized.startsWith("http://127.") || normalized.startsWith("https://127.")) {
+      return true;
+    }
+    if (normalized.startsWith("http://192.168.") || normalized.startsWith("https://192.168.")) {
+      return true;
+    }
+    if (normalized.startsWith("http://10.") || normalized.startsWith("https://10.")) {
+      return true;
+    }
+    return normalized.matches("^https?://172\\.(1[6-9]|2[0-9]|3[0-1])\\..*");
   }
 
   private static boolean isSessionAdmin(SessionRecord session) {

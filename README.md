@@ -27,7 +27,11 @@ Tahir ERP is a React + TypeScript ERP workflow application for laptop refurbishm
 ### Prerequisites
 
 - Node.js 20+
-- npm
+- npm 10+
+- Java JDK 21+ (`java` + `javac`) for the local Java API server
+- Python 3.10+ (for launcher/helper scripts)
+- Docker Engine + Docker Compose plugin (recommended for full-stack LAN deployment)
+- LAN/firewall access for ports `4173`, `8085`, and optionally `8080`
 
 ### Installation
 
@@ -101,10 +105,10 @@ docker compose up --build
 
 Services:
 
-- Web app: `http://localhost:4173`
-- Java API: `http://localhost:8085`
-- Adminer: `http://localhost:8080`
-- PostgreSQL: `localhost:5432`
+- Web app: `http://<host-ip>:4173`
+- Java API: `http://<host-ip>:8085`
+- Adminer: `http://<host-ip>:8080`
+- PostgreSQL: `<host-ip>:5432` (compose defaults to localhost bind for DB safety)
 
 ### Compose health checks
 
@@ -114,7 +118,7 @@ Services:
 
 - Local persistence uses browser storage for offline-first behavior.
 - Cross-browser / multi-user live sharing now uses the Java API snapshot endpoint: `GET/PUT /api/state/snapshot`.
-- Configure `VITE_JAVA_API_BASE` (defaults to `http://localhost:8085`) so all users point to the same API host.
+- Configure `VITE_JAVA_API_BASE` if needed (recommended default: `/api`). With Docker/Vite proxy enabled, frontend and API run through same-origin routing for easier LAN access and fewer CORS issues.
 - The app pushes state updates continuously (debounced) and polls for remote updates every few seconds, so users in different browsers/devices see near real-time changes.
 
 ## Project Structure

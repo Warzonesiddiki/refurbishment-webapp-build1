@@ -8,8 +8,16 @@ export type AuthUser = {
 export type AuthDirectoryUser = AuthUser;
 
 const TOKEN_KEY = "alm_auth_token";
-const API_BASE = (import.meta.env.VITE_JAVA_API_BASE as string | undefined) || "http://localhost:8085";
+const API_BASE = resolveApiBase();
 const REQUEST_TIMEOUT_MS = 8000;
+
+function resolveApiBase() {
+  const configured = import.meta.env.VITE_JAVA_API_BASE as string | undefined;
+  if (configured && configured.trim()) {
+    return configured.trim();
+  }
+  return window.location.origin;
+}
 
 function buildNetworkErrorMessage(action: string) {
   return `Unable to ${action}. Could not reach auth server at ${API_BASE}. Start the Java API server and try again.`;
