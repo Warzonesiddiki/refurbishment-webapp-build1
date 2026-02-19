@@ -1,3 +1,5 @@
+import { joinJavaApiPath, resolveJavaApiBase } from "@/utils/javaApiBase";
+
 export type AuthUser = {
   id: string;
   email: string;
@@ -8,16 +10,8 @@ export type AuthUser = {
 export type AuthDirectoryUser = AuthUser;
 
 const TOKEN_KEY = "alm_auth_token";
-const API_BASE = resolveApiBase();
+const API_BASE = resolveJavaApiBase(import.meta.env.VITE_JAVA_API_BASE as string | undefined);
 const REQUEST_TIMEOUT_MS = 8000;
-
-function resolveApiBase() {
-  const configured = import.meta.env.VITE_JAVA_API_BASE as string | undefined;
-  if (configured && configured.trim()) {
-    return configured.trim();
-  }
-  return window.location.origin;
-}
 
 function buildNetworkErrorMessage(action: string) {
   return `Unable to ${action}. Could not reach auth server at ${API_BASE}. Start the Java API server and try again.`;
@@ -40,7 +34,7 @@ async function readErrorBody(res: Response) {
 
 async function requestJson<T>(path: string, init: RequestInit, action: string): Promise<T> {
   try {
-    const res = await fetchWithTimeout(`${API_BASE}${path}`, init);
+    const res = await fetchWithTimeout(joinJavaApiPath(API_BASE, path), init);
     if (!res.ok) {
       const body = await readErrorBody(res);
       throw new Error(body || `Failed to ${action}`);
@@ -100,7 +94,7 @@ export async function fetchCurrentUser() {
   if (!token) return null;
 
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/api/auth/me`, {
+    const res = await fetchWithTimeout(joinJavaApiPath(API_BASE, "/api/auth/me"), {
       headers: { Authorization: `Bearer ${token}` },
     });
 

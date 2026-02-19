@@ -31,6 +31,7 @@ Tahir ERP is a React + TypeScript ERP workflow application for laptop refurbishm
 - Java JDK 21+ (`java` + `javac`) for the local Java API server
 - Python 3.10+ (for launcher/helper scripts)
 - Docker Engine + Docker Compose plugin (recommended for full-stack LAN deployment)
+- Git 2.40+ and curl (recommended for setup/verification scripts)
 - LAN/firewall access for ports `4173`, `8085`, and optionally `8080`
 
 ### Installation

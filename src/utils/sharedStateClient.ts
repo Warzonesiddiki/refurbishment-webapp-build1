@@ -1,5 +1,6 @@
 import type { AppState } from "@/store/appState";
 import { getAuthToken } from "@/utils/javaAuth";
+import { joinJavaApiPath, resolveJavaApiBase } from "@/utils/javaApiBase";
 
 export type SharedStateSnapshot = {
   timestamp: number;
@@ -16,16 +17,8 @@ export class SharedStatePushError extends Error {
   }
 }
 
-const API_BASE = resolveApiBase();
+const API_BASE = resolveJavaApiBase(import.meta.env.VITE_JAVA_API_BASE as string | undefined);
 const DEFAULT_ENDPOINT = "/api/state/snapshot";
-
-function resolveApiBase() {
-  const configured = import.meta.env.VITE_JAVA_API_BASE as string | undefined;
-  if (configured && configured.trim()) {
-    return configured.trim();
-  }
-  return window.location.origin;
-}
 
 function buildHeaders() {
   const token = getAuthToken();
@@ -35,7 +28,7 @@ function buildHeaders() {
 }
 
 export async function fetchSharedState(endpoint = DEFAULT_ENDPOINT): Promise<SharedStateSnapshot | null> {
-  const res = await fetch(`${API_BASE}${endpoint}`, {
+  const res = await fetch(joinJavaApiPath(API_BASE, endpoint), {
     method: "GET",
     headers: buildHeaders(),
   });
@@ -49,7 +42,7 @@ export async function fetchSharedState(endpoint = DEFAULT_ENDPOINT): Promise<Sha
 }
 
 export async function pushSharedState(snapshot: SharedStateSnapshot, endpoint = DEFAULT_ENDPOINT): Promise<void> {
-  const res = await fetch(`${API_BASE}${endpoint}`, {
+  const res = await fetch(joinJavaApiPath(API_BASE, endpoint), {
     method: "PUT",
     headers: buildHeaders(),
     body: JSON.stringify(snapshot),
