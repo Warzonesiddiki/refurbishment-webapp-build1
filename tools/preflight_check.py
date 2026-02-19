@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import platform
 import shutil
 import subprocess
 from pathlib import Path
@@ -19,6 +20,15 @@ def check_cmd(name: str, required: bool = True) -> tuple[bool, str]:
     return exists or not required, f"[{level}] {name}"
 
 
+def check_any(names: list[str], label: str, required: bool = True) -> tuple[bool, str]:
+    for name in names:
+        if command_exists(name):
+            return True, f"[OK] {label} ({name})"
+
+    level = "MISSING" if required else "OPTIONAL-MISSING"
+    return (not required), f"[{level}] {label} ({'/'.join(names)})"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate local prerequisites for Tahir ERP")
     parser.add_argument("--require-java", action="store_true", help="Treat Java/Javac as required")
@@ -29,23 +39,31 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    checks = [
+
+    ok = True
+    print("[preflight] verifying project prerequisites")
+
+    base_checks = [
         ("node", True),
         ("npm", True),
-        ("python3", False),
-        ("python", False),
         ("java", args.require_java),
         ("javac", args.require_java),
         ("git", True),
         ("curl", True),
     ]
 
-    ok = True
-    print("[preflight] verifying project prerequisites")
-    for cmd, required in checks:
+    for cmd, required in base_checks:
         passed, line = check_cmd(cmd, required)
         print(line)
         ok = ok and passed
+
+    python_passed, python_line = check_any(["python3", "python"], "python", required=True)
+    print(python_line)
+    ok = ok and python_passed
+
+    if platform.system().lower().startswith("win"):
+        powershell_passed, powershell_line = check_any(["pwsh", "powershell"], "powershell", required=False)
+        print(powershell_line)
 
     compose_available = False
     if command_exists("docker"):
