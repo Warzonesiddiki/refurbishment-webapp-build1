@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createInitialState } from "@/store/appState";
 import { buildCompletionRoadmap } from "@/utils/completionRoadmap";
+import { SESSION_HISTORY_KEY } from "@/utils/sessionSummary";
 
 describe("buildCompletionRoadmap", () => {
   it("returns completion percentages, forecast, and prioritized actions", () => {
@@ -69,6 +70,25 @@ describe("buildCompletionRoadmap", () => {
 
     const roadmap = buildCompletionRoadmap(state, new Date("2026-02-12"));
     expect(roadmap.recommendedActions.some((a) => a.id === "receivables-overrun-controls")).toBe(true);
+  });
+
+
+  it("adds session progress recovery recommendation when session tracker trend is weak", () => {
+    const now = Date.now();
+    localStorage.setItem(
+      SESSION_HISTORY_KEY,
+      JSON.stringify([
+        { completedPercent: 55, pendingPercent: 45, endedAt: new Date(now).toISOString() },
+        { completedPercent: 52, pendingPercent: 48, endedAt: new Date(now - 1000).toISOString() },
+        { completedPercent: 90, pendingPercent: 10, endedAt: new Date(now - 2000).toISOString() },
+        { completedPercent: 92, pendingPercent: 8, endedAt: new Date(now - 3000).toISOString() },
+      ])
+    );
+
+    const roadmap = buildCompletionRoadmap(createInitialState(), new Date("2026-02-12"));
+    expect(roadmap.recommendedActions.some((a) => a.id === "session-progress-recovery")).toBe(true);
+
+    localStorage.removeItem(SESSION_HISTORY_KEY);
   });
 
   it("deduplicates and caps recommendations to top 6 actions", () => {

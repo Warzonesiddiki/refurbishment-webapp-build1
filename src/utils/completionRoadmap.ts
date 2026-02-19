@@ -4,6 +4,11 @@ import {
   type FinanceReadinessCheck,
   type FinanceReadinessSnapshot,
 } from "@/utils/financeReadiness";
+import {
+  evaluateSessionMomentum,
+  loadSessionHistory,
+  summarizeSessionHistory,
+} from "@/utils/sessionSummary";
 import { evaluateProjectCompletion } from "@/utils/projectCompletion";
 
 export type CompletionRoadmapItem = {
@@ -156,6 +161,41 @@ function estimateSprintsRemaining(
   };
 }
 
+
+type SessionTrackerSignal = {
+  shouldRecommend: boolean;
+  rationale: string;
+};
+
+function getSessionTrackerSignal(): SessionTrackerSignal {
+  const history = loadSessionHistory();
+  if (history.length < 2) {
+    return {
+      shouldRecommend: false,
+      rationale: "",
+    };
+  }
+
+  const stats = summarizeSessionHistory(history);
+  const momentum = evaluateSessionMomentum(history);
+  const averagePendingPercent = Math.max(0, 100 - stats.averageCompletionPercent);
+
+  if (momentum.direction === "down" || averagePendingPercent >= 25) {
+    return {
+      shouldRecommend: true,
+      rationale:
+        momentum.direction === "down"
+          ? `Session progress momentum is down (${momentum.deltaPercent}%). Focus on unresolved work queues and closure checklists.`
+          : `Average pending work is ${averagePendingPercent}%. Use session tracker history to recover completion consistency.`,
+    };
+  }
+
+  return {
+    shouldRecommend: false,
+    rationale: "",
+  };
+}
+
 const priorityRank: Record<CompletionRoadmapItem["priority"], number> = {
   P0: 0,
   P1: 1,
@@ -198,6 +238,18 @@ export function buildCompletionRoadmap(state: AppState, asOfDate = new Date()): 
         rationale: recommendation.rationale,
       });
     }
+  }
+
+  const sessionTrackerSignal = getSessionTrackerSignal();
+  if (sessionTrackerSignal.shouldRecommend) {
+    actions.push({
+      id: "session-progress-recovery",
+      title: "Recover session completion trend using session progress tracker",
+      area: "UX Guidance & Operator Safety",
+      priority: "P1",
+      impactPoints: 6,
+      rationale: sessionTrackerSignal.rationale,
+    });
   }
 
   if (actions.length === 0) {
