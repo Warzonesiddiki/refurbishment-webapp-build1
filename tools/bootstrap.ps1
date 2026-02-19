@@ -39,7 +39,7 @@ function Invoke-Step($command) {
 
   Invoke-Expression $command
   if ($LASTEXITCODE -ne 0) {
-    throw "Command failed with exit code $LASTEXITCODE: $command"
+    throw "Command failed with exit code ${LASTEXITCODE}: $command"
   }
 }
 
