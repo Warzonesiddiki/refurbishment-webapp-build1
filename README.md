@@ -44,6 +44,8 @@ npm install
 
 ```bash
 npm run check:prerequisites
+# optional strict mode examples:
+# python3 tools/preflight_check.py --strict-env --require-java --require-docker
 ```
 
 ### One-click bootstrap (installs software + project deps)

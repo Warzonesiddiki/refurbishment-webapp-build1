@@ -425,7 +425,15 @@ class LauncherApp:
             self._log("[prerequisites] Python runtime missing. Install Python 3 and retry.")
             self.status_var.set("Failed: prerequisites")
             return
-        self._run_background("prerequisites", f"{shlex.quote(python_cmd)} tools/preflight_check.py")
+
+        flags = ["--strict-env"]
+        if self.start_java_var.get():
+            flags.append("--require-java")
+        if self.start_db_var.get():
+            flags.append("--require-docker")
+
+        flag_text = " ".join(flags)
+        self._run_background("prerequisites", f"{shlex.quote(python_cmd)} tools/preflight_check.py {flag_text}")
 
     def install_dependencies(self):
         if not self.preflight_check():

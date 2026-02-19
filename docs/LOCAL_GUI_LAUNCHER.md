@@ -4,6 +4,7 @@ This project includes a **desktop GUI launcher** for non-technical operators to 
 
 ## What it does
 - Run a **preflight tool check** (Python, Node, npm, optional Java/JDK, optional Docker)
+- Run a strict prerequisites validation based on selected one-click options (Java/DB)
 - Validate launch port input before each setup/start action (must be `1-65535`)
 - Install frontend dependencies automatically (`npm install`)
 - Run full non-watch test suite (`npm run test:run`) with the same preflight validation used for install
