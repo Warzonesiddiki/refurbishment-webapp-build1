@@ -14,7 +14,7 @@ This project includes a **desktop GUI launcher** for non-technical operators to 
 - Start/stop frontend dev server on LAN (`npm run dev -- --host 0.0.0.0 --port <port>`)
 - Start/stop Java API server (local multi-user auth service)
 - Check Java API health endpoint directly from launcher (`/api/health`)
-- Optionally start/stop PostgreSQL stack via Docker Compose (`docker compose pull`, `up -d`, `down`)
+- Optionally start/stop PostgreSQL stack via Docker Compose (`docker compose pull postgres adminer`, `up -d postgres adminer`, `stop postgres adminer`)
 - Configure one-click options with checkboxes:
   - **Start Java API in one-click**
   - **Start DB in one-click**
@@ -56,7 +56,7 @@ python3 tools/local_launcher_gui.py
 - The one-click pipeline stops automatically if install/tests/build fail, including process start failures; preview launch is blocked when build did not start successfully.
 - One-click preflight treats Java and Docker as required only if their one-click checkboxes are enabled.
 - One-click now prevents duplicate pipeline runs while an existing run is still in progress and disables the one-click button during active pipeline execution.
-- When DB is enabled, preflight verifies Docker Compose plugin usability (`docker compose version`) and required project files.
+- When DB is enabled, preflight verifies Docker Compose plugin usability (`docker compose version`) and required project files. The launcher DB action manages only `postgres` + `adminer` so it does not conflict with local frontend/Java ports.
 - DB start/stop now require Docker Compose availability and `docker-compose.yml`; launcher logs explicit errors when either is missing, and compose-up is blocked if pull fails or cannot start.
 - DB status indicator is refreshed automatically using `docker compose ps` when Docker Compose is available.
 - Frontend dev and preview modes are mutually guarded to avoid port conflicts.

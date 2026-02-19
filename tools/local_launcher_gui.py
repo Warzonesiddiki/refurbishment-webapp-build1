@@ -552,13 +552,13 @@ class LauncherApp:
             self.status_var.set("Failed: db")
             return
 
-        self._run_background("db-pull", "docker compose pull")
+        self._run_background("db-pull", "docker compose pull postgres adminer")
 
         def start_after_pull(proc: subprocess.Popen | None):
             if proc is None or proc.returncode != 0:
                 self._log("[db] skipped compose up because docker compose pull failed or could not start")
                 return
-            self._run_background("db", "docker compose up -d")
+            self._run_background("db", "docker compose up -d postgres adminer")
 
         self._wait_for_process("db-pull", start_after_pull)
 
@@ -570,7 +570,7 @@ class LauncherApp:
         if not (ROOT / "docker-compose.yml").exists():
             self._log("[db-stop] docker-compose.yml missing. Nothing to stop.")
             return
-        self._run_background("db-stop", "docker compose down")
+        self._run_background("db-stop", "docker compose stop postgres adminer")
 
     def one_click(self):
         if self.pipeline_active:
