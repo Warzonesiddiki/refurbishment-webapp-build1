@@ -12,7 +12,7 @@ const cwd = process.cwd();
 
 function quoteShellArg(value) {
   if (/^[A-Za-z0-9_./:-]+$/.test(value)) return value;
-  return `"${String(value).replace(/"/g, '\"')}"`;
+  return `"${String(value).replace(/"/g, '\\"')}"`;
 }
 
 function startProcess(command, commandArgs, name) {
