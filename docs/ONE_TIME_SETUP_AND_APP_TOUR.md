@@ -34,6 +34,11 @@ Notes:
 - Bootstrap now attempts `npm ci` first, and automatically falls back to `npm install` when lock mismatch/policy errors occur.
 - Use `--skip-system` / `-SkipSystem` if dependencies are already installed.
 
+Troubleshooting (Windows):
+- If winget Node upgrade fails with installer code `1603` but `node -v` already works, rerun with `-SkipSystem` to skip package-manager churn and continue project setup.
+- If npm fails with `ENOTEMPTY` under `node_modules`, rerun bootstrap; it now retries with a cleanup path automatically.
+- If `tsc` is not recognized, dependency install did not complete. Fix npm install first, then rerun bootstrap.
+
 ## Step 4 — Start through launcher (recommended)
 ```bash
 npm run launcher
