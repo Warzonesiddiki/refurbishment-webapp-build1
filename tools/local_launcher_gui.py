@@ -203,7 +203,7 @@ class LauncherApp:
     def clear_logs(self):
         self.log_text.delete("1.0", tk.END)
 
-    def _run_background(self, name: str, cmd: str, keep_running: bool = False):
+    def _run_background(self, name: str, cmd: str | list[str], keep_running: bool = False):
         if name in self.running and self.running[name].poll() is None:
             self._log(f"[{name}] already running")
             return
@@ -212,10 +212,16 @@ class LauncherApp:
 
         def worker():
             self.status_var.set(f"Running: {name}")
-            self._log(f"[{name}] $ {cmd}")
+            display_cmd = cmd if isinstance(cmd, str) else " ".join(cmd)
+            self._log(f"[{name}] $ {display_cmd}")
             try:
+                args = shlex.split(cmd, posix=os.name != "nt") if isinstance(cmd, str) else list(cmd)
+                if args:
+                    resolved = shutil.which(args[0])
+                    if resolved:
+                        args[0] = resolved
                 proc = subprocess.Popen(
-                    shlex.split(cmd),
+                    args,
                     cwd=ROOT,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -433,7 +439,10 @@ class LauncherApp:
             flags.append("--require-docker")
 
         flag_text = " ".join(flags)
-        self._run_background("prerequisites", f"{shlex.quote(python_cmd)} tools/preflight_check.py {flag_text}")
+        prereq_cmd = [python_cmd, "tools/preflight_check.py"]
+        if flag_text:
+            prereq_cmd.extend(flag_text.split())
+        self._run_background("prerequisites", prereq_cmd)
 
     def install_dependencies(self):
         if not self.preflight_check():
