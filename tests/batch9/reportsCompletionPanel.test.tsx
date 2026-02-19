@@ -34,6 +34,9 @@ describe("ReportsPage completion readiness panel", () => {
     expect(screen.getByText("PROJECT COMPLETION READINESS")).toBeInTheDocument();
     expect(screen.getByText("TARGET 95%")).toBeInTheDocument();
     expect(screen.getByText("Forecast to 95%")).toBeInTheDocument();
+    expect(screen.getByText("Pending Areas")).toBeInTheDocument();
+    expect(screen.getByText("Velocity Source")).toBeInTheDocument();
+    expect(screen.getByText("Pending Area Keys")).toBeInTheDocument();
   });
 
 

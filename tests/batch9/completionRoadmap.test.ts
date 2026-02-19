@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createInitialState } from "@/store/appState";
 import { buildCompletionRoadmap } from "@/utils/completionRoadmap";
+import { SESSION_HISTORY_KEY } from "@/utils/sessionSummary";
 
 describe("buildCompletionRoadmap", () => {
-  it("returns completion percentages, forecast, and prioritized actions", () => {
+  it("returns completion percentages, pending-area stats, forecast, and prioritized actions", () => {
     const state = createInitialState();
     const roadmap = buildCompletionRoadmap(state, new Date("2026-02-12"));
 
@@ -11,18 +12,131 @@ describe("buildCompletionRoadmap", () => {
     expect(roadmap.overallPercent).toBeLessThanOrEqual(100);
     expect(roadmap.financePercent).toBeGreaterThanOrEqual(0);
     expect(roadmap.financePercent).toBeLessThanOrEqual(100);
+    expect(roadmap.pendingAreaCount).toBeGreaterThan(0);
+    expect(roadmap.pendingAreaKeys.length).toBe(roadmap.pendingAreaCount);
     expect(roadmap.forecastToTarget.targetPercent).toBe(95);
     expect(roadmap.forecastToTarget.estimatedSprintsRemaining).toBeGreaterThanOrEqual(0);
     expect(roadmap.recommendedActions.length).toBeGreaterThan(0);
     expect(roadmap.recommendedActions[0].impactPoints).toBeGreaterThanOrEqual(roadmap.recommendedActions.at(-1)!.impactPoints);
+    expect(roadmap.recommendedActions.some((a) => a.id === "core-module-workflow-completion")).toBe(true);
+    expect(roadmap.recommendedActions.some((a) => a.id === "runtime-observability")).toBe(true);
+    expect(roadmap.recommendedActions.some((a) => a.id === "pending-area-burn-down")).toBe(true);
+  });
+
+  it("adds period-close workflow recommendation when finance readiness is below target", () => {
+    const state = createInitialState();
+    state.ownerEntries = [
+      {
+        id: "o1",
+        date: "2026-01-01",
+        type: "Withdraw",
+        amount: 1000,
+        note: "force negative owner balance",
+        balance: -100,
+      },
+    ];
+
+    const roadmap = buildCompletionRoadmap(state, new Date("2026-02-12"));
+    expect(roadmap.financePercent).toBeLessThan(95);
+    expect(roadmap.recommendedActions.some((a) => a.id === "period-close-workflow")).toBe(true);
+  });
+
+  it("adds VAT evidence recommendation when vat-coverage fails", () => {
+    const state = createInitialState();
+    state.sales = [
+      {
+        id: "s1",
+        invoice: "INV-1",
+        date: "2026-01-01",
+        customer: "Test",
+        subtotal: 100,
+        vat: Number.NaN,
+        total: 105,
+        items: 1,
+        profit: 0,
+        status: "Unpaid",
+        method: "Cash",
+        lineItems: [{ barcode: "LP-1", name: "Test Item", price: 100, cost: 100, profit: 0 }],
+      },
+    ];
+
+    const roadmap = buildCompletionRoadmap(state, new Date("2026-02-12"));
+    expect(roadmap.recommendedActions.some((a) => a.id === "tax-filing-evidence-pack")).toBe(true);
   });
 
   it("adds receivables control recommendation when receipts exceed sales", () => {
     const state = createInitialState();
     state.sales = [];
-    state.receipts = [{ id: "r1", receipt: "R1", date: "2026-01-01", invoice: "INV1", amount: 1000, method: "Cash", reference: "X" }];
+    state.receipts = [
+      { id: "r1", receipt: "R1", date: "2026-01-01", invoice: "INV1", amount: 1000, method: "Cash", reference: "X" },
+    ];
 
     const roadmap = buildCompletionRoadmap(state, new Date("2026-02-12"));
     expect(roadmap.recommendedActions.some((a) => a.id === "receivables-overrun-controls")).toBe(true);
+  });
+
+  it("adds session progress recovery recommendation when session tracker trend is weak", () => {
+    const now = Date.now();
+    localStorage.setItem(
+      SESSION_HISTORY_KEY,
+      JSON.stringify([
+        { completedPercent: 55, pendingPercent: 45, endedAt: new Date(now).toISOString() },
+        { completedPercent: 52, pendingPercent: 48, endedAt: new Date(now - 1000).toISOString() },
+        { completedPercent: 90, pendingPercent: 10, endedAt: new Date(now - 2000).toISOString() },
+        { completedPercent: 92, pendingPercent: 8, endedAt: new Date(now - 3000).toISOString() },
+      ])
+    );
+
+    const roadmap = buildCompletionRoadmap(createInitialState(), new Date("2026-02-12"));
+    expect(roadmap.recommendedActions.some((a) => a.id === "session-progress-recovery")).toBe(true);
+
+    localStorage.removeItem(SESSION_HISTORY_KEY);
+  });
+
+  it("uses session-tracker-derived adaptive velocity when enough trend history exists", () => {
+    const now = Date.now();
+    localStorage.setItem(
+      SESSION_HISTORY_KEY,
+      JSON.stringify([
+        { completedPercent: 40, pendingPercent: 60, endedAt: new Date(now - 4000).toISOString() },
+        { completedPercent: 52, pendingPercent: 48, endedAt: new Date(now - 3000).toISOString() },
+        { completedPercent: 66, pendingPercent: 34, endedAt: new Date(now - 2000).toISOString() },
+        { completedPercent: 78, pendingPercent: 22, endedAt: new Date(now - 1000).toISOString() },
+      ])
+    );
+
+    const roadmap = buildCompletionRoadmap(createInitialState(), new Date("2026-02-12"));
+    expect(roadmap.forecastToTarget.velocitySource).toBe("session-tracker");
+    expect(roadmap.forecastToTarget.assumedVelocityPerSprint).toBeGreaterThan(3);
+
+    localStorage.removeItem(SESSION_HISTORY_KEY);
+  });
+
+  it("deduplicates and caps recommendations to top 6 actions", () => {
+    const state = createInitialState();
+    state.sales = [
+      {
+        id: "s1",
+        invoice: "INV-1",
+        date: "2026-01-01",
+        customer: "Test",
+        subtotal: 100,
+        vat: Number.NaN,
+        total: 105,
+        items: 1,
+        profit: 0,
+        status: "Unpaid",
+        method: "Cash",
+        lineItems: [{ barcode: "LP-1", name: "Test Item", price: 100, cost: 100, profit: 0 }],
+      },
+    ];
+    state.receipts = [
+      { id: "r1", receipt: "R1", date: "2026-01-01", invoice: "INV-1", amount: 1000, method: "Cash", reference: "X" },
+    ];
+    state.ownerEntries = [{ id: "o1", date: "2026-01-01", type: "Withdraw", amount: 1000, note: "", balance: -100 }];
+
+    const roadmap = buildCompletionRoadmap(state, new Date("2026-02-12"));
+    expect(roadmap.recommendedActions.length).toBeLessThanOrEqual(6);
+    expect(new Set(roadmap.recommendedActions.map((a) => a.id)).size).toBe(roadmap.recommendedActions.length);
   });
 });

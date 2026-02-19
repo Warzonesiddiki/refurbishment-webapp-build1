@@ -138,6 +138,7 @@ This document is the handoff/source-of-truth for current implementation status, 
 15. Java API seeded/default credentials are now opt-in via env flags and seeded reset requires admin session.
 16. Release readiness smoke script now exists (`tools/release_readiness.sh`) with a single command gate (`npm run check:release-readiness`).
 17. Backup restore roundtrip integration coverage now includes scoped restore rehearsal invariants (`tests/integration/restoreRoundtripFlow.test.ts`).
+18. Completion roadmap now includes pending-area telemetry (`pendingAreaCount`, `pendingAreaKeys`), coordinated burn-down recommendation generation, and Session Progress Tracker-based adaptive forecast velocity.
 
 ### C. Stability & Reliability Extensions
 

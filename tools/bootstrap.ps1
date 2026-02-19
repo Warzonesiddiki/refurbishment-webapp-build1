@@ -34,34 +34,80 @@ if ($Help) {
 function Invoke-Step($command) {
   if ($DryRun) {
     Write-Host "[dry-run] $command"
+    return
   }
-  else {
-    Invoke-Expression $command
+
+  Invoke-Expression $command
+  if ($LASTEXITCODE -ne 0) {
+    throw "Command failed with exit code $LASTEXITCODE: $command"
   }
 }
 
+function Command-Exists($name) {
+  return [bool](Get-Command $name -ErrorAction SilentlyContinue)
+}
+
 function Require-Command($name, $installHint) {
-  if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
+  if (-not (Command-Exists $name)) {
     Write-ErrMsg "Required command '$name' is missing. $installHint"
     exit 1
   }
 }
 
-function Install-WithWinget($pkgId) {
-  Invoke-Step "winget install --id $pkgId --source winget --accept-source-agreements --accept-package-agreements"
+function Install-WithWinget($pkgId, $commandToDetect) {
+  if ($commandToDetect -and (Command-Exists $commandToDetect)) {
+    Write-Info "Skipping $pkgId because '$commandToDetect' is already available."
+    return
+  }
+
+  try {
+    Invoke-Step "winget install --id $pkgId --source winget --accept-source-agreements --accept-package-agreements"
+  }
+  catch {
+    Write-WarnMsg "winget install for $pkgId failed. $_"
+  }
 }
 
 function Install-SystemDependencies {
   Write-Info "Installing system dependencies using winget..."
   Require-Command "winget" "Install App Installer from Microsoft Store, then re-run bootstrap."
 
-  Install-WithWinget "Git.Git"
-  Install-WithWinget "OpenJS.NodeJS.LTS"
-  Install-WithWinget "Python.Python.3.12"
-  Install-WithWinget "Microsoft.OpenJDK.17"
+  Install-WithWinget "Git.Git" "git"
+  Install-WithWinget "OpenJS.NodeJS.LTS" "node"
+  Install-WithWinget "Python.Python.3.12" "python"
+  Install-WithWinget "Microsoft.OpenJDK.17" "java"
 
   if ($WithDocker) {
-    Install-WithWinget "Docker.DockerDesktop"
+    Install-WithWinget "Docker.DockerDesktop" "docker"
+  }
+}
+
+function Install-NpmDependencies {
+  if (Test-Path "package-lock.json") {
+    try {
+      Invoke-Step "npm ci"
+      return
+    }
+    catch {
+      Write-WarnMsg "npm ci failed. Falling back to npm install..."
+    }
+  }
+
+  try {
+    Invoke-Step "npm install"
+  }
+  catch {
+    Write-WarnMsg "npm install failed. Attempting node_modules cleanup + reinstall..."
+    if (-not $DryRun -and (Test-Path "node_modules")) {
+      Remove-Item "node_modules" -Recurse -Force
+    }
+
+    if (Test-Path "package-lock.json") {
+      Invoke-Step "npm ci"
+    }
+    else {
+      Invoke-Step "npm install"
+    }
   }
 }
 
@@ -69,28 +115,12 @@ function Install-ProjectDependencies {
   Write-Info "Installing JavaScript dependencies..."
   Push-Location (Resolve-Path "$PSScriptRoot\..")
   try {
-    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-      Write-WarnMsg "npm not found in current shell PATH. If Node was just installed, open a new PowerShell and re-run bootstrap."
+    if (-not (Command-Exists npm)) {
+      Write-ErrMsg "npm not found in current shell PATH. If Node was just installed, open a new PowerShell and re-run bootstrap."
       if (-not $DryRun) { exit 1 }
     }
 
-    if (Test-Path "package-lock.json") {
-      if ($DryRun) {
-        Invoke-Step "npm ci"
-      }
-      else {
-        try {
-          Invoke-Step "npm ci"
-        }
-        catch {
-          Write-WarnMsg "npm ci failed (lock mismatch or registry policy). Falling back to npm install..."
-          Invoke-Step "npm install"
-        }
-      }
-    }
-    else {
-      Invoke-Step "npm install"
-    }
+    Install-NpmDependencies
 
     if (Test-Path "playwright.config.ts") {
       Write-Info "Installing Playwright browsers..."
