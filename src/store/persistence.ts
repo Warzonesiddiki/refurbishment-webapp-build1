@@ -11,9 +11,11 @@ export const STORAGE_KEY = APP_STATE_KEY;
 export function loadPersistedState(): AppState | null {
   // Keep legacy sync API for existing callers/tests.
   let value: AppState | null = null;
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
+
   try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+
     const parsed = JSON.parse(raw) as PersistedState | AppState;
     if ((parsed as PersistedState).data) {
       const ps = parsed as PersistedState;
@@ -36,7 +38,12 @@ export function persistState(state: AppState) {
     timestamp: Date.now(),
     data: state,
   };
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Keep app responsive when browser storage is unavailable/restricted.
+  }
 }
 
 export function clearPersistedState() {
