@@ -10,4 +10,5 @@ mkdir -p "$OUT_DIR"
 find "$OUT_DIR" -type f -name '*.class' -delete
 
 javac -d "$OUT_DIR" $(find "$SRC_DIR" -type f -name '*.java')
+export TAHIR_ENABLE_SEEDED_USERS="${TAHIR_ENABLE_SEEDED_USERS:-true}"
 java -cp "$OUT_DIR" com.tahir.server.Main "$PORT"

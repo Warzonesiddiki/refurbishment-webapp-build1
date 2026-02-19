@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -33,7 +34,9 @@ def main() -> int:
     if compile_proc.returncode != 0:
         return compile_proc.returncode
 
-    run_proc = subprocess.run([java, "-cp", str(OUT_DIR), "com.tahir.server.Main", port], cwd=ROOT)
+    env = os.environ.copy()
+    env.setdefault("TAHIR_ENABLE_SEEDED_USERS", "true")
+    run_proc = subprocess.run([java, "-cp", str(OUT_DIR), "com.tahir.server.Main", port], cwd=ROOT, env=env)
     return run_proc.returncode
 
 
