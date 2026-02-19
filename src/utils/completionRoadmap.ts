@@ -8,6 +8,7 @@ import {
   evaluateSessionMomentum,
   loadSessionHistory,
   summarizeSessionHistory,
+  type LastSessionSummary,
 } from "@/utils/sessionSummary";
 import { evaluateProjectCompletion } from "@/utils/projectCompletion";
 
@@ -26,18 +27,22 @@ export type CompletionForecast = {
   gapPercent: number;
   estimatedSprintsRemaining: number;
   assumedVelocityPerSprint: number;
+  velocitySource: "default" | "session-tracker";
 };
 
 export type CompletionRoadmap = {
   generatedAt: string;
   overallPercent: number;
   financePercent: number;
+  pendingAreaCount: number;
+  pendingAreaKeys: string[];
   recommendedActions: CompletionRoadmapItem[];
   forecastToTarget: CompletionForecast;
 };
 
 const COMPLETION_AREA_TRIGGER_PERCENT = 90;
 const FINANCE_TARGET_PERCENT = 95;
+const DEFAULT_VELOCITY_PER_SPRINT = 3;
 
 type CompletionAreaRecommendation = Omit<CompletionRoadmapItem, "area"> & { areaKey: string };
 
@@ -144,10 +149,30 @@ function hasFailedFinanceCheck(finance: FinanceReadinessSnapshot, checkKey: Fina
   return finance.checks.some((check) => check.key === checkKey && !check.passed);
 }
 
+function estimateVelocityFromSessionHistory(history: LastSessionSummary[]): CompletionForecast["assumedVelocityPerSprint"] {
+  if (history.length < 3) return DEFAULT_VELOCITY_PER_SPRINT;
+
+  const normalized = [...history]
+    .sort((a, b) => Date.parse(a.endedAt) - Date.parse(b.endedAt))
+    .map((entry) => Math.max(0, Math.min(100, entry.completedPercent)));
+
+  const deltas: number[] = [];
+  for (let i = 1; i < normalized.length; i += 1) {
+    deltas.push(normalized[i] - normalized[i - 1]);
+  }
+
+  const positiveDeltas = deltas.filter((delta) => delta > 0);
+  if (positiveDeltas.length === 0) return DEFAULT_VELOCITY_PER_SPRINT;
+
+  const averageGain = positiveDeltas.reduce((sum, delta) => sum + delta, 0) / positiveDeltas.length;
+  return Math.max(1, Math.min(8, Number(averageGain.toFixed(2))));
+}
+
 function estimateSprintsRemaining(
   currentPercent: number,
   targetPercent: number,
-  velocityPerSprint = 3,
+  velocityPerSprint = DEFAULT_VELOCITY_PER_SPRINT,
+  velocitySource: CompletionForecast["velocitySource"] = "default",
 ): CompletionForecast {
   const safeVelocity = Math.max(1, velocityPerSprint);
   const gapPercent = Math.max(0, Number((targetPercent - currentPercent).toFixed(2)));
@@ -158,9 +183,9 @@ function estimateSprintsRemaining(
     gapPercent,
     estimatedSprintsRemaining,
     assumedVelocityPerSprint: safeVelocity,
+    velocitySource,
   };
 }
-
 
 type SessionTrackerSignal = {
   shouldRecommend: boolean;
@@ -208,6 +233,7 @@ export function buildCompletionRoadmap(state: AppState, asOfDate = new Date()): 
 
   const actions: CompletionRoadmapItem[] = [];
   const completionAreas = new Map(completion.areas.map((area) => [area.key, area]));
+  const pendingAreas = completion.areas.filter((area) => area.percent < COMPLETION_AREA_TRIGGER_PERCENT);
 
   for (const recommendation of financeRecommendationCatalog) {
     const failedCheck = recommendation.checkKey ? hasFailedFinanceCheck(finance, recommendation.checkKey) : false;
@@ -240,6 +266,17 @@ export function buildCompletionRoadmap(state: AppState, asOfDate = new Date()): 
     }
   }
 
+  if (pendingAreas.length >= 4) {
+    actions.push({
+      id: "pending-area-burn-down",
+      title: "Execute coordinated pending-area burn-down sprint",
+      area: "Program Delivery",
+      priority: "P1",
+      impactPoints: 7,
+      rationale: `There are ${pendingAreas.length} completion areas below ${COMPLETION_AREA_TRIGGER_PERCENT}%. Run a focused cross-team burn-down sprint.`,
+    });
+  }
+
   const sessionTrackerSignal = getSessionTrackerSignal();
   if (sessionTrackerSignal.shouldRecommend) {
     actions.push({
@@ -247,7 +284,7 @@ export function buildCompletionRoadmap(state: AppState, asOfDate = new Date()): 
       title: "Recover session completion trend using session progress tracker",
       area: "UX Guidance & Operator Safety",
       priority: "P1",
-      impactPoints: 6,
+      impactPoints: 8,
       rationale: sessionTrackerSignal.rationale,
     });
   }
@@ -273,11 +310,23 @@ export function buildCompletionRoadmap(state: AppState, asOfDate = new Date()): 
     })
     .slice(0, 6);
 
+  const sessionHistory = loadSessionHistory();
+  const adaptiveVelocity = estimateVelocityFromSessionHistory(sessionHistory);
+  const velocitySource: CompletionForecast["velocitySource"] =
+    sessionHistory.length >= 3 && adaptiveVelocity !== DEFAULT_VELOCITY_PER_SPRINT ? "session-tracker" : "default";
+
   return {
     generatedAt: asOfDate.toISOString(),
     overallPercent: completion.overallPercent,
     financePercent: finance.scorePercent,
+    pendingAreaCount: pendingAreas.length,
+    pendingAreaKeys: pendingAreas.map((area) => area.key),
     recommendedActions,
-    forecastToTarget: estimateSprintsRemaining(completion.overallPercent, FINANCE_TARGET_PERCENT, 3),
+    forecastToTarget: estimateSprintsRemaining(
+      completion.overallPercent,
+      FINANCE_TARGET_PERCENT,
+      adaptiveVelocity,
+      velocitySource,
+    ),
   };
 }

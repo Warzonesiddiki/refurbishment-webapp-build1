@@ -4,7 +4,7 @@ import { buildCompletionRoadmap } from "@/utils/completionRoadmap";
 import { SESSION_HISTORY_KEY } from "@/utils/sessionSummary";
 
 describe("buildCompletionRoadmap", () => {
-  it("returns completion percentages, forecast, and prioritized actions", () => {
+  it("returns completion percentages, pending-area stats, forecast, and prioritized actions", () => {
     const state = createInitialState();
     const roadmap = buildCompletionRoadmap(state, new Date("2026-02-12"));
 
@@ -12,12 +12,15 @@ describe("buildCompletionRoadmap", () => {
     expect(roadmap.overallPercent).toBeLessThanOrEqual(100);
     expect(roadmap.financePercent).toBeGreaterThanOrEqual(0);
     expect(roadmap.financePercent).toBeLessThanOrEqual(100);
+    expect(roadmap.pendingAreaCount).toBeGreaterThan(0);
+    expect(roadmap.pendingAreaKeys.length).toBe(roadmap.pendingAreaCount);
     expect(roadmap.forecastToTarget.targetPercent).toBe(95);
     expect(roadmap.forecastToTarget.estimatedSprintsRemaining).toBeGreaterThanOrEqual(0);
     expect(roadmap.recommendedActions.length).toBeGreaterThan(0);
     expect(roadmap.recommendedActions[0].impactPoints).toBeGreaterThanOrEqual(roadmap.recommendedActions.at(-1)!.impactPoints);
     expect(roadmap.recommendedActions.some((a) => a.id === "core-module-workflow-completion")).toBe(true);
     expect(roadmap.recommendedActions.some((a) => a.id === "runtime-observability")).toBe(true);
+    expect(roadmap.recommendedActions.some((a) => a.id === "pending-area-burn-down")).toBe(true);
   });
 
   it("adds period-close workflow recommendation when finance readiness is below target", () => {
@@ -72,7 +75,6 @@ describe("buildCompletionRoadmap", () => {
     expect(roadmap.recommendedActions.some((a) => a.id === "receivables-overrun-controls")).toBe(true);
   });
 
-
   it("adds session progress recovery recommendation when session tracker trend is weak", () => {
     const now = Date.now();
     localStorage.setItem(
@@ -87,6 +89,25 @@ describe("buildCompletionRoadmap", () => {
 
     const roadmap = buildCompletionRoadmap(createInitialState(), new Date("2026-02-12"));
     expect(roadmap.recommendedActions.some((a) => a.id === "session-progress-recovery")).toBe(true);
+
+    localStorage.removeItem(SESSION_HISTORY_KEY);
+  });
+
+  it("uses session-tracker-derived adaptive velocity when enough trend history exists", () => {
+    const now = Date.now();
+    localStorage.setItem(
+      SESSION_HISTORY_KEY,
+      JSON.stringify([
+        { completedPercent: 40, pendingPercent: 60, endedAt: new Date(now - 4000).toISOString() },
+        { completedPercent: 52, pendingPercent: 48, endedAt: new Date(now - 3000).toISOString() },
+        { completedPercent: 66, pendingPercent: 34, endedAt: new Date(now - 2000).toISOString() },
+        { completedPercent: 78, pendingPercent: 22, endedAt: new Date(now - 1000).toISOString() },
+      ])
+    );
+
+    const roadmap = buildCompletionRoadmap(createInitialState(), new Date("2026-02-12"));
+    expect(roadmap.forecastToTarget.velocitySource).toBe("session-tracker");
+    expect(roadmap.forecastToTarget.assumedVelocityPerSprint).toBeGreaterThan(3);
 
     localStorage.removeItem(SESSION_HISTORY_KEY);
   });
