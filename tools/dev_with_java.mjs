@@ -9,6 +9,8 @@ const pythonCandidates = isWin ? ['python', 'python3', 'py'] : ['python3', 'pyth
 const args = process.argv.slice(2);
 const lanMode = args.includes('--lan');
 const cwd = process.cwd();
+const javaPort = process.env.JAVA_API_PORT || '8085';
+const javaHealthUrl = `http://127.0.0.1:${javaPort}/api/health`;
 
 function quoteShellArg(value) {
   if (/^[A-Za-z0-9_./:-]+$/.test(value)) return value;
@@ -42,6 +44,24 @@ function findPython() {
   return null;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForJavaHealth(timeoutMs = 20000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(javaHealthUrl);
+      if (res.ok) return true;
+    } catch {
+      // retry
+    }
+    await sleep(500);
+  }
+  return false;
+}
+
 const javaServerScript = join('tools', 'run_java_server.py');
 if (!existsSync(javaServerScript)) {
   console.error(`[dev-with-java] missing ${javaServerScript}`);
@@ -54,8 +74,15 @@ if (!python) {
   process.exit(1);
 }
 
-const javaProc = startProcess(python, [javaServerScript, '8085'], 'java server');
+const javaProc = startProcess(python, [javaServerScript, javaPort], 'java server');
 if (!javaProc) process.exit(1);
+
+const javaHealthy = await waitForJavaHealth();
+if (!javaHealthy) {
+  console.error(`[dev-with-java] Java API did not become healthy at ${javaHealthUrl}.`);
+  javaProc.kill('SIGTERM');
+  process.exit(1);
+}
 
 const webScript = lanMode ? 'dev:lan' : 'dev';
 const webProc = startProcess(npmCmd, ['run', webScript], 'vite dev server');
@@ -65,28 +92,29 @@ if (!webProc) {
 }
 
 let shuttingDown = false;
-function shutdown(signal) {
+function shutdown(signal, exitCode = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`[dev-with-java] received ${signal}, stopping child processes...`);
   for (const proc of [webProc, javaProc]) {
     if (!proc.killed) proc.kill('SIGTERM');
   }
-  setTimeout(() => process.exit(0), 300);
+  setTimeout(() => process.exit(exitCode), 300);
 }
 
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT', 0));
+process.on('SIGTERM', () => shutdown('SIGTERM', 0));
 
 javaProc.on('exit', (code) => {
-  if (!shuttingDown && code !== 0) {
-    console.error(`[dev-with-java] java server exited with code ${code}`);
+  if (!shuttingDown) {
+    console.error(`[dev-with-java] java server exited with code ${code ?? 'unknown'}`);
+    shutdown('java-exit', 1);
   }
 });
 
 webProc.on('exit', (code) => {
   if (!shuttingDown) {
-    console.log(`[dev-with-java] web process exited with code ${code}, stopping java server.`);
-    shutdown('web-exit');
+    console.log(`[dev-with-java] web process exited with code ${code ?? 'unknown'}, stopping java server.`);
+    shutdown('web-exit', code && code !== 0 ? code : 0);
   }
 });
