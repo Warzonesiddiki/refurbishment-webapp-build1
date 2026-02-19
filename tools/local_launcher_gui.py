@@ -106,6 +106,7 @@ class LauncherApp:
         ttk.Button(buttons, text="0) Preflight Check", command=self.preflight_check).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons, text="1) Install Dependencies", command=self.install_dependencies).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons, text="2) Run Tests", command=self.run_tests).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(buttons, text="Run Ops Core Tests", command=self.run_ops_core_tests).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons, text="3) Start App (Build + Preview)", command=self.start_app).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons, text="Start Frontend Dev", command=self.start_frontend_dev).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons, text="Start Java API", command=self.start_java_api).pack(side=tk.LEFT, padx=(0, 8))
@@ -119,6 +120,7 @@ class LauncherApp:
         ttk.Button(buttons2, text="Stop Frontend Dev", command=self.stop_frontend_dev).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons2, text="Stop Java API", command=self.stop_java_api).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons2, text="Stop DB", command=self.stop_db).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(buttons2, text="Check API Health", command=self.check_java_api_health).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons2, text="Load Env", command=self._load_env_into_editor).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons2, text="Save Env", command=self.save_env_file).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(buttons2, text="Clear Logs", command=self.clear_logs).pack(side=tk.LEFT)
@@ -337,9 +339,34 @@ class LauncherApp:
 
     def save_env_file(self):
         content = self.env_text.get("1.0", tk.END).rstrip() + "\n"
+        if "VITE_JAVA_API_BASE" not in content:
+            content += "VITE_JAVA_API_BASE=/api\n"
+            self._log("[env] added default VITE_JAVA_API_BASE=/api")
         ENV_PATH.write_text(content, encoding="utf-8")
         self._log("[env] saved .env")
         self.status_var.set("Ready")
+
+    def _parse_env_content(self) -> dict[str, str]:
+        content = self.env_text.get("1.0", tk.END)
+        env_map: dict[str, str] = {}
+        for raw_line in content.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            env_map[key.strip()] = value.strip()
+        return env_map
+
+    def _resolve_java_api_port(self) -> int:
+        env_map = self._parse_env_content()
+        raw = env_map.get("JAVA_API_PORT") or env_map.get("API_PORT") or "8085"
+        try:
+            value = int(raw)
+            if 1 <= value <= 65535:
+                return value
+        except ValueError:
+            pass
+        return 8085
 
     def preflight_check(self, strict_optional: bool = False) -> bool:
         port = self._parse_port()
@@ -399,7 +426,19 @@ class LauncherApp:
     def run_tests(self):
         if not self.preflight_check():
             return
-        self._run_background("tests", "npm test")
+        self._run_background("tests", "npm run test:run")
+
+    def run_ops_core_tests(self):
+        if not self.preflight_check():
+            return
+        cmd = (
+            "npm run test:run -- "
+            "tests/integration/inventoryFlow.test.ts "
+            "tests/integration/wipFlow.test.ts "
+            "tests/batch4/partReducer.test.ts "
+            "tests/wipStageTransition.test.ts"
+        )
+        self._run_background("ops-core-tests", cmd)
 
     def start_frontend_dev(self):
         port = self._parse_port()
@@ -453,7 +492,21 @@ class LauncherApp:
             self._log("[java-api] Python runtime missing. Install Python 3 and retry.")
             self.status_var.set("Failed: java-api")
             return
-        self._run_background("java-api", f"{shlex.quote(python_cmd)} tools/run_java_server.py 8085", keep_running=True)
+        java_port = self._resolve_java_api_port()
+        self._run_background("java-api", f"{shlex.quote(python_cmd)} tools/run_java_server.py {java_port}", keep_running=True)
+        host = self.host_var.get().strip() or "127.0.0.1"
+        self._log(f"[java-api] health URL: http://{host}:{java_port}/api/health")
+
+    def check_java_api_health(self):
+        python_cmd = shutil.which("python3") or shutil.which("python")
+        if not python_cmd:
+            self._log("[java-health] Python runtime missing. Install Python 3 and retry.")
+            self.status_var.set("Failed: java-health")
+            return
+        java_port = self._resolve_java_api_port()
+        script = f"import urllib.request;print(urllib.request.urlopen('http://localhost:{java_port}/api/health', timeout=5).read().decode())"
+        command = f"{shlex.quote(python_cmd)} -c {shlex.quote(script)}"
+        self._run_background("java-health", command)
 
     def stop_java_api(self):
         proc = self.running.get("java-api")
@@ -520,7 +573,7 @@ class LauncherApp:
                 return
 
             self._log("[one-click] step 2/5 run tests")
-            self._run_background("tests", "npm test")
+            self._run_background("tests", "npm run test:run")
 
             def after_tests(test_proc: subprocess.Popen | None):
                 if test_proc is None or test_proc.returncode != 0:

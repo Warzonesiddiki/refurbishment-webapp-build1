@@ -6,18 +6,20 @@ This project includes a **desktop GUI launcher** for non-technical operators to 
 - Run a **preflight tool check** (Python, Node, npm, optional Java/JDK, optional Docker)
 - Validate launch port input before each setup/start action (must be `1-65535`)
 - Install frontend dependencies automatically (`npm install`)
-- Run test suite (`npm test`) with the same preflight validation used for install
+- Run full non-watch test suite (`npm run test:run`) with the same preflight validation used for install
+- Run focused operations core tests for inventory/parts + WIP pipelines
 - Build the app (`npm run build`)
 - Launch preview server on LAN (`npm run preview -- --host 0.0.0.0 --port <port>`)
 - Start/stop frontend dev server on LAN (`npm run dev -- --host 0.0.0.0 --port <port>`)
 - Start/stop Java API server (local multi-user auth service)
+- Check Java API health endpoint directly from launcher (`/api/health`)
 - Optionally start/stop PostgreSQL stack via Docker Compose (`docker compose pull`, `up -d`, `down`)
 - Configure one-click options with checkboxes:
   - **Start Java API in one-click**
   - **Start DB in one-click**
 - Show live logs in one window
 - Show live service status indicators (Dev/Preview/Java API/DB)
-- Load/edit/save `.env` directly from launcher UI
+- Load/edit/save `.env` directly from launcher UI (adds `VITE_JAVA_API_BASE=/api` if missing on save)
 - Provide a **One-click Setup + Launch** pipeline with install → test → build → launch order
 
 ## Run the launcher
