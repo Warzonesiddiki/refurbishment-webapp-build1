@@ -6,10 +6,11 @@ OUT_DIR="$ROOT_DIR/java_server/out"
 SRC_DIR="$ROOT_DIR/java_server/src"
 POM_FILE="$ROOT_DIR/java_server/pom.xml"
 PORT="${1:-8085}"
+BUILD_TOOL="${TAHIR_JAVA_BUILD_TOOL:-auto}"
 
 export TAHIR_ENABLE_SEEDED_USERS="${TAHIR_ENABLE_SEEDED_USERS:-true}"
 
-if command -v mvn >/dev/null 2>&1 && [[ -f "$POM_FILE" ]]; then
+if [[ "$BUILD_TOOL" != "javac" ]] && command -v mvn >/dev/null 2>&1 && [[ -f "$POM_FILE" ]]; then
   mvn -q -f "$POM_FILE" -DskipTests compile exec:java -Dexec.args="$PORT"
   exit 0
 fi

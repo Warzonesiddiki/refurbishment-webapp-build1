@@ -18,9 +18,10 @@ def main() -> int:
 
     env = os.environ.copy()
     env.setdefault("TAHIR_ENABLE_SEEDED_USERS", "true")
+    build_tool = env.get("TAHIR_JAVA_BUILD_TOOL", "auto").strip().lower()
 
     mvn = shutil.which("mvn")
-    if mvn and POM_FILE.exists():
+    if build_tool != "javac" and mvn and POM_FILE.exists():
         run_proc = subprocess.run(
             [
                 mvn,
