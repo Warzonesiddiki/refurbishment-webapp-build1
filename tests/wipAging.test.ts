@@ -8,6 +8,12 @@ describe("wip aging risk", () => {
     expect(getWipAgingDays("Feb 18", now)).toBe(2);
   });
 
+  it("interprets short month dates crossing year boundary", () => {
+    const janNow = new Date("2026-01-02T00:00:00.000Z");
+    expect(getWipAgingDays("Dec 30", janNow)).toBe(3);
+    expect(classifyWipAgingRisk("Dec 30", "Active", janNow)).toBe("Watch");
+  });
+
   it("classifies risk buckets", () => {
     expect(classifyWipAgingRisk("Feb 19", "Active", now)).toBe("Healthy");
     expect(classifyWipAgingRisk("Feb 17", "Active", now)).toBe("Watch");

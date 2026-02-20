@@ -11,7 +11,15 @@ function parseOpenedDate(opened: string, now: Date) {
   // Seeded/UI values often use `Jan 15` style; always pin current year first.
   if (/^[A-Za-z]{3,}\s+\d{1,2}$/.test(trimmed)) {
     const withYear = new Date(`${trimmed} ${now.getFullYear()}`);
-    if (!Number.isNaN(withYear.getTime())) return withYear;
+    if (!Number.isNaN(withYear.getTime())) {
+      // If month/day appears in the future (e.g., Dec 30 while now is Jan 2),
+      // interpret as previous year to avoid negative/zero aging around year boundary.
+      if (withYear.getTime() > now.getTime()) {
+        const previousYear = new Date(`${trimmed} ${now.getFullYear() - 1}`);
+        if (!Number.isNaN(previousYear.getTime())) return previousYear;
+      }
+      return withYear;
+    }
   }
 
   // Accept already ISO-like formats.
