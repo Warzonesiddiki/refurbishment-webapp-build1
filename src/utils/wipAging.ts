@@ -31,3 +31,22 @@ export function classifyWipAgingRisk(opened: string, status: string, now = new D
   if (days >= 3) return "Watch";
   return "Healthy";
 }
+
+export function getWipAgingRiskRank(risk: WipAgingRisk) {
+  if (risk === "Risk") return 2;
+  if (risk === "Watch") return 1;
+  return 0;
+}
+
+export function compareWipBySlaRisk(
+  a: { opened: string; status: string },
+  b: { opened: string; status: string },
+  now = new Date(),
+) {
+  const riskA = classifyWipAgingRisk(a.opened, a.status, now);
+  const riskB = classifyWipAgingRisk(b.opened, b.status, now);
+  const rankDiff = getWipAgingRiskRank(riskB) - getWipAgingRiskRank(riskA);
+  if (rankDiff !== 0) return rankDiff;
+
+  return getWipAgingDays(b.opened, now) - getWipAgingDays(a.opened, now);
+}

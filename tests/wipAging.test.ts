@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyWipAgingRisk, getWipAgingDays } from "@/utils/wipAging";
+import { classifyWipAgingRisk, compareWipBySlaRisk, getWipAgingDays } from "@/utils/wipAging";
 
 describe("wip aging risk", () => {
   const now = new Date("2026-02-20T00:00:00.000Z");
@@ -13,5 +13,16 @@ describe("wip aging risk", () => {
     expect(classifyWipAgingRisk("Feb 17", "Active", now)).toBe("Watch");
     expect(classifyWipAgingRisk("Feb 10", "Active", now)).toBe("Risk");
     expect(classifyWipAgingRisk("Feb 10", "Completed", now)).toBe("Healthy");
+  });
+
+  it("sorts jobs by risk first then aging days", () => {
+    const rows = [
+      { opened: "Feb 19", status: "Active", id: "healthy" },
+      { opened: "Feb 16", status: "Active", id: "watch" },
+      { opened: "Feb 10", status: "Active", id: "risk" },
+    ];
+
+    const sorted = [...rows].sort((a, b) => compareWipBySlaRisk(a, b, now));
+    expect(sorted.map((r) => r.id)).toEqual(["risk", "watch", "healthy"]);
   });
 });

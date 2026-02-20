@@ -17,7 +17,7 @@ import { computeWipLaborDrilldown, laborDrilldownToCsv } from "@/utils/wipLaborD
 import { computeTrackProductivityTrends } from "@/utils/wipTrackTrend";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
 import { exportCsv } from "@/utils/exporters";
-import { classifyWipAgingRisk, getWipAgingDays } from "@/utils/wipAging";
+import { classifyWipAgingRisk, compareWipBySlaRisk, getWipAgingDays } from "@/utils/wipAging";
 import { fetchAuthUsers } from "@/utils/javaAuth";
 
 const priorityColors: Record<string, string> = {
@@ -44,6 +44,7 @@ export function WipJobs() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [slaRiskFilter, setSlaRiskFilter] = useState<"All" | "Healthy" | "Watch" | "Risk">("All");
+  const [prioritizeSlaRisk, setPrioritizeSlaRisk] = useState(true);
   const deferredSearch = useDeferredValue(search);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const selectedJob = selectedJobId ? (state.wipJobs.find((w) => w.id === selectedJobId) ?? null) : null;
@@ -82,8 +83,11 @@ export function WipJobs() {
     if (slaRiskFilter !== "All") {
       data = data.filter((w) => classifyWipAgingRisk(w.opened, w.status) === slaRiskFilter);
     }
+    if (prioritizeSlaRisk) {
+      data = [...data].sort((a, b) => compareWipBySlaRisk(a, b));
+    }
     return data;
-  }, [deferredSearch, state.wipJobs, statusFilter, slaRiskFilter]);
+  }, [deferredSearch, state.wipJobs, statusFilter, slaRiskFilter, prioritizeSlaRisk]);
 
   useEffect(() => {
     if (filtered.length === 0) {
@@ -148,7 +152,8 @@ export function WipJobs() {
     }
   }, [addLaborTech, laborApprover, laborUserOptions]);
 
-  const hasActiveFilters = search.trim().length > 0 || statusFilter !== "All" || slaRiskFilter !== "All";
+  const hasActiveFilters =
+    search.trim().length > 0 || statusFilter !== "All" || slaRiskFilter !== "All" || !prioritizeSlaRisk;
 
   const dashboardMetrics = useMemo(() => {
     const jobs = state.wipJobs;
@@ -623,6 +628,14 @@ export function WipJobs() {
             <option value="Watch">Watch</option>
             <option value="Healthy">Healthy</option>
           </select>
+          <label className="inline-flex items-center gap-2 text-xs text-cyan-300/70 px-2">
+            <input
+              type="checkbox"
+              checked={prioritizeSlaRisk}
+              onChange={(e) => setPrioritizeSlaRisk(e.target.checked)}
+            />
+            Prioritize SLA risk
+          </label>
           <button
             className="btn-ghost text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!hasActiveFilters}
@@ -630,6 +643,7 @@ export function WipJobs() {
               setSearch("");
               setStatusFilter("All");
               setSlaRiskFilter("All");
+              setPrioritizeSlaRisk(true);
             }}
           >
             ✕ Clear
