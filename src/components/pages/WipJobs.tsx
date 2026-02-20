@@ -735,10 +735,13 @@ export function WipJobs() {
               (option.value === "All" && slaDeltaFilter === "All") ||
               (option.value !== "All" && slaDeltaFilter === option.value);
             const isDisabled = option.value !== "All" && option.count === 0;
+            const inactiveClass = isDisabled
+              ? "border-cyan-500/20 text-cyan-300/45"
+              : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10";
             return (
               <button
                 key={option.value}
-                className={`px-2 py-1 rounded border ${isActive ? quickSlaToneByValue[option.value] : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"} ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                className={`px-2 py-1 rounded border ${isActive ? quickSlaToneByValue[option.value] : inactiveClass} ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
                 type="button"
                 aria-pressed={isActive}
                 disabled={isDisabled}
