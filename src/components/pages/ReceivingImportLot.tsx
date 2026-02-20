@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { useIdempotentAction } from "@/hooks/useIdempotentAction";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
@@ -49,6 +49,43 @@ type ImportMapping = {
   ssdCapacityGb: string;
   graphicsType: string;
 };
+
+type ReceivingImportJobRecord = {
+  id: string;
+  lot: string;
+  supplier: string;
+  fileName: string;
+  fileHash: string;
+  importedAt: string;
+  importedBy: string;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+};
+
+const IMPORT_HISTORY_KEY = "tahir.receivingImportHistory.v1";
+
+function computeImportFileHash(rawRows: ImportRow[], fileName: string) {
+  const payload = `${fileName}|${rawRows.length}|${JSON.stringify(rawRows).slice(0, 4000)}`;
+  let hash = 0;
+  for (let i = 0; i < payload.length; i += 1) {
+    hash = (hash << 5) - hash + payload.charCodeAt(i);
+    hash |= 0;
+  }
+  return `IMP-${Math.abs(hash).toString(16).padStart(8, "0")}`;
+}
+
+function loadImportHistory(): ReceivingImportJobRecord[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(IMPORT_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 function parseCsv(text: string): ImportRow[] {
   const rows: string[][] = [];
@@ -175,6 +212,7 @@ export function ReceivingImportLot() {
   const [defaultSsdType, setDefaultSsdType] = useState("NVMe");
   const [defaultSsdCapacityGb, setDefaultSsdCapacityGb] = useState(256);
   const [defaultGraphicsType, setDefaultGraphicsType] = useState<"GPU" | "iGPU">("iGPU");
+  const [importHistory, setImportHistory] = useState<ReceivingImportJobRecord[]>(() => loadImportHistory());
   const requiredMapped = Object.values(mapping).every((v) => v && v.trim().length > 0);
   const missingMappings = Object.entries(mapping)
     .filter(([, value]) => !value || value.trim().length === 0)
@@ -182,6 +220,11 @@ export function ReceivingImportLot() {
 
   const { run: logCommit } = useIdempotentAction("import-lot-commit", "lot");
   const { trigger } = useUiActionFeedback();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(IMPORT_HISTORY_KEY, JSON.stringify(importHistory.slice(0, 20)));
+  }, [importHistory]);
 
   const previewRows = useMemo<ImportPreviewRow[]>(() => {
     const seen = new Set<string>();
@@ -344,19 +387,29 @@ export function ReceivingImportLot() {
     const normalizedLot = lotNumber.trim();
     const computedLotCost =
       totalCost > 0 ? totalCost : Number(validRows.reduce((sum, row) => sum + row.cost, 0).toFixed(2));
+    const importedAt = new Date().toISOString();
+    const fileHash = computeImportFileHash(rawRows, fileName || "inline-data.csv");
+    const importJobId = `JOB-${importedAt.slice(0, 10).replace(/-/g, "")}-${Math.floor(Math.random() * 100000)
+      .toString()
+      .padStart(5, "0")}`;
 
-    logCommit(normalizedLot, { validRows: validRows.length, totalRows: previewRows.length });
+    logCommit(normalizedLot, { validRows: validRows.length, totalRows: previewRows.length, importJobId, fileHash });
     dispatch({
       type: "ADD_LOT",
       payload: {
         lot: normalizedLot,
         supplier: supplier.trim(),
-        received: new Date().toISOString().slice(0, 10),
+        received: importedAt.slice(0, 10),
         status: "Pending",
         items: validRows.length,
         verified: 0,
         graded: 0,
         cost: computedLotCost,
+        importJobId,
+        importedAt,
+        importedBy: "operator",
+        sourceFileName: fileName || "inline-data.csv",
+        sourceFileHash: fileHash,
       },
     });
     validRows.forEach((r) => {
@@ -382,11 +435,28 @@ export function ReceivingImportLot() {
           graphicsType: r.graphicsType,
           importMeta: {
             ...r.importMeta,
+            importJobId,
+            sourceFileHash: fileHash,
             ...Object.fromEntries(Object.entries(r.canonical).map(([k, v]) => [`canon_${k}`, v])),
           },
         },
       });
     });
+    setImportHistory((prev) => [
+      {
+        id: importJobId,
+        lot: normalizedLot,
+        supplier: supplier.trim(),
+        fileName: fileName || "inline-data.csv",
+        fileHash,
+        importedAt,
+        importedBy: "operator",
+        totalRows: previewRows.length,
+        validRows: validRows.length,
+        invalidRows,
+      },
+      ...prev,
+    ]);
     trigger("success", `Imported ${validRows.length} laptops into ${normalizedLot}`);
     setActiveStep(1);
     setRawRows([]);
@@ -443,6 +513,31 @@ export function ReceivingImportLot() {
             </p>
           ))}
         </div>
+      </div>
+
+      <div className="glass-card p-4 border border-cyan-500/20 bg-cyan-500/5">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-bold text-cyan-200" style={{ fontFamily: "Rajdhani" }}>
+            Recent import jobs
+          </p>
+          <span className="text-[10px] text-cyan-400/70">Stored locally for audit rehearsal</span>
+        </div>
+        {importHistory.length === 0 ? (
+          <p className="text-xs text-cyan-300/50">No import jobs logged yet.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {importHistory.slice(0, 5).map((job) => (
+              <div key={job.id} className="text-xs text-cyan-100/80 flex flex-wrap items-center gap-2">
+                <span className="font-bold">{job.id}</span>
+                <span>• Lot {job.lot}</span>
+                <span>
+                  • {job.validRows}/{job.totalRows} valid
+                </span>
+                <span>• {job.fileName}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {activeStep === 1 && (

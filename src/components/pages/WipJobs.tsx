@@ -58,7 +58,7 @@ export function WipJobs() {
   const [replaceDestination, setReplaceDestination] =
     useState<(typeof REPLACEMENT_DESTINATIONS)[number]>("Harvest QA Bin");
   const { enqueue } = useOfflineQueue();
-  const laborTimer = useLaborTimer();
+  const laborTimer = useLaborTimer("tahir.wipLaborTimer.startedAt");
   const { trigger } = useUiActionFeedback();
 
   const filtered = useMemo(() => {
@@ -114,6 +114,18 @@ export function WipJobs() {
     const merged = Array.from(new Set([...userOptions, "Supervisor"])).filter((name) => name.trim().length > 0);
     return merged.sort((a, b) => a.localeCompare(b));
   }, [userOptions]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedTech = window.localStorage.getItem("tahir.wipLaborTimer.tech");
+    if (savedTech) setAddLaborTech(savedTech);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (addLaborTech.trim()) window.localStorage.setItem("tahir.wipLaborTimer.tech", addLaborTech.trim());
+    else window.localStorage.removeItem("tahir.wipLaborTimer.tech");
+  }, [addLaborTech]);
 
   useEffect(() => {
     if (!laborUserOptions.includes(laborApprover)) {
