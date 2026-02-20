@@ -17,7 +17,7 @@ import { computeWipLaborDrilldown, laborDrilldownToCsv } from "@/utils/wipLaborD
 import { computeTrackProductivityTrends } from "@/utils/wipTrackTrend";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
 import { exportCsv } from "@/utils/exporters";
-import { classifyWipAgingRisk, compareWipBySlaRisk, formatWipSlaDelta, getWipAgingDays, getWipSlaRiskDeltaDays } from "@/utils/wipAging";
+import { classifyWipAgingRisk, compareWipBySlaRisk, formatWipSlaDelta, getWipAgingDays, getWipSlaDeltaState, getWipSlaRiskDeltaDays } from "@/utils/wipAging";
 import { fetchAuthUsers } from "@/utils/javaAuth";
 
 const priorityColors: Record<string, string> = {
@@ -44,6 +44,7 @@ export function WipJobs() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [slaRiskFilter, setSlaRiskFilter] = useState<"All" | "Healthy" | "Watch" | "Risk">("All");
+  const [slaDeltaFilter, setSlaDeltaFilter] = useState<"All" | "DueToday" | "Overdue">("All");
   const [prioritizeSlaRisk, setPrioritizeSlaRisk] = useState(true);
   const deferredSearch = useDeferredValue(search);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -83,11 +84,14 @@ export function WipJobs() {
     if (slaRiskFilter !== "All") {
       data = data.filter((w) => classifyWipAgingRisk(w.opened, w.status) === slaRiskFilter);
     }
+    if (slaDeltaFilter !== "All") {
+      data = data.filter((w) => getWipSlaDeltaState(w.opened, w.status) === slaDeltaFilter);
+    }
     if (prioritizeSlaRisk) {
       data = [...data].sort((a, b) => compareWipBySlaRisk(a, b));
     }
     return data;
-  }, [deferredSearch, state.wipJobs, statusFilter, slaRiskFilter, prioritizeSlaRisk]);
+  }, [deferredSearch, state.wipJobs, statusFilter, slaRiskFilter, slaDeltaFilter, prioritizeSlaRisk]);
 
   useEffect(() => {
     if (filtered.length === 0) {
@@ -153,7 +157,11 @@ export function WipJobs() {
   }, [addLaborTech, laborApprover, laborUserOptions]);
 
   const hasActiveFilters =
-    search.trim().length > 0 || statusFilter !== "All" || slaRiskFilter !== "All" || !prioritizeSlaRisk;
+    search.trim().length > 0 ||
+    statusFilter !== "All" ||
+    slaRiskFilter !== "All" ||
+    slaDeltaFilter !== "All" ||
+    !prioritizeSlaRisk;
 
   const dashboardMetrics = useMemo(() => {
     const jobs = state.wipJobs;
@@ -170,7 +178,8 @@ export function WipJobs() {
       },
       { Healthy: 0, Watch: 0, Risk: 0 },
     );
-    const slaDueToday = jobs.filter((job) => getWipSlaRiskDeltaDays(job.opened, job.status) === 0).length;
+    const slaDueToday = jobs.filter((job) => getWipSlaDeltaState(job.opened, job.status) === "DueToday").length;
+    const slaOverdue = jobs.filter((job) => getWipSlaDeltaState(job.opened, job.status) === "Overdue").length;
     const qualityAnalytics = computeWipQualityAnalytics(jobs);
     const laborEfficiency = computeWipLaborEfficiency(jobs);
     const productivityTop = computeTechnicianProductivityByTrack(jobs).slice(0, 5);
@@ -185,6 +194,7 @@ export function WipJobs() {
       totalPartsCost,
       riskCounts,
       slaDueToday,
+      slaOverdue,
       qualityAnalytics,
       laborEfficiency,
       productivityTop,
@@ -201,6 +211,7 @@ export function WipJobs() {
     totalPartsCost,
     riskCounts,
     slaDueToday,
+    slaOverdue,
     qualityAnalytics,
     laborEfficiency,
     productivityTop,
@@ -487,6 +498,7 @@ export function WipJobs() {
         <KpiCard label="SLA Watch" value={riskCounts.Watch} tone="yellow" icon="⚠️" />
         <KpiCard label="SLA Risk" value={riskCounts.Risk} tone="red" icon="🚨" />
         <KpiCard label="Risk Due Today" value={slaDueToday} tone="magenta" icon="📍" />
+        <KpiCard label="SLA Overdue" value={slaOverdue} tone="red" icon="⛔" />
         <KpiCard label="Completed Jobs" value={completedCount} tone="green" icon="✓" />
         <KpiCard label="Total Parts Cost" value={`AED ${totalPartsCost.toFixed(2)}`} tone="magenta" icon="◈" />
         <KpiCard label="Ready to Complete" value={qualityAnalytics.readyToComplete} tone="green" icon="◎" />
@@ -632,6 +644,15 @@ export function WipJobs() {
             <option value="Watch">Watch</option>
             <option value="Healthy">Healthy</option>
           </select>
+          <select
+            value={slaDeltaFilter}
+            onChange={(e) => setSlaDeltaFilter(e.target.value as "All" | "DueToday" | "Overdue")}
+            className="px-3 py-2 rounded-lg text-sm min-w-[140px]"
+          >
+            <option value="All">All SLA Δ</option>
+            <option value="DueToday">Due Today</option>
+            <option value="Overdue">Overdue</option>
+          </select>
           <label className="inline-flex items-center gap-2 text-xs text-cyan-300/70 px-2">
             <input
               type="checkbox"
@@ -647,6 +668,7 @@ export function WipJobs() {
               setSearch("");
               setStatusFilter("All");
               setSlaRiskFilter("All");
+              setSlaDeltaFilter("All");
               setPrioritizeSlaRisk(true);
             }}
           >

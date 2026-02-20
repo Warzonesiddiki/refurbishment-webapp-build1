@@ -1,4 +1,5 @@
 export type WipAgingRisk = "Healthy" | "Watch" | "Risk";
+export type WipSlaDeltaState = "Done" | "Ahead" | "DueToday" | "Overdue";
 
 const SLA_WATCH_DAYS = 3;
 const SLA_RISK_DAYS = 5;
@@ -46,6 +47,14 @@ export function formatWipSlaDelta(opened: string, status: string, now = new Date
   if (delta > 0) return `D-${delta}`;
   if (delta === 0) return "D-Day";
   return `D+${Math.abs(delta)}`;
+}
+
+export function getWipSlaDeltaState(opened: string, status: string, now = new Date()): WipSlaDeltaState {
+  const delta = getWipSlaRiskDeltaDays(opened, status, now);
+  if (delta === null) return "Done";
+  if (delta > 0) return "Ahead";
+  if (delta === 0) return "DueToday";
+  return "Overdue";
 }
 
 export function getWipAgingRiskRank(risk: WipAgingRisk) {
