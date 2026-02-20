@@ -197,6 +197,44 @@ To support higher-quality receiving operations, V4 must include an expanded **Im
 - `PRICE`, `BRAND`, `MODEL`, and spec fields must be available for prioritization and disposition decisions.
 - `SOLD` state must hard-block unintended WIP entry for already sold assets.
 
+#### Overall Project Data Usage (Cross-Project Impact)
+
+Receiving import mapping is a **project-wide canonical intake contract**. The imported fields are not only for receiving screens; they must propagate across the entire project data model and operational flows.
+
+**Required downstream usage across the project:**
+
+1. **Inventory master record**
+   - Canonical spec profile (CPU/SPEED/RAM/Mem Type/HDD/HDD Type/SCREEN/RESOLUTION) must be stored once and reused everywhere.
+   - Identity fields (`LOT`, `ASSET`, `PALLET`, `SERIAL`) must remain queryable for traceability and audits.
+
+2. **WIP orchestration and queue policies**
+   - `CLASS`, `GRADE`, `COSMETIC`, `FUNCTIONAL`, `RSL`, and parts/accessory indicators (`AC`, `Keyboard`, `WEBCAM`, `COA`) must drive queue placement and checklists.
+   - Stage-level validation should compare observed test outcomes vs imported baseline fields.
+
+3. **Quality and reconciliation**
+   - Receiving values become baseline truth for discrepancy checks during WIP and cycle counts.
+   - Variance events must include both imported baseline and latest observed values.
+
+4. **Disposition and pricing readiness**
+   - `PRICE`, `GRADE`, spec fields, and `SOLD` must be part of disposition eligibility and pricing guardrails.
+   - `SOLD` status must block duplicate lifecycle entry and trigger exception workflow if conflicting state is detected.
+
+5. **Reporting and KPI layer**
+   - Intake completeness, mapping error rates, and field-level null rates must be tracked as operational KPIs.
+   - WIP throughput/aging analytics must segment by imported `CLASS`, `GRADE`, and spec cohorts.
+
+6. **API/event contracts**
+   - Import pipeline must emit standardized events containing canonical mapped fields.
+   - Downstream services must consume canonical field names only (no raw source headers in internal contracts).
+
+#### Overall Project Implementation Effects (Required)
+
+- Introduce a canonical **ReceivingImport DTO/schema** shared by import API, validation engine, inventory persistence, and WIP initializer.
+- Add data lineage metadata (`importJobId`, source row number, source file hash, importedAt, importedBy) to inventory records/events.
+- Enforce compatibility policy for mapping evolution (new source columns allowed, canonical field removals forbidden without migration plan).
+- Add project-wide dashboards for import health (success rate, reject reasons, dedupe conflicts, missing required fields).
+- Add regression test coverage for mapping correctness and end-to-end propagation into inventory and WIP states.
+
 ## 5.2 Quality & Classification Automation
 
 - Rule engine for grading consistency.
