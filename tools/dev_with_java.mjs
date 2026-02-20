@@ -94,7 +94,7 @@ if (!javaHealthy) {
   process.exit(1);
 }
 
-const webScript = lanMode ? 'dev:lan' : 'dev';
+const webScript = lanMode ? 'dev:lan:web' : 'dev:web';
 const webProc = startProcess(npmCmd, ['run', webScript], 'vite dev server');
 if (!webProc) {
   javaProc.kill('SIGTERM');

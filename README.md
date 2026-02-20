@@ -80,10 +80,11 @@ Useful bash options:
 npm run dev
 ```
 
-If login shows network errors because the Java API is not running, start both together:
+`npm run dev` now starts both Java API + frontend automatically.
+If you only need frontend, run:
 
 ```bash
-npm run dev:with-java
+npm run dev:web
 ```
 
 ### Building
@@ -100,10 +101,11 @@ Run the dev server bound to all interfaces:
 npm run dev:lan
 ```
 
-Or run LAN frontend + Java API together:
+`npm run dev:lan` now starts Java API + LAN frontend automatically.
+If you only need LAN frontend, run:
 
 ```bash
-npm run dev:lan:with-java
+npm run dev:lan:web
 ```
 
 Then open from another device using your computer IP, for example:

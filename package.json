@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --strictPort",
+    "dev": "node tools/dev_with_java.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview --host 0.0.0.0 --strictPort",
     "launcher": "python tools/local_launcher_gui.py || python3 tools/local_launcher_gui.py",
@@ -32,7 +32,7 @@
     "release:dry": "standard-version --dry-run",
     "start:local": "npm run build && npm run preview",
     "serve:java": "java -jar server/tahir-erp-server.jar",
-    "dev:lan": "vite --host 0.0.0.0 --port 5173 --strictPort",
+    "dev:lan": "node tools/dev_with_java.mjs --lan",
     "preview:lan": "vite preview --host 0.0.0.0 --port 4173 --strictPort",
     "serve:lan": "npm run dev:lan",
     "build:pwa": "npm run build && npm run preview:lan",
@@ -47,7 +47,9 @@
     "dev:with-java": "node tools/dev_with_java.mjs",
     "dev:lan:with-java": "node tools/dev_with_java.mjs --lan",
     "deps:install": "npm install --legacy-peer-deps --no-audit --no-fund",
-    "deps:ci": "npm ci --legacy-peer-deps --no-audit --no-fund"
+    "deps:ci": "npm ci --legacy-peer-deps --no-audit --no-fund",
+    "dev:web": "vite --host 0.0.0.0 --strictPort",
+    "dev:lan:web": "vite --host 0.0.0.0 --port 5173 --strictPort"
   },
   "dependencies": {
     "clsx": "2.1.1",
