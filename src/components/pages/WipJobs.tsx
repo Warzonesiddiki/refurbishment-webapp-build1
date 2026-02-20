@@ -45,6 +45,12 @@ type QuickSlaFocusOption = {
   title: string;
 };
 
+const quickSlaToneByValue: Record<QuickSlaFocusOption["value"], string> = {
+  DueToday: "border-fuchsia-400/60 text-fuchsia-200 bg-fuchsia-500/10",
+  Overdue: "border-red-400/60 text-red-200 bg-red-500/10",
+  All: "border-cyan-300/50 text-cyan-100 bg-cyan-500/10",
+};
+
 export function WipJobs() {
   const state = useAppState();
   const dispatch = useDispatch();
@@ -728,19 +734,15 @@ export function WipJobs() {
             const isActive =
               (option.value === "All" && slaDeltaFilter === "All") ||
               (option.value !== "All" && slaDeltaFilter === option.value);
-            const toneClass =
-              option.value === "DueToday"
-                ? "border-fuchsia-400/60 text-fuchsia-200 bg-fuchsia-500/10"
-                : option.value === "Overdue"
-                  ? "border-red-400/60 text-red-200 bg-red-500/10"
-                  : "border-cyan-300/50 text-cyan-100 bg-cyan-500/10";
+            const isDisabled = option.value !== "All" && option.count === 0;
             return (
               <button
                 key={option.value}
-                className={`px-2 py-1 rounded border ${isActive ? toneClass : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
+                className={`px-2 py-1 rounded border ${isActive ? quickSlaToneByValue[option.value] : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"} ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
                 type="button"
                 aria-pressed={isActive}
-                title={option.title}
+                disabled={isDisabled}
+                title={isDisabled ? `${option.label} currently has no jobs` : option.title}
                 onClick={() => applySlaQuickFocus(option.value)}
               >
                 {option.label} ({option.count})
