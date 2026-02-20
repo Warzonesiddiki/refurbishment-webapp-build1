@@ -224,6 +224,9 @@ export function WipJobs() {
     if (next !== "All") setPrioritizeSlaRisk(true);
   };
 
+  const slaQuickFocusLabel =
+    slaDeltaFilter === "DueToday" ? "Due Today" : slaDeltaFilter === "Overdue" ? "Overdue" : "All SLA States";
+
   const openJobDetails = (job: (typeof state.wipJobs)[number]) => {
     setSelectedJobId(job.id);
     setDiagNotes(job.diagnosisNotes);
@@ -684,7 +687,12 @@ export function WipJobs() {
           Showing {filtered.length} of {state.wipJobs.length} jobs
           {hasActiveFilters ? " (filtered)" : ""}
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]" style={{ fontFamily: "var(--font-mono)" }}>
+        <div
+          className="mt-3 flex flex-wrap items-center gap-2 text-[11px]"
+          style={{ fontFamily: "var(--font-mono)" }}
+          role="group"
+          aria-label="Quick SLA focus"
+        >
           <span className="text-cyan-500/45">Quick SLA focus:</span>
           <button
             className={`px-2 py-1 rounded border ${slaDeltaFilter === "DueToday" ? "border-fuchsia-400/60 text-fuchsia-200 bg-fuchsia-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
@@ -714,6 +722,9 @@ export function WipJobs() {
             All SLA States ({state.wipJobs.length})
           </button>
         </div>
+        <p className="text-[11px] text-cyan-400/50" aria-live="polite">
+          Active quick focus: {slaQuickFocusLabel}
+        </p>
       </div>
 
       {showCreate && (
