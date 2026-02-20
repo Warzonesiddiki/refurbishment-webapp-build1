@@ -10,15 +10,37 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "java_server" / "out"
 SRC_DIR = ROOT / "java_server" / "src"
+POM_FILE = ROOT / "java_server" / "pom.xml"
 
 
 def main() -> int:
     port = sys.argv[1] if len(sys.argv) > 1 else "8085"
 
+    env = os.environ.copy()
+    env.setdefault("TAHIR_ENABLE_SEEDED_USERS", "true")
+
+    mvn = shutil.which("mvn")
+    if mvn and POM_FILE.exists():
+        run_proc = subprocess.run(
+            [
+                mvn,
+                "-q",
+                "-f",
+                str(POM_FILE),
+                "-DskipTests",
+                "compile",
+                "exec:java",
+                f"-Dexec.args={port}",
+            ],
+            cwd=ROOT,
+            env=env,
+        )
+        return run_proc.returncode
+
     javac = shutil.which("javac")
     java = shutil.which("java")
     if not javac or not java:
-        print("Java tooling missing: both 'javac' and 'java' are required.", file=sys.stderr)
+        print("Java tooling missing: either Maven (`mvn`) or both `javac` and `java` are required.", file=sys.stderr)
         return 1
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -34,8 +56,6 @@ def main() -> int:
     if compile_proc.returncode != 0:
         return compile_proc.returncode
 
-    env = os.environ.copy()
-    env.setdefault("TAHIR_ENABLE_SEEDED_USERS", "true")
     run_proc = subprocess.run([java, "-cp", str(OUT_DIR), "com.tahir.server.Main", port], cwd=ROOT, env=env)
     return run_proc.returncode
 
