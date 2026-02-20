@@ -88,3 +88,54 @@ export function extractReceivingCanonicalFields(row: ImportRow): ReceivingCanoni
 export function isSoldLike(value: string) {
   return /^(1|true|yes|y|sold)$/i.test((value || "").trim());
 }
+
+function hasIdentity(canonical: ReceivingCanonicalFields) {
+  return Boolean(canonical.assetTag.trim() || canonical.serialNumber.trim());
+}
+
+export function validateReceivingCanonicalFields(canonical: ReceivingCanonicalFields): string[] {
+  const errors: string[] = [];
+  if (!canonical.lotId.trim()) errors.push("Missing LOT");
+  if (!hasIdentity(canonical)) errors.push("Missing ASSET or SERIAL");
+
+  const maybePrice = canonical.purchasePrice.trim();
+  if (maybePrice) {
+    const normalized = maybePrice.replace(/,/g, "");
+    if (!Number.isFinite(Number(normalized))) {
+      errors.push("Invalid PRICE");
+    }
+  }
+
+  if (isSoldLike(canonical.soldFlag)) {
+    errors.push("Row marked as SOLD");
+  }
+
+  return errors;
+}
+
+export function invalidImportRowsToCsv(
+  rows: Array<{ barcode: string; model: string; error: string; canonical: Record<string, string> }>,
+) {
+  const headers = ["barcode", "model", "error", "lotId", "assetTag", "serialNumber", "soldFlag", "purchasePrice"];
+  const escaped = (v: string) => {
+    const value = String(v ?? "");
+    if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+    return value;
+  };
+
+  const lines = [headers.join(",")];
+  rows.forEach((row) => {
+    const values = [
+      row.barcode,
+      row.model,
+      row.error,
+      row.canonical.lotId || "",
+      row.canonical.assetTag || "",
+      row.canonical.serialNumber || "",
+      row.canonical.soldFlag || "",
+      row.canonical.purchasePrice || "",
+    ];
+    lines.push(values.map(escaped).join(","));
+  });
+  return lines.join("\n");
+}

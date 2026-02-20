@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { extractReceivingCanonicalFields, isSoldLike } from "@/utils/receivingImport";
+import {
+  extractReceivingCanonicalFields,
+  invalidImportRowsToCsv,
+  isSoldLike,
+  validateReceivingCanonicalFields,
+} from "@/utils/receivingImport";
 
 describe("receiving import canonical mapping", () => {
   it("maps requested receiving columns to canonical fields", () => {
@@ -46,5 +51,36 @@ describe("receiving import canonical mapping", () => {
     expect(isSoldLike("yes")).toBe(true);
     expect(isSoldLike("1")).toBe(true);
     expect(isSoldLike("no")).toBe(false);
+  });
+
+  it("validates required identity and lot fields", () => {
+    const errors = validateReceivingCanonicalFields(
+      extractReceivingCanonicalFields({ CLASS: "Laptop", SOLD: "No", PRICE: "abc" }),
+    );
+
+    expect(errors).toContain("Missing LOT");
+    expect(errors).toContain("Missing ASSET or SERIAL");
+    expect(errors).toContain("Invalid PRICE");
+  });
+
+  it("builds invalid-row csv export payload", () => {
+    const csv = invalidImportRowsToCsv([
+      {
+        barcode: "",
+        model: "Latitude",
+        error: "Missing ASSET or SERIAL",
+        canonical: {
+          lotId: "LOT-9",
+          assetTag: "",
+          serialNumber: "",
+          soldFlag: "No",
+          purchasePrice: "100",
+        },
+      },
+    ]);
+
+    expect(csv).toContain("barcode,model,error,lotId,assetTag,serialNumber,soldFlag,purchasePrice");
+    expect(csv).toContain("LOT-9");
+    expect(csv).toContain("Missing ASSET or SERIAL");
   });
 });

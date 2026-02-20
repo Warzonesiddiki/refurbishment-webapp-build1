@@ -2,7 +2,12 @@ import { useMemo, useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { useIdempotentAction } from "@/hooks/useIdempotentAction";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
-import { extractReceivingCanonicalFields, isSoldLike, type ImportRow } from "@/utils/receivingImport";
+import {
+  extractReceivingCanonicalFields,
+  invalidImportRowsToCsv,
+  validateReceivingCanonicalFields,
+  type ImportRow,
+} from "@/utils/receivingImport";
 
 const steps = [
   { num: 1, label: "Lot Details", icon: "◈" },
@@ -220,9 +225,10 @@ export function ReceivingImportLot() {
           ? "GPU"
           : defaultGraphicsType;
 
+      const canonicalErrors = validateReceivingCanonicalFields(canonical);
       let error = "";
       if (!barcode || !brand || !model) error = "Missing required fields";
-      else if (isSoldLike(canonical.soldFlag)) error = "Row marked as SOLD";
+      else if (canonicalErrors.length > 0) error = canonicalErrors[0];
       else if (existing.has(normalized)) error = "Barcode already exists";
       else if (seen.has(normalized)) error = "Duplicate barcode in file";
 
@@ -298,6 +304,23 @@ export function ReceivingImportLot() {
   const handleFile = (file: File) => {
     setFileName(file.name);
     file.text().then((text) => setRawRows(parseCsv(text)));
+  };
+
+  const exportInvalidRows = () => {
+    const bad = previewRows.filter((row) => row.error);
+    if (bad.length === 0) {
+      trigger("warn", "No invalid rows to export");
+      return;
+    }
+    const csv = invalidImportRowsToCsv(bad);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `receiving-import-errors-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    trigger("success", `Exported ${bad.length} invalid row(s)`);
   };
 
   const handleCommit = () => {
@@ -610,9 +633,14 @@ export function ReceivingImportLot() {
               ))}
             </tbody>
           </table>
-          <p className="text-xs text-cyan-400/50 mt-3">
-            Valid: {validRows.length} / {previewRows.length}
-          </p>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="text-xs text-cyan-400/50">
+              Valid: {validRows.length} / {previewRows.length}
+            </p>
+            <button type="button" className="btn-ghost" onClick={exportInvalidRows}>
+              Export Invalid Rows CSV
+            </button>
+          </div>
           <div className="flex justify-between mt-6">
             <button className="btn-ghost" onClick={() => setActiveStep(3)}>
               ← Back
