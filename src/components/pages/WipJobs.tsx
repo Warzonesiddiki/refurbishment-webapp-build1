@@ -690,6 +690,7 @@ export function WipJobs() {
             className={`px-2 py-1 rounded border ${slaDeltaFilter === "DueToday" ? "border-fuchsia-400/60 text-fuchsia-200 bg-fuchsia-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
             type="button"
             aria-pressed={slaDeltaFilter === "DueToday"}
+            title="Show jobs that reach SLA risk today"
             onClick={() => applySlaQuickFocus("DueToday")}
           >
             Due Today ({slaDueToday})
@@ -698,6 +699,7 @@ export function WipJobs() {
             className={`px-2 py-1 rounded border ${slaDeltaFilter === "Overdue" ? "border-red-400/60 text-red-200 bg-red-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
             type="button"
             aria-pressed={slaDeltaFilter === "Overdue"}
+            title="Show jobs already over SLA risk threshold"
             onClick={() => applySlaQuickFocus("Overdue")}
           >
             Overdue ({slaOverdue})
@@ -706,17 +708,19 @@ export function WipJobs() {
             className={`px-2 py-1 rounded border ${slaDeltaFilter === "All" ? "border-cyan-300/50 text-cyan-100 bg-cyan-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
             type="button"
             aria-pressed={slaDeltaFilter === "All"}
+            title="Clear SLA delta focus"
             onClick={() => applySlaQuickFocus("All")}
           >
-            All Jobs ({state.wipJobs.length})
+            Clear SLA Δ ({state.wipJobs.length})
           </button>
           <button
             className="px-2 py-1 rounded border border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10 disabled:opacity-40"
             type="button"
             disabled={slaDeltaFilter === "All"}
+            title="Reset quick focus chips to neutral"
             onClick={() => applySlaQuickFocus("All")}
           >
-            Clear Focus
+            Reset Quick Focus
           </button>
         </div>
       </div>
