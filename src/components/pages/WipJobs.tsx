@@ -180,7 +180,6 @@ export function WipJobs() {
     );
     const slaDueToday = jobs.filter((job) => getWipSlaDeltaState(job.opened, job.status) === "DueToday").length;
     const slaOverdue = jobs.filter((job) => getWipSlaDeltaState(job.opened, job.status) === "Overdue").length;
-    const activeSlaJobs = jobs.filter((job) => job.status !== "Completed").length;
     const qualityAnalytics = computeWipQualityAnalytics(jobs);
     const laborEfficiency = computeWipLaborEfficiency(jobs);
     const productivityTop = computeTechnicianProductivityByTrack(jobs).slice(0, 5);
@@ -196,7 +195,6 @@ export function WipJobs() {
       riskCounts,
       slaDueToday,
       slaOverdue,
-      activeSlaJobs,
       qualityAnalytics,
       laborEfficiency,
       productivityTop,
@@ -214,7 +212,6 @@ export function WipJobs() {
     riskCounts,
     slaDueToday,
     slaOverdue,
-    activeSlaJobs,
     qualityAnalytics,
     laborEfficiency,
     productivityTop,
@@ -711,7 +708,7 @@ export function WipJobs() {
             aria-pressed={slaDeltaFilter === "All"}
             onClick={() => applySlaQuickFocus("All")}
           >
-            All Active ({activeSlaJobs})
+            All Jobs ({state.wipJobs.length})
           </button>
           <button
             className="px-2 py-1 rounded border border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10 disabled:opacity-40"
