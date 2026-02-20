@@ -263,6 +263,12 @@ export function WipJobs() {
     [slaDueToday, slaOverdue, state.wipJobs.length],
   );
 
+  const activeQuickSlaFocusCount = useMemo(() => {
+    if (slaDeltaFilter === "DueToday") return slaDueToday;
+    if (slaDeltaFilter === "Overdue") return slaOverdue;
+    return state.wipJobs.length;
+  }, [slaDeltaFilter, slaDueToday, slaOverdue, state.wipJobs.length]);
+
   const openJobDetails = (job: (typeof state.wipJobs)[number]) => {
     setSelectedJobId(job.id);
     setDiagNotes(job.diagnosisNotes);
@@ -754,7 +760,7 @@ export function WipJobs() {
           })}
         </div>
         <p className="text-[11px] text-cyan-400/50" aria-live="polite">
-          Active quick focus: {slaQuickFocusLabel}
+          Active quick focus: {slaQuickFocusLabel} ({activeQuickSlaFocusCount})
         </p>
       </div>
 

@@ -11,6 +11,10 @@ const lanMode = args.includes('--lan');
 const cwd = process.cwd();
 const javaPort = process.env.JAVA_API_PORT || '8085';
 const javaHealthUrl = `http://127.0.0.1:${javaPort}/api/health`;
+const healthTimeoutMs = Number(process.env.DEV_JAVA_HEALTH_TIMEOUT_MS || 20000);
+const healthIntervalMs = Number(process.env.DEV_JAVA_HEALTH_INTERVAL_MS || 500);
+const healthBackoffFactor = Number(process.env.DEV_JAVA_HEALTH_BACKOFF_FACTOR || 1.25);
+const healthMaxIntervalMs = Number(process.env.DEV_JAVA_HEALTH_MAX_INTERVAL_MS || 2000);
 
 function quoteShellArg(value) {
   if (/^[A-Za-z0-9_./:-]+$/.test(value)) return value;
@@ -53,8 +57,9 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForJavaHealth(timeoutMs = 20000) {
+async function waitForJavaHealth(timeoutMs = healthTimeoutMs) {
   const deadline = Date.now() + timeoutMs;
+  let intervalMs = Math.max(100, healthIntervalMs);
   while (Date.now() < deadline) {
     try {
       const res = await fetch(javaHealthUrl);
@@ -62,7 +67,8 @@ async function waitForJavaHealth(timeoutMs = 20000) {
     } catch {
       // retry
     }
-    await sleep(500);
+    await sleep(intervalMs);
+    intervalMs = Math.min(healthMaxIntervalMs, Math.floor(intervalMs * Math.max(1, healthBackoffFactor)));
   }
   return false;
 }
@@ -90,7 +96,7 @@ if (!javaProc) process.exit(1);
 
 const javaHealthy = await waitForJavaHealth();
 if (!javaHealthy) {
-  console.error(`[dev-with-java] Java API did not become healthy at ${javaHealthUrl}.`);
+  console.error(`[dev-with-java] Java API did not become healthy at ${javaHealthUrl} within ${healthTimeoutMs}ms.`);
   javaProc.kill('SIGTERM');
   process.exit(1);
 }
