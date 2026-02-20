@@ -87,6 +87,19 @@ If you only need frontend, run:
 npm run dev:web
 ```
 
+Java server launch options:
+
+```bash
+# Prefer Maven Java server launch (default when mvn is installed)
+npm run java:server:mvn
+
+# Force legacy javac/java launch path
+npm run java:server:javac
+
+# Force build-tool behavior for launcher scripts (auto|javac)
+export TAHIR_JAVA_BUILD_TOOL=javac
+```
+
 ### Building
 
 ```bash

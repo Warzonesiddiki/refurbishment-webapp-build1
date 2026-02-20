@@ -69,3 +69,15 @@ python3 tools/local_launcher_gui.py
 - Java API health default: `http://<server-ip>:8085/api/health`
 
 - Ops core button executes `npm run check:core-areas` for critical Inventory/Parts + WIP regression coverage.
+
+
+## Java build-tool override
+
+- By default, launcher/server scripts prefer **Maven** when `mvn` is available and fallback to `javac/java`.
+- To force legacy compilation/run path, set environment variable:
+
+```bash
+export TAHIR_JAVA_BUILD_TOOL=javac
+```
+
+- Supported values: `auto` (default), `javac`.
