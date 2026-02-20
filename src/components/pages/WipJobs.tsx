@@ -17,7 +17,7 @@ import { computeWipLaborDrilldown, laborDrilldownToCsv } from "@/utils/wipLaborD
 import { computeTrackProductivityTrends } from "@/utils/wipTrackTrend";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
 import { exportCsv } from "@/utils/exporters";
-import { classifyWipAgingRisk, compareWipBySlaRisk, getWipAgingDays, getWipSlaRiskDeltaDays } from "@/utils/wipAging";
+import { classifyWipAgingRisk, compareWipBySlaRisk, formatWipSlaDelta, getWipAgingDays, getWipSlaRiskDeltaDays } from "@/utils/wipAging";
 import { fetchAuthUsers } from "@/utils/javaAuth";
 
 const priorityColors: Record<string, string> = {
@@ -170,6 +170,7 @@ export function WipJobs() {
       },
       { Healthy: 0, Watch: 0, Risk: 0 },
     );
+    const slaDueToday = jobs.filter((job) => getWipSlaRiskDeltaDays(job.opened, job.status) === 0).length;
     const qualityAnalytics = computeWipQualityAnalytics(jobs);
     const laborEfficiency = computeWipLaborEfficiency(jobs);
     const productivityTop = computeTechnicianProductivityByTrack(jobs).slice(0, 5);
@@ -183,6 +184,7 @@ export function WipJobs() {
       completedCount,
       totalPartsCost,
       riskCounts,
+      slaDueToday,
       qualityAnalytics,
       laborEfficiency,
       productivityTop,
@@ -198,6 +200,7 @@ export function WipJobs() {
     completedCount,
     totalPartsCost,
     riskCounts,
+    slaDueToday,
     qualityAnalytics,
     laborEfficiency,
     productivityTop,
@@ -483,6 +486,7 @@ export function WipJobs() {
         <KpiCard label="Awaiting Parts" value={awaitingParts} tone="yellow" icon="⏳" />
         <KpiCard label="SLA Watch" value={riskCounts.Watch} tone="yellow" icon="⚠️" />
         <KpiCard label="SLA Risk" value={riskCounts.Risk} tone="red" icon="🚨" />
+        <KpiCard label="Risk Due Today" value={slaDueToday} tone="magenta" icon="📍" />
         <KpiCard label="Completed Jobs" value={completedCount} tone="green" icon="✓" />
         <KpiCard label="Total Parts Cost" value={`AED ${totalPartsCost.toFixed(2)}`} tone="magenta" icon="◈" />
         <KpiCard label="Ready to Complete" value={qualityAnalytics.readyToComplete} tone="green" icon="◎" />
@@ -727,6 +731,7 @@ export function WipJobs() {
                 <th className="py-3 px-4 text-left">Priority</th>
                 <th className="py-3 px-4 text-left">Status</th>
                 <th className="py-3 px-4 text-left">SLA Risk</th>
+                <th className="py-3 px-4 text-left">SLA Δ</th>
                 <th className="py-3 px-4 text-left">Opened</th>
                 <th className="py-3 px-4 text-left">Actions</th>
               </tr>
@@ -797,6 +802,9 @@ export function WipJobs() {
                       );
                     })()}
                   </td>
+                  <td className="py-3 px-4" style={{ fontFamily: "var(--font-mono)", fontSize: "11px" }}>
+                    <span className="text-cyan-300/70">{formatWipSlaDelta(job.opened, job.status)}</span>
+                  </td>
                   <td
                     className="py-3 px-4 text-cyan-300/30"
                     style={{ fontFamily: "var(--font-mono)", fontSize: "11px" }}
@@ -820,7 +828,7 @@ export function WipJobs() {
               {filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={13}
                     className="py-8 px-4 text-center text-cyan-500/35"
                     style={{ fontFamily: "var(--font-mono)" }}
                   >

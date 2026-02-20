@@ -40,6 +40,14 @@ export function getWipSlaRiskDeltaDays(opened: string, status: string, now = new
   return SLA_RISK_DAYS - getWipAgingDays(opened, now);
 }
 
+export function formatWipSlaDelta(opened: string, status: string, now = new Date()) {
+  const delta = getWipSlaRiskDeltaDays(opened, status, now);
+  if (delta === null) return "Done";
+  if (delta > 0) return `D-${delta}`;
+  if (delta === 0) return "D-Day";
+  return `D+${Math.abs(delta)}`;
+}
+
 export function getWipAgingRiskRank(risk: WipAgingRisk) {
   if (risk === "Risk") return 2;
   if (risk === "Watch") return 1;
