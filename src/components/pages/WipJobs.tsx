@@ -17,6 +17,7 @@ import { computeWipLaborDrilldown, laborDrilldownToCsv } from "@/utils/wipLaborD
 import { computeTrackProductivityTrends } from "@/utils/wipTrackTrend";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
 import { exportCsv } from "@/utils/exporters";
+import { classifyWipAgingRisk, getWipAgingDays } from "@/utils/wipAging";
 import { fetchAuthUsers } from "@/utils/javaAuth";
 
 const priorityColors: Record<string, string> = {
@@ -29,6 +30,12 @@ const statusColors: Record<string, string> = {
   Active: "cyber-badge-cyan",
   "Awaiting Parts": "cyber-badge-yellow",
   Completed: "cyber-badge-green",
+};
+
+const riskColors: Record<string, string> = {
+  Healthy: "cyber-badge-green",
+  Watch: "cyber-badge-yellow",
+  Risk: "cyber-badge-red",
 };
 
 export function WipJobs() {
@@ -406,6 +413,12 @@ export function WipJobs() {
       suggestions.push(`Move stage to ${stages[idx + 1]} using “✓ Complete Status”.`);
     }
 
+    const agingDays = getWipAgingDays(selectedJob.opened);
+    const agingRisk = classifyWipAgingRisk(selectedJob.opened, selectedJob.status);
+    if (agingRisk !== "Healthy") {
+      suggestions.push(`SLA ${agingRisk.toLowerCase()}: job has been open ${agingDays} day(s). Prioritize escalation.`);
+    }
+
     if (completionGate?.canComplete) {
       suggestions.push("Quality gate passed. You can safely click “✓ Complete Job”.");
     } else {
@@ -672,6 +685,7 @@ export function WipJobs() {
                 <th className="py-3 px-4 text-right">Cost</th>
                 <th className="py-3 px-4 text-left">Priority</th>
                 <th className="py-3 px-4 text-left">Status</th>
+                <th className="py-3 px-4 text-left">SLA Risk</th>
                 <th className="py-3 px-4 text-left">Opened</th>
                 <th className="py-3 px-4 text-left">Actions</th>
               </tr>
@@ -722,6 +736,17 @@ export function WipJobs() {
                   <td className="py-3 px-4">
                     <span className={`cyber-chip ${statusColors[job.status] || ""}`}>{job.status}</span>
                   </td>
+                  <td className="py-3 px-4">
+                    {(() => {
+                      const risk = classifyWipAgingRisk(job.opened, job.status);
+                      const days = getWipAgingDays(job.opened);
+                      return (
+                        <span className={`cyber-chip ${riskColors[risk] || ""}`} title={`${days} day(s) open`}>
+                          {risk}
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td
                     className="py-3 px-4 text-cyan-300/30"
                     style={{ fontFamily: "var(--font-mono)", fontSize: "11px" }}
@@ -745,7 +770,7 @@ export function WipJobs() {
               {filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={12}
                     className="py-8 px-4 text-center text-cyan-500/35"
                     style={{ fontFamily: "var(--font-mono)" }}
                   >

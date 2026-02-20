@@ -366,6 +366,51 @@ export function ReceivingImportLot() {
     trigger("success", `Exported ${bad.length} invalid row(s)`);
   };
 
+  const exportImportHistory = () => {
+    if (importHistory.length === 0) {
+      trigger("warn", "No import history to export");
+      return;
+    }
+    const headers = [
+      "jobId",
+      "lot",
+      "supplier",
+      "fileName",
+      "fileHash",
+      "importedAt",
+      "importedBy",
+      "totalRows",
+      "validRows",
+      "invalidRows",
+    ];
+    const lines = [headers.join(",")].concat(
+      importHistory.map((job) =>
+        [
+          job.id,
+          job.lot,
+          job.supplier,
+          job.fileName,
+          job.fileHash,
+          job.importedAt,
+          job.importedBy,
+          String(job.totalRows),
+          String(job.validRows),
+          String(job.invalidRows),
+        ]
+          .map((value) => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value))
+          .join(","),
+      ),
+    );
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `receiving-import-history-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    trigger("success", `Exported ${importHistory.length} import history row(s)`);
+  };
+
   const handleCommit = () => {
     if (!lotNumber.trim()) {
       trigger("error", "Lot number is required");
@@ -520,7 +565,12 @@ export function ReceivingImportLot() {
           <p className="text-xs font-bold text-cyan-200" style={{ fontFamily: "Rajdhani" }}>
             Recent import jobs
           </p>
-          <span className="text-[10px] text-cyan-400/70">Stored locally for audit rehearsal</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-cyan-400/70">Stored locally for audit rehearsal</span>
+            <button type="button" className="btn-ghost" onClick={exportImportHistory}>
+              Export CSV
+            </button>
+          </div>
         </div>
         {importHistory.length === 0 ? (
           <p className="text-xs text-cyan-300/50">No import jobs logged yet.</p>
