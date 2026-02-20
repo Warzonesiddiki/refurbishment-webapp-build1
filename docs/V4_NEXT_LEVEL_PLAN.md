@@ -1,122 +1,392 @@
-# Project V4 — Next-Level Roadmap
+# Refurbishment WebApp V4 — Autonomous Enterprise Platform Blueprint
 
-## Vision
+## 0) Executive Summary
 
-Build **Refurbishment WebApp V4** as a secure, observable, AI-assisted, enterprise-ready platform that supports multi-site operations, offline-first workflows, and high-confidence audits for every business event.
+V4 is not an incremental release. It is a **platform transformation**: from a single-application workflow tool into an **autonomous, policy-driven operations system** for refurbishment, sales, finance, and compliance.
 
-## Strategic Goals
+This blueprint upgrades V4 into a next-generation architecture with:
 
-1. **Platform-grade security** (Zero Trust, strong auth, secure-by-default infrastructure).
-2. **Operational excellence** (SLOs, deep observability, automated incident response).
-3. **Scale and resilience** (modular services, queue-driven workflows, safe deployments).
-4. **Product intelligence** (forecasting, anomaly detection, workflow recommendations).
-5. **Developer velocity** (golden paths, policy automation, fast CI/CD).
+- **Zero-trust identity and policy fabric** (human + machine identities, step-up auth, scoped tokens).
+- **Event-native domain platform** (transactional core + streaming backbone + analytics mesh).
+- **AI copilot and optimization engine** (forecasting, anomaly detection, constrained decisioning).
+- **SRE-grade reliability** (SLO-driven engineering, progressive delivery, automated rollback).
+- **Enterprise governance** (audit evidence pipelines, compliance controls, data residency readiness).
 
-## Architecture (Target State)
+---
 
-- **Frontend**: Vite + React with feature modules, design system tokens, and RUM telemetry.
-- **API Gateway/BFF**: single ingress for auth, rate-limits, request shaping.
-- **Domain services**:
-  - Auth & Identity
-  - Inventory & Refurbishment Workflow
-  - Sales & Fulfillment
-  - Reporting & Analytics
-  - Notification/Automation
-- **Data layer**:
-  - PostgreSQL (OLTP)
-  - Redis (cache/session/rate limiting)
-  - Object storage for snapshots and exports
-  - Event stream (Kafka/NATS) for async integration and audit pipeline
-- **Ops**: containerized workloads, IaC, progressive delivery, and SLO-driven monitoring.
+## 1) North Star Outcomes (3-Year Horizon)
 
-## V4 Capability Pillars
+### Business Outcomes
 
-### 1) Security & Compliance
+- 3x throughput per operator via guided automation and policy-assisted workflows.
+- 50% reduction in refurbishment cycle time via predictive prioritization.
+- 30% margin uplift through dynamic pricing, parts optimization, and risk scoring.
+- 90% faster audit response time via continuous control evidence and immutable trails.
 
-- Migrate from ad-hoc auth flows to **JWT + refresh token rotation** with device/session controls.
-- Add optional **MFA** (TOTP and recovery codes).
-- Enforce **role and policy-based access control** (RBAC + ABAC attributes).
-- Add **secrets management** and key rotation policy.
-- Encrypt sensitive fields at rest; TLS everywhere.
-- Implement immutable **audit trail** for privileged actions.
+### Platform Outcomes
 
-### 2) Reliability & Performance
+- 99.95% availability for mission-critical paths.
+- <200ms p95 read latency on top 20 endpoints.
+- <500ms p95 write latency for core transactional paths.
+- 0 critical security findings aging > 30 days.
+- Deployment lead time < 30 minutes from merge to production (safe progressive rollout).
 
-- Define SLOs (availability, latency, error budget).
-- Introduce **OpenTelemetry** tracing across frontend/API/services.
-- Add circuit breakers, timeouts, retries, and idempotency keys.
-- Build synthetic checks and canary health probes.
-- Optimize hot paths with caching and read models.
+---
 
-### 3) Product Experience
+## 2) Product Scope Expansion (V4 Capabilities)
 
-- Offline-first scanner/sales flows (queued local actions + conflict resolution).
-- Advanced global search (assets, customers, transactions, states).
-- Configurable workflow engine for refurbishment stages.
-- Multi-language and accessibility AA compliance.
+### 2.1 Core Operational Domains
 
-### 4) Data & AI
+1. **Identity & Access Plane**
+   - SSO (OIDC/SAML), MFA, device posture checks, risk-adaptive auth.
+   - RBAC + ABAC + policy engine (OPA/Cedar-style).
 
-- Standardize event schemas and data contracts.
-- Build a warehouse sync for business intelligence.
-- Add ML features:
-  - demand forecasting
-  - margin/risk anomaly detection
-  - next-best-action recommendations
-- Human-in-the-loop controls for high-impact predictions.
+2. **Intake & Refurbishment Orchestration**
+   - Asset intake, diagnostics, triage queues, job routing, technician assignment.
+   - Rule-driven and ML-assisted stage progression.
 
-### 5) Engineering Excellence
+3. **Inventory, Parts, and Procurement Intelligence**
+   - Multi-warehouse state, parts availability graph, vendor SLA scoring.
+   - Automated replenishment suggestions and shortage risk flags.
 
-- Monorepo quality gates: lint, typecheck, tests, security scans, license checks.
-- Contract tests between frontend and services.
+4. **Sales, Pricing, and Fulfillment**
+   - Smart listing generation, dynamic discounting, confidence-based pricing bands.
+   - Omnichannel order sync and dispatch automation.
+
+5. **Finance & Cost Transparency**
+   - Per-unit P&L attribution (parts/labor/shipping/warranty risk).
+   - Forecasted gross margin and variance analytics.
+
+6. **Compliance, Audit, and Governance Hub**
+   - Immutable event timeline and signed approval checkpoints.
+   - Evidence packs for internal/external audits.
+
+### 2.2 Experience-Level Features
+
+- Offline-first mobile scanner and technician workflow with deterministic conflict resolution.
+- Unified global search with semantic retrieval over assets, tickets, invoices, and notes.
+- Multi-language, accessibility-first (WCAG 2.2 AA), and role-personalized dashboards.
+
+---
+
+## 3) Target Architecture (Platform Reference Model)
+
+### 3.1 Topology
+
+- **Edge Layer**: CDN + WAF + bot protection + API rate shaping.
+- **Application Access Layer**: API gateway + BFFs per client surface.
+- **Domain Service Layer** (modular monolith → service decomposition path):
+  - auth-service
+  - workflow-service
+  - inventory-service
+  - pricing-service
+  - order-service
+  - reporting-service
+  - notification-service
+- **Data & Event Layer**:
+  - PostgreSQL (transactional source of truth)
+  - Redis (session/rate-limits/cache)
+  - Object storage (snapshots/documents/evidence)
+  - Event streaming (Kafka/NATS) + schema registry
+  - Warehouse/Lakehouse (BI + ML features)
+- **Intelligence Layer**:
+  - Feature store
+  - model serving
+  - policy-constrained recommender
+- **Platform Ops Layer**:
+  - Kubernetes + GitOps + progressive delivery
+  - Observability stack (metrics/logs/traces/profiles/RUM)
+
+### 3.2 Architectural Principles
+
+- API-first and event-first contracts.
+- Backward compatibility by default.
+- Idempotent writes and retry-safe workflows.
+- PII minimization and field-level security.
+- Every critical action produces an audit-grade event.
+
+---
+
+## 4) Security, Privacy, and Trust Model
+
+### 4.1 Identity and Authentication
+
+- Passwords: PBKDF2/Argon2 with rotation policy and adaptive parameters.
+- JWT access token + rotating refresh token family with replay detection.
+- Optional phishing-resistant MFA (WebAuthn/FIDO2).
+- Session intelligence: impossible travel, device fingerprint drift, geo-velocity anomalies.
+
+### 4.2 Authorization and Policy
+
+- Central policy decision point (PDP) and policy enforcement points (PEP).
+- Fine-grained permissions at resource/field/action levels.
+- Just-in-time elevated privileges with timeboxed approvals.
+
+### 4.3 Data Protection
+
+- Encryption in transit (TLS 1.3) and at rest (KMS-managed keys).
+- Tokenization for sensitive business/customer fields.
+- Data retention and deletion workflows per jurisdiction.
+
+### 4.4 AppSec & Supply Chain
+
+- SAST, DAST, IaC scan, dependency scanning, SBOM generation.
+- Signed artifacts and provenance verification in CI/CD.
+- Runtime threat detection and policy-based pod isolation.
+
+---
+
+## 5) Reliability Engineering (SRE Operating Model)
+
+### 5.1 Service Level Objectives
+
+- Availability SLOs per critical journey:
+  - Login/auth: 99.99%
+  - Inventory reads: 99.95%
+  - Checkout/write path: 99.95%
+- Latency/error budgets tracked and tied to release gates.
+
+### 5.2 Resilience Patterns
+
+- Timeouts, retries with jitter, circuit breakers, bulkheads.
+- Dead-letter queues and replay pipelines.
+- Graceful degradation modes for non-critical dependencies.
+
+### 5.3 Operational Readiness
+
+- Runbooks + game days + incident command model.
+- Automated canary analysis and rollback on SLO breach.
+- Chaos testing for queue, database, and network failure modes.
+
+---
+
+## 6) AI/ML & Decision Intelligence Strategy
+
+### 6.1 V4 Intelligence Modules
+
+1. **Demand Forecasting Engine**
+   - SKU/category-level demand projections with confidence intervals.
+2. **Anomaly Detection Engine**
+   - Margin leakage, fraud patterns, unusual return clusters.
+3. **Workflow Optimization Engine**
+   - Queue prioritization based on SLA breach risk and margin opportunity.
+4. **Pricing Recommendation Engine**
+   - Dynamic price band suggestions with explainability.
+
+### 6.2 Responsible AI Controls
+
+- Human-in-the-loop for high-impact actions.
+- Bias and drift monitoring with rollback thresholds.
+- Explainability logs attached to every recommendation.
+- Governance board approvals for model promotion.
+
+---
+
+## 7) Data Platform and Analytics Mesh
+
+### 7.1 Data Contracts
+
+- Versioned event schemas with compatibility rules.
+- Contract tests on producer/consumer boundaries.
+- Data quality SLAs (freshness, completeness, correctness).
+
+### 7.2 Analytical Surfaces
+
+- Executive KPI cockpit (revenue, margin, cycle time, defect rate).
+- Operations command center (queue health, SLA risk, staffing heatmap).
+- Security command center (auth abuse, lockouts, suspicious sessions).
+
+### 7.3 Digital Twin (Advanced)
+
+- Simulated operational state for “what-if” policy experiments.
+- Sandbox replay of historical streams for strategy testing.
+
+---
+
+## 8) Engineering System (Velocity + Governance)
+
+### 8.1 DevEx Golden Path
+
+- One-command local environment with seeded fixtures.
 - Ephemeral preview environments per PR.
-- Architecture decision records (ADR) and ownership map.
+- Integrated architecture checks and policy-as-code in CI.
 
-## Delivery Plan
+### 8.2 Quality Gates
 
-### Phase 1 (0–6 weeks): Foundation Hardening
+- Lint, typecheck, unit, integration, contract, e2e.
+- Performance regression thresholds and bundle budgets.
+- Security gates blocking release on critical issues.
 
-- Finalize secure auth model and migration plan.
-- Add centralized config validation and secrets handling.
-- Establish observability baseline (logs/metrics/traces).
-- Restore and enforce commit hooks + CI policy checks.
+### 8.3 Documentation and Decision Hygiene
 
-### Phase 2 (6–12 weeks): Modularization & Data Backbone
+- ADR repository with mandatory decision templates.
+- Auto-generated API/event docs from source contracts.
+- Ownership map and escalation matrix per domain.
 
-- Extract domain boundaries behind service interfaces.
-- Introduce event bus and async processors.
-- Add Redis-backed distributed rate limiting/session controls.
-- Launch reporting pipeline with curated metrics.
+---
 
-### Phase 3 (12–20 weeks): AI-Enabled Operations
+## 9) Platformization & Extensibility
 
-- Ship forecasting and anomaly alerts.
-- Add workflow assistant for operators.
-- Build executive KPI cockpit with drill-downs.
+### 9.1 Integration Framework
 
-### Phase 4 (20+ weeks): Enterprise Expansion
+- Event-driven integration SDK (webhooks + stream connectors).
+- Certified connectors for ERP, CRM, shipping, and accounting platforms.
 
-- Multi-tenant capability and regional deployment model.
-- Compliance package (SOC2 readiness controls, evidence automation).
-- Marketplace/integration SDK for partners.
+### 9.2 Internal Developer Platform
 
-## KPIs (V4 Success Metrics)
+- Self-service service templates (API, queue worker, ML endpoint).
+- Standardized observability and security scaffolding.
 
-- 99.95% monthly API availability.
-- p95 API latency < 250ms on core read endpoints.
-- 80% reduction in auth-related incident rate.
-- < 15 minute MTTD and < 60 minute MTTR for P1 incidents.
-- 2x developer deployment frequency with no increase in change-failure rate.
+### 9.3 Plugin/Marketplace Roadmap
 
-## Immediate Backlog (Actionable Next 10)
+- Curated extension marketplace with capability-scoped permissions.
+- Tenant-safe extension execution boundaries.
 
-1. Add auth integration tests for PBKDF2 + legacy hash verification paths.
-2. Add proxy-trust config toggle and tests for spoofed forwarding headers.
-3. Introduce centralized error model and response envelope standard.
-4. Add OpenTelemetry SDK wiring for API and frontend.
-5. Add Redis adapter for sessions/rate limits.
-6. Define event contracts for login, state mutation, and inventory transitions.
-7. Add CI security scans (SAST + dependency audit + secret scanning).
-8. Build a canary deployment workflow.
-9. Add dashboard for login abuse and lockout patterns.
-10. Publish ADR-001..003 for auth, domain boundaries, and observability.
+---
+
+## 10) Delivery Roadmap (Execution Program)
+
+## Wave A (0–8 Weeks): Stabilize + Secure Foundations
+
+- Finalize auth/token/session architecture.
+- Harden proxy trust and rate-limiting invariants.
+- Establish baseline observability and SLO dashboards.
+- Standardize error envelopes and correlation IDs.
+
+### Exit Criteria
+
+- Auth abuse dashboard live.
+- 100% core endpoints instrumented for traces.
+- No unauthenticated critical routes.
+
+## Wave B (8–16 Weeks): Domain Decomposition + Event Backbone
+
+- Introduce event bus and contract registry.
+- Split high-change domains behind service interfaces.
+- Add read-model projections for reporting and search.
+
+### Exit Criteria
+
+- Top 10 domain events schema-registered.
+- Contract tests enforced in CI.
+- First async workflow in production.
+
+## Wave C (16–28 Weeks): Intelligence and Automation
+
+- Launch forecasting + anomaly modules.
+- Ship workflow copilot and recommendation UI.
+- Enable policy-constrained auto-remediation for selected alerts.
+
+### Exit Criteria
+
+- Forecast MAE below agreed threshold.
+- > 25% of queue prioritization decisions assisted by AI.
+
+## Wave D (28–40 Weeks): Enterprise Scale & Governance
+
+- Multi-tenant isolation model and regional deployment profile.
+- Compliance evidence automation (SOC2/ISO control mapping).
+- Partner integration SDK and certification process.
+
+### Exit Criteria
+
+- Regional DR drill meets RTO/RPO targets.
+- Audit evidence generated continuously with minimal manual work.
+
+---
+
+## 11) Quantified KPI Tree (Leading + Lagging)
+
+### Operational KPIs
+
+- Intake-to-ready cycle time (p50/p90).
+- Queue SLA breach probability.
+- First-pass refurbishment success rate.
+
+### Commercial KPIs
+
+- Gross margin per asset class.
+- Dynamic pricing uplift vs baseline.
+- Return/warranty cost ratio.
+
+### Platform KPIs
+
+- Deployment frequency and change failure rate.
+- MTTR, MTTD, and paging load.
+- p95 latency and saturation by service.
+
+### Trust KPIs
+
+- Failed login abuse trends and lockout ratio.
+- Privilege escalation approvals and durations.
+- Open critical vulnerability aging.
+
+---
+
+## 12) Risk Register (Top Risks + Mitigations)
+
+1. **Over-complex decomposition too early**
+   - Mitigation: modular monolith first, extraction by measured hotspots.
+2. **Data contract drift across teams**
+   - Mitigation: schema registry + mandatory contract tests.
+3. **AI recommendations degrade trust**
+   - Mitigation: explainability, guardrails, HITL controls.
+4. **Reliability debt during rapid feature growth**
+   - Mitigation: error-budget release policy.
+5. **Compliance evidence gaps**
+   - Mitigation: automate control telemetry from day one.
+
+---
+
+## 13) Immediate 90-Day Backlog (Prioritized)
+
+### P0 (Must Deliver)
+
+1. Add auth integration tests covering PBKDF2, legacy hash fallback, and migration path.
+2. Add explicit trusted-proxy CIDR config and tests for spoofed header rejection.
+3. Implement standardized API error envelope + trace/correlation propagation.
+4. Add OpenTelemetry in Java API + frontend with shared trace context.
+5. Create SLO dashboards and alerting for login/inventory/checkout paths.
+
+### P1 (High Value)
+
+6. Introduce Redis-backed distributed rate limiting and session metadata.
+7. Add event schema registry and publish first 10 business events.
+8. Build replay-safe queue worker framework with idempotency keys.
+9. Add security scanning pipeline (SAST/DAST/SBOM/secrets).
+
+### P2 (Strategic)
+
+10. Draft ADR set for auth, service boundaries, event contracts, and observability.
+11. Build executive KPI cockpit prototype.
+12. Pilot forecasting model with historical dataset and evaluation baseline.
+
+---
+
+## 14) Investment and Team Topology (Suggested)
+
+- **Platform Team**: infra, developer platform, CI/CD, observability.
+- **Trust Team**: identity, auth, policy, compliance automation.
+- **Operations Team**: workflow, inventory, refurbishment intelligence.
+- **Commercial Team**: pricing, sales, fulfillment, finance analytics.
+- **Data/AI Team**: data contracts, feature store, model lifecycle.
+
+Recommended cadence:
+
+- Quarterly planning with KPI-linked OKRs.
+- Bi-weekly architecture review.
+- Monthly risk/control review with security + operations + product.
+
+---
+
+## 15) Definition of Done for V4 Program
+
+V4 is considered successful when:
+
+1. Security posture is continuously measured and policy-enforced.
+2. Reliability objectives are met without heroics.
+3. AI features demonstrably improve cycle time and margin.
+4. Audit/compliance evidence is generated continuously.
+5. Teams ship faster with lower incident rates.
+
+This roadmap is designed to be ambitious but executable: every major objective is tied to measurable outcomes, staged delivery, and explicit risk controls.
