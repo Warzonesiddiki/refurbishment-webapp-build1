@@ -98,6 +98,11 @@ npm run java:server:javac
 
 # Force build-tool behavior for launcher scripts (auto|javac)
 export TAHIR_JAVA_BUILD_TOOL=javac
+# PowerShell: $env:TAHIR_JAVA_BUILD_TOOL="javac"
+# CMD: set TAHIR_JAVA_BUILD_TOOL=javac
+
+# Or use CLI override (takes precedence over env)
+python tools/run_java_server.py 8085 --build-tool=javac
 ```
 
 ### Building

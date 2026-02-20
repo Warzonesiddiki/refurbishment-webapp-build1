@@ -78,6 +78,9 @@ python3 tools/local_launcher_gui.py
 
 ```bash
 export TAHIR_JAVA_BUILD_TOOL=javac
+# PowerShell: $env:TAHIR_JAVA_BUILD_TOOL="javac"
+# CMD: set TAHIR_JAVA_BUILD_TOOL=javac
 ```
 
 - Supported values: `auto` (default), `javac`.
+- CLI flag `python tools/run_java_server.py <port> --build-tool=...` overrides env var when both are present.
