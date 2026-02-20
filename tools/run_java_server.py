@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import os
 import shutil
 import subprocess
@@ -13,11 +14,21 @@ SRC_DIR = ROOT / "java_server" / "src"
 POM_FILE = ROOT / "java_server" / "pom.xml"
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run Tahir Java server")
+    parser.add_argument("port", nargs="?", default="8085", help="Port to bind Java server")
+    parser.add_argument("--build-tool", choices=["auto", "javac"], help="Override build tool selection")
+    return parser.parse_args()
+
+
 def main() -> int:
-    port = sys.argv[1] if len(sys.argv) > 1 else "8085"
+    args = parse_args()
+    port = args.port
 
     env = os.environ.copy()
     env.setdefault("TAHIR_ENABLE_SEEDED_USERS", "true")
+    if args.build_tool:
+        env["TAHIR_JAVA_BUILD_TOOL"] = args.build_tool
     build_tool = env.get("TAHIR_JAVA_BUILD_TOOL", "auto").strip().lower()
 
     mvn = shutil.which("mvn")

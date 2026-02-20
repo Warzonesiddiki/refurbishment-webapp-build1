@@ -52,7 +52,7 @@
     "dev:lan:web": "vite --host 0.0.0.0 --port 5173 --strictPort",
     "check:sla-wip": "vitest run tests/wipAging.test.ts tests/wipStageTransition.test.ts tests/wipPartReplacement.test.ts tests/wipQualityGate.test.ts tests/integration/wipFlow.test.ts",
     "java:server:mvn": "mvn -q -f java_server/pom.xml -DskipTests compile exec:java -Dexec.args=8085",
-    "java:server:javac": "TAHIR_JAVA_BUILD_TOOL=javac bash tools/run_java_server.sh 8085"
+    "java:server:javac": "python tools/run_java_server.py 8085 --build-tool=javac || python3 tools/run_java_server.py 8085 --build-tool=javac"
   },
   "dependencies": {
     "clsx": "2.1.1",
