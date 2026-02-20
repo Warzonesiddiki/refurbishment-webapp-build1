@@ -572,26 +572,27 @@ public class Main {
 
 
   private static String remoteClientIdentity(HttpExchange exchange) {
-    if (exchange == null) return "unknown";
+    if (exchange == null || exchange.getRemoteAddress() == null) return "unknown";
+    InetAddress remoteAddress = exchange.getRemoteAddress().getAddress();
 
-    // Prefer proxy-forwarded client IP when present so rate limiting remains accurate behind reverse proxies.
-    String forwarded = exchange.getRequestHeaders().getFirst("X-Forwarded-For");
-    if (forwarded != null && !forwarded.isBlank()) {
-      String candidate = forwarded.split(",")[0].trim();
-      if (!candidate.isBlank()) {
-        return candidate;
+    // Security hardening: only trust forwarding headers from loopback/private proxy hops.
+    if (remoteAddress != null && (remoteAddress.isLoopbackAddress() || remoteAddress.isSiteLocalAddress())) {
+      String forwarded = exchange.getRequestHeaders().getFirst("X-Forwarded-For");
+      if (forwarded != null && !forwarded.isBlank()) {
+        String candidate = forwarded.split(",")[0].trim();
+        if (!candidate.isBlank()) {
+          return candidate;
+        }
+      }
+
+      String realIp = exchange.getRequestHeaders().getFirst("X-Real-IP");
+      if (realIp != null && !realIp.isBlank()) {
+        return realIp.trim();
       }
     }
 
-    String realIp = exchange.getRequestHeaders().getFirst("X-Real-IP");
-    if (realIp != null && !realIp.isBlank()) {
-      return realIp.trim();
-    }
-
-    if (exchange.getRemoteAddress() == null) return "unknown";
-    InetAddress address = exchange.getRemoteAddress().getAddress();
-    if (address == null) return String.valueOf(exchange.getRemoteAddress());
-    return address.getHostAddress();
+    if (remoteAddress == null) return String.valueOf(exchange.getRemoteAddress());
+    return remoteAddress.getHostAddress();
   }
 
   private static String ensureRequestId(HttpExchange exchange) {
