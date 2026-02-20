@@ -390,3 +390,145 @@ V4 is considered successful when:
 5. Teams ship faster with lower incident rates.
 
 This roadmap is designed to be ambitious but executable: every major objective is tied to measurable outcomes, staged delivery, and explicit risk controls.
+
+---
+
+## 16) Operating Model 2.0 — Governance, Cadence, and Decision Rights
+
+### 16.1 Program Governance Structure
+
+- **Executive Steering Committee (monthly):** CEO/COO/CTO/CISO-level decision forum for budget, risk acceptance, and strategic scope.
+- **Architecture Review Board (bi-weekly):** approves ADRs, schema changes, and service boundary decisions.
+- **Reliability Council (weekly):** SRE + product + platform review for SLO/error-budget and incident learning.
+- **Trust & Compliance Council (weekly):** policy updates, vulnerability aging review, audit evidence posture.
+
+### 16.2 RACI Snapshot
+
+- **Auth and Policy Fabric:** Trust Team (R), Platform Team (A), Operations Team (C), Commercial Team (I)
+- **Event Contracts and Data Quality:** Data/AI Team (R), Architecture Board (A), Domain Teams (C)
+- **SLO and Incident Program:** Platform Team (R), Reliability Council (A), All domain teams (C)
+- **AI Model Promotion:** Data/AI Team (R), Trust Team (A), Product Leads (C)
+
+### 16.3 Mandatory Decision SLAs
+
+- ADR approval/reject decision within 5 business days.
+- Critical risk acceptance decisions within 48 hours.
+- Emergency architectural waiver auto-expires after 14 days unless ratified.
+
+---
+
+## 17) Delivery Mechanics — Release Trains and Control Gates
+
+### 17.1 Release Train Model
+
+- **Train cadence:** every 2 weeks for standard releases.
+- **Fast lane:** hotfix/security lane with canary + auto-rollback.
+- **Quarterly hardening sprint:** resilience, debt burn-down, incident follow-up closure.
+
+### 17.2 Environment Promotion Policy
+
+1. PR preview environment with contract/e2e smoke checks.
+2. Shared integration environment with synthetic traffic.
+3. Pre-prod with production-like data shape (masked) and canary rehearsal.
+4. Progressive production rollout (1% → 10% → 25% → 100%).
+
+### 17.3 Non-Negotiable Release Gates
+
+- No unresolved critical vulnerabilities.
+- Error-budget health above threshold.
+- Contract compatibility checks all green.
+- Security policy checks and provenance checks passed.
+
+---
+
+## 18) Migration Blueprint — From Current State to V4 Target State
+
+### 18.1 Migration Strategy
+
+- **Strangler pattern** for high-change modules.
+- Keep a **modular monolith core** as control plane while extracting volatile domains.
+- Route traffic via gateway feature flags for incremental cutover.
+
+### 18.2 Sequenced Migration Tracks
+
+1. **Identity Track:** centralized token/session model + policy enforcement points.
+2. **Workflow Track:** event-emitting workflow state transitions and replay-safe processors.
+3. **Data Track:** event schema registry, CDC pipelines, analytics projections.
+4. **Observability Track:** end-to-end traces and service-level dashboards before decomposition.
+
+### 18.3 Backward Compatibility Commitments
+
+- API versioning with deprecation windows.
+- Event schema compatibility rules (backward/forward where required).
+- Dual-write/dual-read windows with verifiable reconciliation.
+
+---
+
+## 19) Financial Model and Capacity Planning
+
+### 19.1 Investment Envelope (Guidance)
+
+- **People:** 5 cross-functional squads + shared platform/security/data enabling teams.
+- **Cloud/platform:** budget for observability, event streaming, and pre-prod parity.
+- **Compliance/security:** dedicated allocation for audit tooling, scanning, and control automation.
+
+### 19.2 Capacity Allocation Policy
+
+- 60% roadmap/value delivery
+- 25% reliability and security hardening
+- 15% engineering productivity and debt retirement
+
+### 19.3 Unit Economics to Track
+
+- Compute cost per processed asset.
+- Incident cost per month (downtime + recovery effort).
+- Automation ROI (manual hours removed).
+
+---
+
+## 20) Enterprise Readiness Pack
+
+### 20.1 Business Continuity and DR
+
+- Active-passive regional failover strategy.
+- Quarterly DR game day with executive sign-off.
+- RPO/RTO targets by domain tier (Tier-0, Tier-1, Tier-2).
+
+### 20.2 Compliance-by-Design Controls
+
+- Continuous control evidence collectors for auth, data access, changes, and incidents.
+- Control mapping matrix (SOC2/ISO27001/NIST) linked to telemetry sources.
+- Auditor self-service evidence portal with immutable event references.
+
+### 20.3 Data Residency and Tenant Isolation
+
+- Tenant-aware encryption domains.
+- Region-bound processing options.
+- Cross-tenant access prevention policy validation tests.
+
+---
+
+## 21) Program Scorecards and Quarterly Exit Rubric
+
+### 21.1 Quarterly Scorecard Template
+
+- **Value:** cycle time, margin uplift, throughput.
+- **Trust:** auth abuse trends, vulnerability aging, policy violations.
+- **Reliability:** SLO attainment, incident frequency, MTTR.
+- **Velocity:** deployment frequency, lead time, CFR.
+- **Intelligence:** forecast accuracy, recommendation adoption, model drift rate.
+
+### 21.2 Exit Rubric (Go / Conditional Go / No-Go)
+
+- **Go:** all P0 objectives complete, no critical risk open, SLO/error budget healthy.
+- **Conditional Go:** limited exceptions with approved mitigation dates.
+- **No-Go:** unresolved trust/reliability risks with customer impact potential.
+
+### 21.3 Program Completion Signal
+
+V4 graduates from program mode to steady-state operations when:
+
+- all tier-0 journeys meet 2 consecutive quarters of SLO targets,
+- control evidence generation is continuous and audit-ready,
+- AI-assisted workflows show sustained ROI without trust regressions,
+- and teams maintain deployment velocity with stable change failure rate.
