@@ -814,9 +814,19 @@ export function appReducer(state: AppState, action: Action): AppState {
       const nextLots = record.lot
         ? state.lots.map((lot) => (lot.lot === record.lot ? recalculateLotCounters(lot.lot, nextLaptops, lot) : lot))
         : state.lots;
+      const importJobId = action.payload.importMeta?.importJobId;
       const logs = appendLogs(
         state,
-        { entityType: "laptop", entityId: record.id, ref: record.barcode, action: "create" },
+        {
+          entityType: "laptop",
+          entityId: record.id,
+          ref: record.barcode,
+          action: "create",
+          from: action.payload.lot ? `RECEIVING:${action.payload.lot}` : "MANUAL_ENTRY",
+          to: "INVENTORY",
+          qty: 1,
+          note: importJobId ? `importJob=${importJobId}` : undefined,
+        },
         {
           entityType: "laptop",
           entityId: record.id,
