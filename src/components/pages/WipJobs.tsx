@@ -226,6 +226,31 @@ export function WipJobs() {
 
   const slaQuickFocusLabel =
     slaDeltaFilter === "DueToday" ? "Due Today" : slaDeltaFilter === "Overdue" ? "Overdue" : "All SLA States";
+  const quickSlaFocusOptions: Array<{
+    value: "DueToday" | "Overdue" | "All";
+    label: string;
+    count: number;
+    title: string;
+  }> = [
+    {
+      value: "DueToday",
+      label: "Due Today",
+      count: slaDueToday,
+      title: "Show jobs that reach SLA risk today",
+    },
+    {
+      value: "Overdue",
+      label: "Overdue",
+      count: slaOverdue,
+      title: "Show jobs already over SLA risk threshold",
+    },
+    {
+      value: "All",
+      label: "All SLA States",
+      count: state.wipJobs.length,
+      title: "Show all SLA delta states",
+    },
+  ];
 
   const openJobDetails = (job: (typeof state.wipJobs)[number]) => {
     setSelectedJobId(job.id);
@@ -694,33 +719,29 @@ export function WipJobs() {
           aria-label="Quick SLA focus"
         >
           <span className="text-cyan-500/45">Quick SLA focus:</span>
-          <button
-            className={`px-2 py-1 rounded border ${slaDeltaFilter === "DueToday" ? "border-fuchsia-400/60 text-fuchsia-200 bg-fuchsia-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
-            type="button"
-            aria-pressed={slaDeltaFilter === "DueToday"}
-            title="Show jobs that reach SLA risk today"
-            onClick={() => applySlaQuickFocus("DueToday")}
-          >
-            Due Today ({slaDueToday})
-          </button>
-          <button
-            className={`px-2 py-1 rounded border ${slaDeltaFilter === "Overdue" ? "border-red-400/60 text-red-200 bg-red-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
-            type="button"
-            aria-pressed={slaDeltaFilter === "Overdue"}
-            title="Show jobs already over SLA risk threshold"
-            onClick={() => applySlaQuickFocus("Overdue")}
-          >
-            Overdue ({slaOverdue})
-          </button>
-          <button
-            className={`px-2 py-1 rounded border ${slaDeltaFilter === "All" ? "border-cyan-300/50 text-cyan-100 bg-cyan-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
-            type="button"
-            aria-pressed={slaDeltaFilter === "All"}
-            title="Show all SLA delta states"
-            onClick={() => applySlaQuickFocus("All")}
-          >
-            All SLA States ({state.wipJobs.length})
-          </button>
+          {quickSlaFocusOptions.map((option) => {
+            const isActive =
+              (option.value === "All" && slaDeltaFilter === "All") ||
+              (option.value !== "All" && slaDeltaFilter === option.value);
+            const toneClass =
+              option.value === "DueToday"
+                ? "border-fuchsia-400/60 text-fuchsia-200 bg-fuchsia-500/10"
+                : option.value === "Overdue"
+                  ? "border-red-400/60 text-red-200 bg-red-500/10"
+                  : "border-cyan-300/50 text-cyan-100 bg-cyan-500/10";
+            return (
+              <button
+                key={option.value}
+                className={`px-2 py-1 rounded border ${isActive ? toneClass : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
+                type="button"
+                aria-pressed={isActive}
+                title={option.title}
+                onClick={() => applySlaQuickFocus(option.value)}
+              >
+                {option.label} ({option.count})
+              </button>
+            );
+          })}
         </div>
         <p className="text-[11px] text-cyan-400/50" aria-live="polite">
           Active quick focus: {slaQuickFocusLabel}
