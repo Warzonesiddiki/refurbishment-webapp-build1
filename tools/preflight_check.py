@@ -46,8 +46,6 @@ def main() -> int:
     base_checks = [
         ("node", True),
         ("npm", True),
-        ("java", args.require_java),
-        ("javac", args.require_java),
         ("git", True),
         ("curl", True),
     ]
@@ -56,6 +54,33 @@ def main() -> int:
         passed, line = check_cmd(cmd, required)
         print(line)
         ok = ok and passed
+
+    if args.require_java:
+        has_maven = command_exists("mvn")
+        has_java = command_exists("java")
+        has_javac = command_exists("javac")
+        has_jdk_toolchain = has_java and has_javac
+
+        if has_maven:
+            print("[OK] maven (mvn)")
+        else:
+            print("[OPTIONAL-MISSING] maven (mvn)")
+
+        if has_jdk_toolchain:
+            print("[OK] java toolchain (java+javac)")
+        else:
+            print("[MISSING] java toolchain (java+javac)")
+
+        if not (has_maven or has_jdk_toolchain):
+            print("[MISSING] Java server build path (need either mvn OR java+javac)")
+            ok = False
+    else:
+        java_passed, java_line = check_cmd("java", required=False)
+        print(java_line)
+        javac_passed, javac_line = check_cmd("javac", required=False)
+        print(javac_line)
+        maven_passed, maven_line = check_cmd("mvn", required=False)
+        print(maven_line)
 
     python_passed, python_line = check_any(["python3", "python"], "python", required=True)
     print(python_line)
