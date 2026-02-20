@@ -38,6 +38,13 @@ const riskColors: Record<string, string> = {
   Risk: "cyber-badge-red",
 };
 
+type QuickSlaFocusOption = {
+  value: "DueToday" | "Overdue" | "All";
+  label: string;
+  count: number;
+  title: string;
+};
+
 export function WipJobs() {
   const state = useAppState();
   const dispatch = useDispatch();
@@ -226,31 +233,29 @@ export function WipJobs() {
 
   const slaQuickFocusLabel =
     slaDeltaFilter === "DueToday" ? "Due Today" : slaDeltaFilter === "Overdue" ? "Overdue" : "All SLA States";
-  const quickSlaFocusOptions: Array<{
-    value: "DueToday" | "Overdue" | "All";
-    label: string;
-    count: number;
-    title: string;
-  }> = [
-    {
-      value: "DueToday",
-      label: "Due Today",
-      count: slaDueToday,
-      title: "Show jobs that reach SLA risk today",
-    },
-    {
-      value: "Overdue",
-      label: "Overdue",
-      count: slaOverdue,
-      title: "Show jobs already over SLA risk threshold",
-    },
-    {
-      value: "All",
-      label: "All SLA States",
-      count: state.wipJobs.length,
-      title: "Show all SLA delta states",
-    },
-  ];
+  const quickSlaFocusOptions = useMemo<QuickSlaFocusOption[]>(
+    () => [
+      {
+        value: "DueToday",
+        label: "Due Today",
+        count: slaDueToday,
+        title: "Show jobs that reach SLA risk today",
+      },
+      {
+        value: "Overdue",
+        label: "Overdue",
+        count: slaOverdue,
+        title: "Show jobs already over SLA risk threshold",
+      },
+      {
+        value: "All",
+        label: "All SLA States",
+        count: state.wipJobs.length,
+        title: "Show all SLA delta states",
+      },
+    ],
+    [slaDueToday, slaOverdue, state.wipJobs.length],
+  );
 
   const openJobDetails = (job: (typeof state.wipJobs)[number]) => {
     setSelectedJobId(job.id);
