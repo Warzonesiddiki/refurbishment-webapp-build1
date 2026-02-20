@@ -146,6 +146,57 @@ Everything else (sales, HR, broad analytics platform, marketplace, etc.) is out-
 - Batch integrity validation.
 - Duplicate serial/asset detection.
 
+### Receiving Import Lot Upgrade (Required in V4)
+
+To support higher-quality receiving operations, V4 must include an expanded **Import Lot** template and mapping engine. This upgrade is mandatory for intake completeness, grading consistency, and downstream WIP routing.
+
+#### Import Schema: Required Column Mapping
+
+| Source Column | V4 Canonical Field    | Purpose                                            |
+| ------------- | --------------------- | -------------------------------------------------- |
+| LOT           | `lotId`               | Receiving lot/batch identifier for traceability.   |
+| CLASS         | `assetClass`          | Inventory class used for routing and reporting.    |
+| ASSET         | `assetTag`            | Internal asset reference/id.                       |
+| PALLET        | `palletId`            | Physical pallet grouping at receiving.             |
+| BRAND         | `brand`               | Manufacturer normalization and grouping.           |
+| MODEL         | `model`               | Model normalization and compatibility rules.       |
+| CPU           | `cpuModel`            | Processing unit descriptor for valuation/workflow. |
+| SPEED         | `cpuSpeed`            | CPU speed attribute used for spec validation.      |
+| RAM           | `ramSize`             | Memory capacity for grading/spec checks.           |
+| Mem Type      | `memoryType`          | DDR generation/type for compatibility checks.      |
+| HDD           | `storageSize`         | Storage capacity attribute.                        |
+| HDD Type      | `storageType`         | HDD/SSD/NVMe classification.                       |
+| OPTICAL       | `opticalDrive`        | Optical drive presence/spec.                       |
+| SCREEN        | `screenSize`          | Display size for product classing.                 |
+| RESOLUTION    | `screenResolution`    | Display resolution for valuation/grading.          |
+| COA           | `coaStatus`           | Certificate/license marker (e.g., OS license).     |
+| WEBCAM        | `webcamStatus`        | Webcam presence/condition indicator.               |
+| Keyboard      | `keyboardStatus`      | Keyboard availability/condition flag.              |
+| COSMETIC      | `cosmeticCondition`   | Cosmetic grading input.                            |
+| FUNCTIONAL    | `functionalCondition` | Functional test result summary.                    |
+| RSL           | `rslCode`             | Internal disposition/routing shorthand.            |
+| GRADE         | `finalGrade`          | Final inventory grade used by WIP rules.           |
+| AC            | `acAdapterStatus`     | Accessory inclusion/condition (adapter).           |
+| SERIAL        | `serialNumber`        | Device serial number (unique identity).            |
+| PRICE         | `purchasePrice`       | Acquisition/valuation baseline.                    |
+| SOLD          | `soldFlag`            | Inventory sale-state indicator.                    |
+
+#### Import Processing Rules
+
+1. **Header aliasing support** for common variations (e.g., `Mem Type` vs `Memory Type`, `Keyboard` vs `KEYBOARD`).
+2. **Strict type validation** for numeric/spec fields (`SPEED`, `RAM`, `HDD`, `PRICE`).
+3. **Required identity fields** (`LOT`, `ASSET` or `SERIAL`) with row-level rejection if missing.
+4. **Deduplication checks** on `SERIAL` + lot context before commit.
+5. **Row-level error report** with source row, failed columns, and remediation guidance.
+6. **Partial import mode**: valid rows commit, invalid rows exported to error file.
+7. **Audit trail**: import job id, uploader, timestamp, source file hash, and row counts.
+
+#### WIP Integration Requirements
+
+- `CLASS`, `GRADE`, `FUNCTIONAL`, `COSMETIC`, and `RSL` must auto-feed initial WIP routing decisions.
+- `PRICE`, `BRAND`, `MODEL`, and spec fields must be available for prioritization and disposition decisions.
+- `SOLD` state must hard-block unintended WIP entry for already sold assets.
+
 ## 5.2 Quality & Classification Automation
 
 - Rule engine for grading consistency.
