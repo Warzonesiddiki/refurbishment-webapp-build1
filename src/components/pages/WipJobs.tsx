@@ -180,6 +180,7 @@ export function WipJobs() {
     );
     const slaDueToday = jobs.filter((job) => getWipSlaDeltaState(job.opened, job.status) === "DueToday").length;
     const slaOverdue = jobs.filter((job) => getWipSlaDeltaState(job.opened, job.status) === "Overdue").length;
+    const activeSlaJobs = jobs.filter((job) => job.status !== "Completed").length;
     const qualityAnalytics = computeWipQualityAnalytics(jobs);
     const laborEfficiency = computeWipLaborEfficiency(jobs);
     const productivityTop = computeTechnicianProductivityByTrack(jobs).slice(0, 5);
@@ -195,6 +196,7 @@ export function WipJobs() {
       riskCounts,
       slaDueToday,
       slaOverdue,
+      activeSlaJobs,
       qualityAnalytics,
       laborEfficiency,
       productivityTop,
@@ -212,6 +214,7 @@ export function WipJobs() {
     riskCounts,
     slaDueToday,
     slaOverdue,
+    activeSlaJobs,
     qualityAnalytics,
     laborEfficiency,
     productivityTop,
@@ -678,6 +681,27 @@ export function WipJobs() {
         <div className="mt-2 text-[11px] text-cyan-500/35" style={{ fontFamily: "var(--font-mono)" }}>
           Showing {filtered.length} of {state.wipJobs.length} jobs
           {hasActiveFilters ? " (filtered)" : ""}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]" style={{ fontFamily: "var(--font-mono)" }}>
+          <span className="text-cyan-500/45">Quick SLA focus:</span>
+          <button
+            className={`px-2 py-1 rounded border ${slaDeltaFilter === "DueToday" ? "border-fuchsia-400/60 text-fuchsia-200 bg-fuchsia-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
+            onClick={() => setSlaDeltaFilter("DueToday")}
+          >
+            Due Today ({slaDueToday})
+          </button>
+          <button
+            className={`px-2 py-1 rounded border ${slaDeltaFilter === "Overdue" ? "border-red-400/60 text-red-200 bg-red-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
+            onClick={() => setSlaDeltaFilter("Overdue")}
+          >
+            Overdue ({slaOverdue})
+          </button>
+          <button
+            className={`px-2 py-1 rounded border ${slaDeltaFilter === "All" ? "border-cyan-300/50 text-cyan-100 bg-cyan-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
+            onClick={() => setSlaDeltaFilter("All")}
+          >
+            All Active ({activeSlaJobs})
+          </button>
         </div>
       </div>
 
