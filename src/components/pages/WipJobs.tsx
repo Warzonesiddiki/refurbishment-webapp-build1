@@ -43,6 +43,7 @@ export function WipJobs() {
   const dispatch = useDispatch();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [slaRiskFilter, setSlaRiskFilter] = useState<"All" | "Healthy" | "Watch" | "Risk">("All");
   const deferredSearch = useDeferredValue(search);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const selectedJob = selectedJobId ? (state.wipJobs.find((w) => w.id === selectedJobId) ?? null) : null;
@@ -78,8 +79,11 @@ export function WipJobs() {
       );
     }
     if (statusFilter !== "All") data = data.filter((w) => w.status === statusFilter);
+    if (slaRiskFilter !== "All") {
+      data = data.filter((w) => classifyWipAgingRisk(w.opened, w.status) === slaRiskFilter);
+    }
     return data;
-  }, [deferredSearch, state.wipJobs, statusFilter]);
+  }, [deferredSearch, state.wipJobs, statusFilter, slaRiskFilter]);
 
   useEffect(() => {
     if (filtered.length === 0) {
@@ -144,7 +148,7 @@ export function WipJobs() {
     }
   }, [addLaborTech, laborApprover, laborUserOptions]);
 
-  const hasActiveFilters = search.trim().length > 0 || statusFilter !== "All";
+  const hasActiveFilters = search.trim().length > 0 || statusFilter !== "All" || slaRiskFilter !== "All";
 
   const dashboardMetrics = useMemo(() => {
     const jobs = state.wipJobs;
@@ -153,6 +157,14 @@ export function WipJobs() {
     const awaitingParts = jobs.filter((w) => w.status === "Awaiting Parts").length;
     const completedCount = jobs.filter((w) => w.status === "Completed").length;
     const totalPartsCost = jobs.reduce((a, w) => a + w.partsCost, 0);
+    const riskCounts = jobs.reduce(
+      (acc, job) => {
+        const risk = classifyWipAgingRisk(job.opened, job.status);
+        acc[risk] += 1;
+        return acc;
+      },
+      { Healthy: 0, Watch: 0, Risk: 0 },
+    );
     const qualityAnalytics = computeWipQualityAnalytics(jobs);
     const laborEfficiency = computeWipLaborEfficiency(jobs);
     const productivityTop = computeTechnicianProductivityByTrack(jobs).slice(0, 5);
@@ -165,6 +177,7 @@ export function WipJobs() {
       awaitingParts,
       completedCount,
       totalPartsCost,
+      riskCounts,
       qualityAnalytics,
       laborEfficiency,
       productivityTop,
@@ -179,6 +192,7 @@ export function WipJobs() {
     awaitingParts,
     completedCount,
     totalPartsCost,
+    riskCounts,
     qualityAnalytics,
     laborEfficiency,
     productivityTop,
@@ -458,10 +472,12 @@ export function WipJobs() {
 
       <SectionHelpHint hint={getPageSectionHint("wipJobs")} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-10 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-12 gap-4">
         <KpiCard label="Active Jobs" value={activeCount} tone="cyan" icon="⬢" />
         <KpiCard label="In Progress" value={inProgressCount} tone="purple" icon="⚙" />
         <KpiCard label="Awaiting Parts" value={awaitingParts} tone="yellow" icon="⏳" />
+        <KpiCard label="SLA Watch" value={riskCounts.Watch} tone="yellow" icon="⚠️" />
+        <KpiCard label="SLA Risk" value={riskCounts.Risk} tone="red" icon="🚨" />
         <KpiCard label="Completed Jobs" value={completedCount} tone="green" icon="✓" />
         <KpiCard label="Total Parts Cost" value={`AED ${totalPartsCost.toFixed(2)}`} tone="magenta" icon="◈" />
         <KpiCard label="Ready to Complete" value={qualityAnalytics.readyToComplete} tone="green" icon="◎" />
@@ -597,12 +613,23 @@ export function WipJobs() {
             <option>Awaiting Parts</option>
             <option>Completed</option>
           </select>
+          <select
+            value={slaRiskFilter}
+            onChange={(e) => setSlaRiskFilter(e.target.value as "All" | "Healthy" | "Watch" | "Risk")}
+            className="px-3 py-2 rounded-lg text-sm min-w-[140px]"
+          >
+            <option value="All">All SLA Risk</option>
+            <option value="Risk">Risk</option>
+            <option value="Watch">Watch</option>
+            <option value="Healthy">Healthy</option>
+          </select>
           <button
             className="btn-ghost text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!hasActiveFilters}
             onClick={() => {
               setSearch("");
               setStatusFilter("All");
+              setSlaRiskFilter("All");
             }}
           >
             ✕ Clear
