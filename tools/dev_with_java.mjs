@@ -73,6 +73,7 @@ if (!existsSync(javaServerScript)) {
   process.exit(1);
 }
 
+// Stability fix: fail fast with clear diagnostics when npm is unavailable.
 if (!hasCommand(npmCmd)) {
   console.error(`[dev-with-java] ${npmCmd} is not available in PATH.`);
   process.exit(1);

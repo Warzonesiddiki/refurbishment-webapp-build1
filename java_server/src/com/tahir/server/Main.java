@@ -13,11 +13,15 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Base64;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -63,6 +67,10 @@ public class Main {
   private static final Map<String, SessionRecord> sessionsByToken = new ConcurrentHashMap<>();
   private static final Map<String, FailedLoginState> failedLoginByPrincipal = new ConcurrentHashMap<>();
   private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+  private static final String PASSWORD_HASH_SCHEME_PBKDF2 = "pbkdf2";
+  private static final int PASSWORD_PBKDF2_ITERATIONS = 120_000;
+  private static final int PASSWORD_SALT_BYTES = 16;
+  private static final int PASSWORD_HASH_BYTES = 32;
   private static final AtomicLong totalRequests = new AtomicLong(0);
   private static final AtomicLong status4xxResponses = new AtomicLong(0);
   private static final AtomicLong status5xxResponses = new AtomicLong(0);
@@ -256,7 +264,7 @@ public class Main {
       UUID.randomUUID().toString(),
       adminEmail,
       "Tahir Admin",
-      sha256(adminPassword),
+      hashPassword(adminPassword),
       Instant.now().toString(),
       "ADMIN"
     );
@@ -283,7 +291,7 @@ public class Main {
         UUID.randomUUID().toString(),
         normalizedEmail,
         "Skyline User " + i,
-        sha256(password),
+        hashPassword(password),
         Instant.now().toString(),
         "USER"
       );
@@ -310,7 +318,7 @@ public class Main {
         continue;
       }
       String password = "user" + i + "skylinein";
-      UserRecord reset = new UserRecord(current.id, current.email, current.fullName, sha256(password), current.createdAt, current.role);
+      UserRecord reset = new UserRecord(current.id, current.email, current.fullName, hashPassword(password), current.createdAt, current.role);
       usersByEmail.put(email, reset);
       updated += 1;
     }
@@ -564,7 +572,23 @@ public class Main {
 
 
   private static String remoteClientIdentity(HttpExchange exchange) {
-    if (exchange == null || exchange.getRemoteAddress() == null) return "unknown";
+    if (exchange == null) return "unknown";
+
+    // Prefer proxy-forwarded client IP when present so rate limiting remains accurate behind reverse proxies.
+    String forwarded = exchange.getRequestHeaders().getFirst("X-Forwarded-For");
+    if (forwarded != null && !forwarded.isBlank()) {
+      String candidate = forwarded.split(",")[0].trim();
+      if (!candidate.isBlank()) {
+        return candidate;
+      }
+    }
+
+    String realIp = exchange.getRequestHeaders().getFirst("X-Real-IP");
+    if (realIp != null && !realIp.isBlank()) {
+      return realIp.trim();
+    }
+
+    if (exchange.getRemoteAddress() == null) return "unknown";
     InetAddress address = exchange.getRemoteAddress().getAddress();
     if (address == null) return String.valueOf(exchange.getRemoteAddress());
     return address.getHostAddress();
@@ -727,6 +751,44 @@ public class Main {
     }
   }
 
+  // Security hardening: prefer PBKDF2 for new/rotated passwords while retaining legacy SHA-256 compatibility.
+  private static String hashPassword(String rawPassword) {
+    try {
+      byte[] salt = new byte[PASSWORD_SALT_BYTES];
+      new SecureRandom().nextBytes(salt);
+      PBEKeySpec spec = new PBEKeySpec(rawPassword.toCharArray(), salt, PASSWORD_PBKDF2_ITERATIONS, PASSWORD_HASH_BYTES * 8);
+      SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+      byte[] hash = factory.generateSecret(spec).getEncoded();
+      return PASSWORD_HASH_SCHEME_PBKDF2 + "$" + PASSWORD_PBKDF2_ITERATIONS + "$" + Base64.getEncoder().encodeToString(salt) + "$" + Base64.getEncoder().encodeToString(hash);
+    } catch (Exception exception) {
+      // Fallback keeps API available even if PBKDF2 provider is unavailable in constrained JREs.
+      return sha256(rawPassword);
+    }
+  }
+
+  private static boolean verifyPassword(String rawPassword, String storedHash) {
+    if (storedHash == null || storedHash.isBlank()) return false;
+
+    if (storedHash.startsWith(PASSWORD_HASH_SCHEME_PBKDF2 + "$")) {
+      try {
+        String[] parts = storedHash.split("\\$");
+        if (parts.length != 4) return false;
+        int iterations = Integer.parseInt(parts[1]);
+        byte[] salt = Base64.getDecoder().decode(parts[2]);
+        byte[] expectedHash = Base64.getDecoder().decode(parts[3]);
+        PBEKeySpec spec = new PBEKeySpec(rawPassword.toCharArray(), salt, iterations, expectedHash.length * 8);
+        SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+        byte[] actualHash = factory.generateSecret(spec).getEncoded();
+        return MessageDigest.isEqual(actualHash, expectedHash);
+      } catch (Exception ignored) {
+        return false;
+      }
+    }
+
+    // Legacy SHA-256 support for previously seeded/stored users.
+    return storedHash.equals(sha256(rawPassword));
+  }
+
   private static int parsePort(String[] args) {
     if (args.length == 0) {
       String envPort = System.getenv("PORT");
@@ -858,7 +920,7 @@ public class Main {
         UUID.randomUUID().toString(),
         email,
         fullName,
-        sha256(password),
+        hashPassword(password),
         Instant.now().toString(),
         "USER"
       );
@@ -893,6 +955,7 @@ public class Main {
       }
       String email = jsonValue(body, "email").toLowerCase();
       String password = jsonValue(body, "password");
+      // Stability fix: rate-limit identity should ignore ephemeral source ports.
       String principal = email + "|" + remoteClientIdentity(exchange);
 
       if (isLoginRateLimited(principal)) {
@@ -902,7 +965,7 @@ public class Main {
       }
 
       UserRecord user = usersByEmail.get(email);
-      if (user == null || !user.passwordHash.equals(sha256(password))) {
+      if (user == null || !verifyPassword(password, user.passwordHash)) {
         registerFailedLogin(principal);
         sendJson(exchange, 401, "{\"error\":\"invalid_credentials\"}");
         return;
@@ -1009,12 +1072,12 @@ public class Main {
       }
 
       UserRecord user = usersByEmail.get(session.email.toLowerCase());
-      if (user == null || !user.passwordHash.equals(sha256(currentPassword))) {
+      if (user == null || !verifyPassword(currentPassword, user.passwordHash)) {
         sendJson(exchange, 401, "{\"error\":\"invalid_credentials\"}");
         return;
       }
 
-      UserRecord updated = new UserRecord(user.id, user.email, user.fullName, sha256(newPassword), user.createdAt, user.role);
+      UserRecord updated = new UserRecord(user.id, user.email, user.fullName, hashPassword(newPassword), user.createdAt, user.role);
       usersByEmail.put(user.email.toLowerCase(), updated);
       rewriteUsersCsv();
 
