@@ -222,6 +222,11 @@ export function WipJobs() {
     trackTrends,
   } = dashboardMetrics;
 
+  const applySlaQuickFocus = (next: "All" | "DueToday" | "Overdue") => {
+    setSlaDeltaFilter(next);
+    if (next !== "All") setPrioritizeSlaRisk(true);
+  };
+
   const openJobDetails = (job: (typeof state.wipJobs)[number]) => {
     setSelectedJobId(job.id);
     setDiagNotes(job.diagnosisNotes);
@@ -686,21 +691,35 @@ export function WipJobs() {
           <span className="text-cyan-500/45">Quick SLA focus:</span>
           <button
             className={`px-2 py-1 rounded border ${slaDeltaFilter === "DueToday" ? "border-fuchsia-400/60 text-fuchsia-200 bg-fuchsia-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
-            onClick={() => setSlaDeltaFilter("DueToday")}
+            type="button"
+            aria-pressed={slaDeltaFilter === "DueToday"}
+            onClick={() => applySlaQuickFocus("DueToday")}
           >
             Due Today ({slaDueToday})
           </button>
           <button
             className={`px-2 py-1 rounded border ${slaDeltaFilter === "Overdue" ? "border-red-400/60 text-red-200 bg-red-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
-            onClick={() => setSlaDeltaFilter("Overdue")}
+            type="button"
+            aria-pressed={slaDeltaFilter === "Overdue"}
+            onClick={() => applySlaQuickFocus("Overdue")}
           >
             Overdue ({slaOverdue})
           </button>
           <button
             className={`px-2 py-1 rounded border ${slaDeltaFilter === "All" ? "border-cyan-300/50 text-cyan-100 bg-cyan-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
-            onClick={() => setSlaDeltaFilter("All")}
+            type="button"
+            aria-pressed={slaDeltaFilter === "All"}
+            onClick={() => applySlaQuickFocus("All")}
           >
             All Active ({activeSlaJobs})
+          </button>
+          <button
+            className="px-2 py-1 rounded border border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10 disabled:opacity-40"
+            type="button"
+            disabled={slaDeltaFilter === "All"}
+            onClick={() => applySlaQuickFocus("All")}
+          >
+            Clear Focus
           </button>
         </div>
       </div>
