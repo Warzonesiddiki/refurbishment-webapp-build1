@@ -93,6 +93,12 @@ npm run dev:web
 npm run build
 ```
 
+## Complete Documentation
+
+For full technical/operational documentation, see:
+
+- `docs/PROJECT_DOCUMENTATION_FULL.md`
+
 ## LAN Access (Same Wi‑Fi)
 
 Run the dev server bound to all interfaces:
