@@ -370,6 +370,12 @@ export function WipJobs() {
   };
 
   const laborCost = selectedJob ? selectedJob.laborEntries.reduce((a, l) => a + l.hours * l.rate, 0) : 0;
+  const selectedWipAudit = useMemo(() => {
+    if (!selectedJob) return [];
+    return state.movementLog
+      .filter((entry) => entry.entityType === "wip" && entry.ref === selectedJob.wip)
+      .slice(0, 12);
+  }, [selectedJob, state.movementLog]);
   const totalJobCost = selectedJob ? selectedJob.partsCost + laborCost : 0;
   const completionGate = selectedJob ? evaluateWipCompletionGate(selectedJob) : null;
   const nextStepSuggestions = useMemo(() => {
@@ -1006,18 +1012,48 @@ export function WipJobs() {
               </div>
             )}
             {detailTab === "history" && (
-              <div className="space-y-2">
-                {selectedJob.history.map((h, i) => (
-                  <div key={i} className="flex items-start gap-3 py-2 border-b border-cyan-500/5">
-                    <div className="w-2 h-2 rounded-full bg-cyan-500/30 mt-1.5" />
-                    <div className="flex-1">
-                      <p className="text-sm text-cyan-200/70">{h.action}</p>
-                      <p className="text-[10px] text-cyan-500/20" style={{ fontFamily: "var(--font-mono)" }}>
-                        {h.ts} • {h.user}
-                      </p>
-                    </div>
+              <div className="space-y-3 max-h-[360px] overflow-auto pr-1">
+                <div>
+                  <p className="text-[11px] font-bold text-cyan-300/75 mb-2" style={{ fontFamily: "Rajdhani" }}>
+                    JOB HISTORY
+                  </p>
+                  <div className="space-y-2">
+                    {selectedJob.history.map((h, i) => (
+                      <div key={i} className="flex items-start gap-3 py-2 border-b border-cyan-500/5">
+                        <div className="w-2 h-2 rounded-full bg-cyan-500/30 mt-1.5" />
+                        <div className="flex-1">
+                          <p className="text-sm text-cyan-200/70">{h.action}</p>
+                          <p className="text-[10px] text-cyan-500/20" style={{ fontFamily: "var(--font-mono)" }}>
+                            {h.ts} • {h.user}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-bold text-cyan-300/75 mb-2" style={{ fontFamily: "Rajdhani" }}>
+                    SYSTEM AUDIT TRAIL
+                  </p>
+                  {selectedWipAudit.length === 0 ? (
+                    <p className="text-xs text-cyan-500/50">No system audit entries yet for this job.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedWipAudit.map((entry) => (
+                        <div key={entry.id} className="p-2 rounded bg-purple-500/5 border border-purple-500/20 text-xs">
+                          <p className="text-cyan-100/80">
+                            {entry.action}
+                            {entry.note ? ` — ${entry.note}` : ""}
+                          </p>
+                          <p className="text-cyan-500/40">
+                            {new Date(entry.ts).toLocaleString()} · {entry.user}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             {completionGate && (
