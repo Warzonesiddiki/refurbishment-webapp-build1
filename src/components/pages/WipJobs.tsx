@@ -708,19 +708,10 @@ export function WipJobs() {
             className={`px-2 py-1 rounded border ${slaDeltaFilter === "All" ? "border-cyan-300/50 text-cyan-100 bg-cyan-500/10" : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10"}`}
             type="button"
             aria-pressed={slaDeltaFilter === "All"}
-            title="Clear SLA delta focus"
+            title="Show all SLA delta states"
             onClick={() => applySlaQuickFocus("All")}
           >
-            Clear SLA Δ ({state.wipJobs.length})
-          </button>
-          <button
-            className="px-2 py-1 rounded border border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10 disabled:opacity-40"
-            type="button"
-            disabled={slaDeltaFilter === "All"}
-            title="Reset quick focus chips to neutral"
-            onClick={() => applySlaQuickFocus("All")}
-          >
-            Reset Quick Focus
+            All SLA States ({state.wipJobs.length})
           </button>
         </div>
       </div>
