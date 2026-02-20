@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyWipAgingRisk, compareWipBySlaRisk, getWipAgingDays } from "@/utils/wipAging";
+import { classifyWipAgingRisk, compareWipBySlaRisk, getWipAgingDays, getWipSlaRiskDeltaDays } from "@/utils/wipAging";
 
 describe("wip aging risk", () => {
   const now = new Date("2026-02-20T00:00:00.000Z");
@@ -24,5 +24,12 @@ describe("wip aging risk", () => {
 
     const sorted = [...rows].sort((a, b) => compareWipBySlaRisk(a, b, now));
     expect(sorted.map((r) => r.id)).toEqual(["risk", "watch", "healthy"]);
+  });
+
+  it("computes remaining days to SLA risk threshold", () => {
+    expect(getWipSlaRiskDeltaDays("Feb 19", "Active", now)).toBe(4);
+    expect(getWipSlaRiskDeltaDays("Feb 15", "Active", now)).toBe(0);
+    expect(getWipSlaRiskDeltaDays("Feb 14", "Active", now)).toBe(-1);
+    expect(getWipSlaRiskDeltaDays("Feb 10", "Completed", now)).toBeNull();
   });
 });

@@ -1,5 +1,8 @@
 export type WipAgingRisk = "Healthy" | "Watch" | "Risk";
 
+const SLA_WATCH_DAYS = 3;
+const SLA_RISK_DAYS = 5;
+
 function parseOpenedDate(opened: string, now: Date) {
   const trimmed = (opened || "").trim();
   if (!trimmed) return null;
@@ -27,9 +30,14 @@ export function getWipAgingDays(opened: string, now = new Date()) {
 export function classifyWipAgingRisk(opened: string, status: string, now = new Date()): WipAgingRisk {
   if (status === "Completed") return "Healthy";
   const days = getWipAgingDays(opened, now);
-  if (days >= 5) return "Risk";
-  if (days >= 3) return "Watch";
+  if (days >= SLA_RISK_DAYS) return "Risk";
+  if (days >= SLA_WATCH_DAYS) return "Watch";
   return "Healthy";
+}
+
+export function getWipSlaRiskDeltaDays(opened: string, status: string, now = new Date()) {
+  if (status === "Completed") return null;
+  return SLA_RISK_DAYS - getWipAgingDays(opened, now);
 }
 
 export function getWipAgingRiskRank(risk: WipAgingRisk) {

@@ -17,7 +17,7 @@ import { computeWipLaborDrilldown, laborDrilldownToCsv } from "@/utils/wipLaborD
 import { computeTrackProductivityTrends } from "@/utils/wipTrackTrend";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
 import { exportCsv } from "@/utils/exporters";
-import { classifyWipAgingRisk, compareWipBySlaRisk, getWipAgingDays } from "@/utils/wipAging";
+import { classifyWipAgingRisk, compareWipBySlaRisk, getWipAgingDays, getWipSlaRiskDeltaDays } from "@/utils/wipAging";
 import { fetchAuthUsers } from "@/utils/javaAuth";
 
 const priorityColors: Record<string, string> = {
@@ -781,8 +781,17 @@ export function WipJobs() {
                     {(() => {
                       const risk = classifyWipAgingRisk(job.opened, job.status);
                       const days = getWipAgingDays(job.opened);
+                      const delta = getWipSlaRiskDeltaDays(job.opened, job.status);
+                      const title =
+                        delta === null
+                          ? `Completed • ${days} day(s) open`
+                          : delta > 0
+                            ? `${days} day(s) open • ${delta} day(s) until risk`
+                            : delta === 0
+                              ? `${days} day(s) open • risk threshold today`
+                              : `${days} day(s) open • ${Math.abs(delta)} day(s) over risk threshold`;
                       return (
-                        <span className={`cyber-chip ${riskColors[risk] || ""}`} title={`${days} day(s) open`}>
+                        <span className={`cyber-chip ${riskColors[risk] || ""}`} title={title}>
                           {risk}
                         </span>
                       );
