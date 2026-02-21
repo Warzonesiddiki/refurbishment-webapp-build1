@@ -8,13 +8,19 @@ const npmCmd = isWin ? 'npm.cmd' : 'npm';
 const pythonCandidates = isWin ? ['python', 'python3', 'py'] : ['python3', 'python'];
 const args = process.argv.slice(2);
 const lanMode = args.includes('--lan');
+const buildToolArg = args.find((arg) => arg.startsWith('--build-tool='));
+const buildTool = (buildToolArg ? buildToolArg.split('=')[1] : process.env.TAHIR_JAVA_BUILD_TOOL || 'auto').toLowerCase();
+const allowedBuildTools = new Set(['auto', 'javac', 'maven']);
 const cwd = process.cwd();
 const javaPort = process.env.JAVA_API_PORT || '8085';
-const javaHealthUrl = `http://127.0.0.1:${javaPort}/api/health`;
+const javaHealthHost = process.env.DEV_JAVA_HEALTH_HOST || '127.0.0.1';
+const javaHealthPath = process.env.DEV_JAVA_HEALTH_PATH || '/api/health';
+const javaHealthUrl = `http://${javaHealthHost}:${javaPort}${javaHealthPath}`;
 const healthTimeoutMs = Number(process.env.DEV_JAVA_HEALTH_TIMEOUT_MS || 20000);
 const healthIntervalMs = Number(process.env.DEV_JAVA_HEALTH_INTERVAL_MS || 500);
 const healthBackoffFactor = Number(process.env.DEV_JAVA_HEALTH_BACKOFF_FACTOR || 1.25);
 const healthMaxIntervalMs = Number(process.env.DEV_JAVA_HEALTH_MAX_INTERVAL_MS || 2000);
+const allowFrontendWithoutJava = process.env.DEV_ALLOW_WEB_WITHOUT_JAVA === 'true';
 
 function quoteShellArg(value) {
   if (/^[A-Za-z0-9_./:-]+$/.test(value)) return value;
@@ -85,20 +91,29 @@ if (!hasCommand(npmCmd)) {
   process.exit(1);
 }
 
+
+if (!allowedBuildTools.has(buildTool)) {
+  console.error(`[dev-with-java] invalid build tool: ${buildTool}. Allowed: auto|javac|maven`);
+  process.exit(1);
+}
 const python = findPython();
 if (!python) {
   console.error('[dev-with-java] Python runtime not found (expected python3/python/py).');
   process.exit(1);
 }
 
-const javaProc = startProcess(python, [javaServerScript, javaPort], 'java server');
+const javaProc = startProcess(python, [javaServerScript, javaPort, `--build-tool=${buildTool}`], 'java server');
 if (!javaProc) process.exit(1);
 
 const javaHealthy = await waitForJavaHealth();
 if (!javaHealthy) {
-  console.error(`[dev-with-java] Java API did not become healthy at ${javaHealthUrl} within ${healthTimeoutMs}ms.`);
-  javaProc.kill('SIGTERM');
-  process.exit(1);
+  const message = `[dev-with-java] Java API did not become healthy at ${javaHealthUrl} within ${healthTimeoutMs}ms.`;
+  if (!allowFrontendWithoutJava) {
+    console.error(message);
+    javaProc.kill('SIGTERM');
+    process.exit(1);
+  }
+  console.warn(`${message} Continuing because DEV_ALLOW_WEB_WITHOUT_JAVA=true.`);
 }
 
 const webScript = lanMode ? 'dev:lan:web' : 'dev:web';

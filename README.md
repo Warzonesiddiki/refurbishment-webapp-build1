@@ -96,13 +96,20 @@ npm run java:server:mvn
 # Force legacy javac/java launch path
 npm run java:server:javac
 
-# Force build-tool behavior for launcher scripts (auto|javac)
-export TAHIR_JAVA_BUILD_TOOL=javac
-# PowerShell: $env:TAHIR_JAVA_BUILD_TOOL="javac"
-# CMD: set TAHIR_JAVA_BUILD_TOOL=javac
+# Force build-tool behavior for launcher scripts (auto|javac|maven)
+export TAHIR_JAVA_BUILD_TOOL=maven
+# PowerShell: $env:TAHIR_JAVA_BUILD_TOOL="maven"
+# CMD: set TAHIR_JAVA_BUILD_TOOL=maven
 
 # Or use CLI override (takes precedence over env)
-python tools/run_java_server.py 8085 --build-tool=javac
+python tools/run_java_server.py 8085 --build-tool=maven
+```
+
+Optional fallback when Java is unavailable during local UI work:
+
+```bash
+export DEV_ALLOW_WEB_WITHOUT_JAVA=true
+npm run dev -- --build-tool=auto
 ```
 
 ### Building

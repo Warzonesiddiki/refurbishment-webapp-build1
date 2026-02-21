@@ -17,7 +17,7 @@ POM_FILE = ROOT / "java_server" / "pom.xml"
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Tahir Java server")
     parser.add_argument("port", nargs="?", default="8085", help="Port to bind Java server")
-    parser.add_argument("--build-tool", choices=["auto", "javac"], help="Override build tool selection")
+    parser.add_argument("--build-tool", choices=["auto", "javac", "maven"], help="Override build tool selection")
     return parser.parse_args()
 
 
@@ -31,7 +31,15 @@ def main() -> int:
         env["TAHIR_JAVA_BUILD_TOOL"] = args.build_tool
     build_tool = env.get("TAHIR_JAVA_BUILD_TOOL", "auto").strip().lower()
 
+    if build_tool not in {"auto", "javac", "maven"}:
+        print(f"Unsupported TAHIR_JAVA_BUILD_TOOL value: {build_tool}", file=sys.stderr)
+        return 1
+
     mvn = shutil.which("mvn")
+    if build_tool == "maven" and (not mvn or not POM_FILE.exists()):
+        print("Maven build requested but `mvn` or java_server/pom.xml is unavailable.", file=sys.stderr)
+        return 1
+
     if build_tool != "javac" and mvn and POM_FILE.exists():
         run_proc = subprocess.run(
             [

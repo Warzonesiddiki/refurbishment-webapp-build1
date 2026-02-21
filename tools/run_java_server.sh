@@ -10,6 +10,19 @@ BUILD_TOOL="${TAHIR_JAVA_BUILD_TOOL:-auto}"
 
 export TAHIR_ENABLE_SEEDED_USERS="${TAHIR_ENABLE_SEEDED_USERS:-true}"
 
+case "$BUILD_TOOL" in
+  auto|javac|maven) ;;
+  *)
+    echo "Unsupported TAHIR_JAVA_BUILD_TOOL: $BUILD_TOOL (allowed: auto|javac|maven)" >&2
+    exit 1
+    ;;
+esac
+
+if [[ "$BUILD_TOOL" == "maven" ]] && (! command -v mvn >/dev/null 2>&1 || [[ ! -f "$POM_FILE" ]]); then
+  echo "Maven build requested but mvn or java_server/pom.xml is unavailable." >&2
+  exit 1
+fi
+
 if [[ "$BUILD_TOOL" != "javac" ]] && command -v mvn >/dev/null 2>&1 && [[ -f "$POM_FILE" ]]; then
   mvn -q -f "$POM_FILE" -DskipTests compile exec:java -Dexec.args="$PORT"
   exit 0
