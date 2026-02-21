@@ -118,6 +118,9 @@ npm run dev -- --build-tool=auto
 
 # Or skip Java startup entirely and run only frontend
 npm run dev -- --no-java
+
+# Pass-through extra Vite args after `--`
+npm run dev -- --no-java -- --port 5180 --strictPort
 ```
 
 In `--no-java` mode, local Java/Python tooling is not required.

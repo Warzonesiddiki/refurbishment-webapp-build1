@@ -23,6 +23,7 @@ export function parseDevWithJavaArgs(argv, env = process.env) {
     showHelp: false,
     buildTool: (env.TAHIR_JAVA_BUILD_TOOL || 'auto').toLowerCase(),
     javaPort: env.JAVA_API_PORT || '8085',
+    webArgs: [],
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -58,6 +59,11 @@ export function parseDevWithJavaArgs(argv, env = process.env) {
       continue;
     }
 
+    if (token === '--') {
+      result.webArgs = argv.slice(i + 1);
+      break;
+    }
+
     throw new Error(`Unknown option: ${token}`);
   }
 
@@ -77,6 +83,7 @@ export function getDevWithJavaUsage() {
     '  --no-java                  Skip Java startup and run frontend only.',
     '  --build-tool <tool>        Java build tool: auto|javac|maven.',
     '  --java-port <port>         Java API port (default: JAVA_API_PORT or 8085).',
+    '  -- <vite args...>          Pass remaining args through to Vite.',
     '  -h, --help                 Show this help text.',
   ].join('\n');
 }

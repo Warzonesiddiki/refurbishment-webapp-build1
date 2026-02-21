@@ -43,6 +43,12 @@ describe('parseDevWithJavaArgs', () => {
     expect(() => parseDevWithJavaArgs(['--wat'])).toThrow(/Unknown option/);
   });
 
+  it('captures vite passthrough args after -- separator', () => {
+    const parsed = parseDevWithJavaArgs(['--no-java', '--', '--port', '5180', '--strictPort']);
+    expect(parsed.noJava).toBe(true);
+    expect(parsed.webArgs).toEqual(['--port', '5180', '--strictPort']);
+  });
+
   it('exposes usage text', () => {
     expect(getDevWithJavaUsage()).toContain('--no-java');
   });

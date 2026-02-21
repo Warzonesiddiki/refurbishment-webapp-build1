@@ -132,7 +132,12 @@ if (!parsed.noJava) {
 }
 
 const webScript = parsed.lanMode ? 'dev:lan:web' : 'dev:web';
-const webProc = startProcess(npmCmd, ['run', webScript], 'vite dev server');
+const webCommandArgs = ['run', webScript];
+if (parsed.webArgs.length > 0) {
+  webCommandArgs.push('--', ...parsed.webArgs);
+  console.log(`[dev-with-java] forwarding Vite args: ${parsed.webArgs.join(' ')}`);
+}
+const webProc = startProcess(npmCmd, webCommandArgs, 'vite dev server');
 if (!webProc) {
   if (javaProc) javaProc.kill('SIGTERM');
   process.exit(1);
