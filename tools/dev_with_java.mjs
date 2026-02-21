@@ -91,10 +91,6 @@ async function waitForJavaHealth(timeoutMs = healthTimeoutMs) {
 }
 
 const javaServerScript = join('tools', 'run_java_server.py');
-if (!existsSync(javaServerScript)) {
-  console.error(`[dev-with-java] missing ${javaServerScript}`);
-  process.exit(1);
-}
 
 if (!hasCommand(npmCmd)) {
   console.error(`[dev-with-java] ${npmCmd} is not available in PATH.`);
@@ -102,12 +98,19 @@ if (!hasCommand(npmCmd)) {
 }
 
 const python = findPython();
+if (!parsed.noJava && !existsSync(javaServerScript)) {
+  console.error(`[dev-with-java] missing ${javaServerScript}`);
+  process.exit(1);
+}
 if (!python && !parsed.noJava) {
   console.error('[dev-with-java] Python runtime not found (expected python3/python/py).');
   process.exit(1);
 }
 
 let javaProc = null;
+if (parsed.noJava) {
+  console.log('[dev-with-java] --no-java enabled: skipping Java startup and health checks.');
+}
 if (!parsed.noJava) {
   javaProc = startProcess(
     python,

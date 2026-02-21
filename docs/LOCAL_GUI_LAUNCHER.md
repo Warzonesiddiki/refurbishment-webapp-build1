@@ -88,3 +88,5 @@ export TAHIR_JAVA_BUILD_TOOL=maven
 - Dev launcher accepts `--build-tool=<auto|javac|maven>` and can continue without Java when `DEV_ALLOW_WEB_WITHOUT_JAVA=true`.
 
 - Dev launcher flags: `--build-tool=<auto|javac|maven>`, `--java-port=<port>`, `--no-java`, `--help`.
+
+- `--no-java` mode skips Java startup/health checks and does not require local Java/Python tooling.

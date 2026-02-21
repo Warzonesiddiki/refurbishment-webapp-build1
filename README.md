@@ -120,6 +120,8 @@ npm run dev -- --build-tool=auto
 npm run dev -- --no-java
 ```
 
+In `--no-java` mode, local Java/Python tooling is not required.
+
 ### Building
 
 ```bash
