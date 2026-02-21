@@ -101,6 +101,9 @@ export TAHIR_JAVA_BUILD_TOOL=maven
 # PowerShell: $env:TAHIR_JAVA_BUILD_TOOL="maven"
 # CMD: set TAHIR_JAVA_BUILD_TOOL=maven
 
+# Force legacy javac/java flow explicitly
+export TAHIR_JAVA_BUILD_TOOL=javac
+
 # Or use CLI override (takes precedence over env)
 python tools/run_java_server.py 8085 --build-tool=maven
 ```
