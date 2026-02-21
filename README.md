@@ -106,6 +106,8 @@ export TAHIR_JAVA_BUILD_TOOL=javac
 
 # Or use CLI override (takes precedence over env)
 python tools/run_java_server.py 8085 --build-tool=maven
+
+# dev_with_java.mjs also supports: --java-port <port>, --no-java, --help
 ```
 
 Optional fallback when Java is unavailable during local UI work:
@@ -113,6 +115,9 @@ Optional fallback when Java is unavailable during local UI work:
 ```bash
 export DEV_ALLOW_WEB_WITHOUT_JAVA=true
 npm run dev -- --build-tool=auto
+
+# Or skip Java startup entirely and run only frontend
+npm run dev -- --no-java
 ```
 
 ### Building

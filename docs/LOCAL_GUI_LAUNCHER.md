@@ -86,3 +86,5 @@ export TAHIR_JAVA_BUILD_TOOL=maven
 - CLI flag `python tools/run_java_server.py <port> --build-tool=...` overrides env var when both are present.
 
 - Dev launcher accepts `--build-tool=<auto|javac|maven>` and can continue without Java when `DEV_ALLOW_WEB_WITHOUT_JAVA=true`.
+
+- Dev launcher flags: `--build-tool=<auto|javac|maven>`, `--java-port=<port>`, `--no-java`, `--help`.
