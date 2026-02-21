@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
 
 function Write-Info($msg) { Write-Host "[bootstrap] $msg" -ForegroundColor Cyan }
 function Write-WarnMsg($msg) { Write-Host "[bootstrap:warn] $msg" -ForegroundColor Yellow }
@@ -37,9 +38,11 @@ function Invoke-Step($command) {
     return
   }
 
-  Invoke-Expression $command
-  if ($LASTEXITCODE -ne 0) {
-    throw "Command failed with exit code ${LASTEXITCODE}: $command"
+  $shell = if ($env:ComSpec) { $env:ComSpec } else { 'cmd.exe' }
+  & $shell /d /s /c $command
+  $exitCode = $LASTEXITCODE
+  if ($exitCode -ne 0) {
+    throw ("Command failed with exit code {0}: {1}" -f $exitCode, $command)
   }
 }
 
@@ -85,7 +88,7 @@ function Install-SystemDependencies {
 function Install-NpmDependencies {
   if (Test-Path "package-lock.json") {
     try {
-      Invoke-Step "npm ci"
+      Invoke-Step "npm ci --legacy-peer-deps --no-audit --no-fund"
       return
     }
     catch {
@@ -94,7 +97,7 @@ function Install-NpmDependencies {
   }
 
   try {
-    Invoke-Step "npm install"
+    Invoke-Step "npm install --legacy-peer-deps --no-audit --no-fund"
   }
   catch {
     Write-WarnMsg "npm install failed. Attempting node_modules cleanup + reinstall..."
@@ -103,10 +106,10 @@ function Install-NpmDependencies {
     }
 
     if (Test-Path "package-lock.json") {
-      Invoke-Step "npm ci"
+      Invoke-Step "npm ci --legacy-peer-deps --no-audit --no-fund"
     }
     else {
-      Invoke-Step "npm install"
+      Invoke-Step "npm install --legacy-peer-deps --no-audit --no-fund"
     }
   }
 }
@@ -115,7 +118,7 @@ function Install-ProjectDependencies {
   Write-Info "Installing JavaScript dependencies..."
   Push-Location (Resolve-Path "$PSScriptRoot\..")
   try {
-    if (-not (Command-Exists npm)) {
+    if (-not (Command-Exists 'npm')) {
       Write-ErrMsg "npm not found in current shell PATH. If Node was just installed, open a new PowerShell and re-run bootstrap."
       if (-not $DryRun) { exit 1 }
     }

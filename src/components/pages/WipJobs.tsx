@@ -17,6 +17,7 @@ import { computeWipLaborDrilldown, laborDrilldownToCsv } from "@/utils/wipLaborD
 import { computeTrackProductivityTrends } from "@/utils/wipTrackTrend";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
 import { exportCsv } from "@/utils/exporters";
+import { classifyWipAgingRisk, compareWipBySlaRisk, formatWipSlaDelta, getWipAgingDays, getWipSlaDeltaState, getWipSlaRiskDeltaDays } from "@/utils/wipAging";
 import { fetchAuthUsers } from "@/utils/javaAuth";
 
 const priorityColors: Record<string, string> = {
@@ -31,11 +32,33 @@ const statusColors: Record<string, string> = {
   Completed: "cyber-badge-green",
 };
 
+const riskColors: Record<string, string> = {
+  Healthy: "cyber-badge-green",
+  Watch: "cyber-badge-yellow",
+  Risk: "cyber-badge-red",
+};
+
+type QuickSlaFocusOption = {
+  value: "DueToday" | "Overdue" | "All";
+  label: string;
+  count: number;
+  title: string;
+};
+
+const quickSlaToneByValue: Record<QuickSlaFocusOption["value"], string> = {
+  DueToday: "border-fuchsia-400/60 text-fuchsia-200 bg-fuchsia-500/10",
+  Overdue: "border-red-400/60 text-red-200 bg-red-500/10",
+  All: "border-cyan-300/50 text-cyan-100 bg-cyan-500/10",
+};
+
 export function WipJobs() {
   const state = useAppState();
   const dispatch = useDispatch();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [slaRiskFilter, setSlaRiskFilter] = useState<"All" | "Healthy" | "Watch" | "Risk">("All");
+  const [slaDeltaFilter, setSlaDeltaFilter] = useState<"All" | "DueToday" | "Overdue">("All");
+  const [prioritizeSlaRisk, setPrioritizeSlaRisk] = useState(true);
   const deferredSearch = useDeferredValue(search);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const selectedJob = selectedJobId ? (state.wipJobs.find((w) => w.id === selectedJobId) ?? null) : null;
@@ -58,7 +81,7 @@ export function WipJobs() {
   const [replaceDestination, setReplaceDestination] =
     useState<(typeof REPLACEMENT_DESTINATIONS)[number]>("Harvest QA Bin");
   const { enqueue } = useOfflineQueue();
-  const laborTimer = useLaborTimer();
+  const laborTimer = useLaborTimer("tahir.wipLaborTimer.startedAt");
   const { trigger } = useUiActionFeedback();
 
   const filtered = useMemo(() => {
@@ -71,8 +94,17 @@ export function WipJobs() {
       );
     }
     if (statusFilter !== "All") data = data.filter((w) => w.status === statusFilter);
+    if (slaRiskFilter !== "All") {
+      data = data.filter((w) => classifyWipAgingRisk(w.opened, w.status) === slaRiskFilter);
+    }
+    if (slaDeltaFilter !== "All") {
+      data = data.filter((w) => getWipSlaDeltaState(w.opened, w.status) === slaDeltaFilter);
+    }
+    if (prioritizeSlaRisk) {
+      data = [...data].sort((a, b) => compareWipBySlaRisk(a, b));
+    }
     return data;
-  }, [deferredSearch, state.wipJobs, statusFilter]);
+  }, [deferredSearch, state.wipJobs, statusFilter, slaRiskFilter, slaDeltaFilter, prioritizeSlaRisk]);
 
   useEffect(() => {
     if (filtered.length === 0) {
@@ -116,6 +148,18 @@ export function WipJobs() {
   }, [userOptions]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedTech = window.localStorage.getItem("tahir.wipLaborTimer.tech");
+    if (savedTech) setAddLaborTech(savedTech);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (addLaborTech.trim()) window.localStorage.setItem("tahir.wipLaborTimer.tech", addLaborTech.trim());
+    else window.localStorage.removeItem("tahir.wipLaborTimer.tech");
+  }, [addLaborTech]);
+
+  useEffect(() => {
     if (!laborUserOptions.includes(laborApprover)) {
       setLaborApprover(laborUserOptions[0] ?? "Supervisor");
     }
@@ -125,7 +169,12 @@ export function WipJobs() {
     }
   }, [addLaborTech, laborApprover, laborUserOptions]);
 
-  const hasActiveFilters = search.trim().length > 0 || statusFilter !== "All";
+  const hasActiveFilters =
+    search.trim().length > 0 ||
+    statusFilter !== "All" ||
+    slaRiskFilter !== "All" ||
+    slaDeltaFilter !== "All" ||
+    !prioritizeSlaRisk;
 
   const dashboardMetrics = useMemo(() => {
     const jobs = state.wipJobs;
@@ -134,6 +183,16 @@ export function WipJobs() {
     const awaitingParts = jobs.filter((w) => w.status === "Awaiting Parts").length;
     const completedCount = jobs.filter((w) => w.status === "Completed").length;
     const totalPartsCost = jobs.reduce((a, w) => a + w.partsCost, 0);
+    const riskCounts = jobs.reduce(
+      (acc, job) => {
+        const risk = classifyWipAgingRisk(job.opened, job.status);
+        acc[risk] += 1;
+        return acc;
+      },
+      { Healthy: 0, Watch: 0, Risk: 0 },
+    );
+    const slaDueToday = jobs.filter((job) => getWipSlaDeltaState(job.opened, job.status) === "DueToday").length;
+    const slaOverdue = jobs.filter((job) => getWipSlaDeltaState(job.opened, job.status) === "Overdue").length;
     const qualityAnalytics = computeWipQualityAnalytics(jobs);
     const laborEfficiency = computeWipLaborEfficiency(jobs);
     const productivityTop = computeTechnicianProductivityByTrack(jobs).slice(0, 5);
@@ -146,6 +205,9 @@ export function WipJobs() {
       awaitingParts,
       completedCount,
       totalPartsCost,
+      riskCounts,
+      slaDueToday,
+      slaOverdue,
       qualityAnalytics,
       laborEfficiency,
       productivityTop,
@@ -160,12 +222,52 @@ export function WipJobs() {
     awaitingParts,
     completedCount,
     totalPartsCost,
+    riskCounts,
+    slaDueToday,
+    slaOverdue,
     qualityAnalytics,
     laborEfficiency,
     productivityTop,
     laborDrilldown,
     trackTrends,
   } = dashboardMetrics;
+
+  const applySlaQuickFocus = (next: "All" | "DueToday" | "Overdue") => {
+    setSlaDeltaFilter(next);
+    if (next !== "All") setPrioritizeSlaRisk(true);
+  };
+
+  const slaQuickFocusLabel =
+    slaDeltaFilter === "DueToday" ? "Due Today" : slaDeltaFilter === "Overdue" ? "Overdue" : "All SLA States";
+  const quickSlaFocusOptions = useMemo<QuickSlaFocusOption[]>(
+    () => [
+      {
+        value: "DueToday",
+        label: "Due Today",
+        count: slaDueToday,
+        title: "Show jobs that reach SLA risk today",
+      },
+      {
+        value: "Overdue",
+        label: "Overdue",
+        count: slaOverdue,
+        title: "Show jobs already over SLA risk threshold",
+      },
+      {
+        value: "All",
+        label: "All SLA States",
+        count: state.wipJobs.length,
+        title: "Show all SLA delta states",
+      },
+    ],
+    [slaDueToday, slaOverdue, state.wipJobs.length],
+  );
+
+  const activeQuickSlaFocusCount = useMemo(() => {
+    if (slaDeltaFilter === "DueToday") return slaDueToday;
+    if (slaDeltaFilter === "Overdue") return slaOverdue;
+    return state.wipJobs.length;
+  }, [slaDeltaFilter, slaDueToday, slaOverdue, state.wipJobs.length]);
 
   const openJobDetails = (job: (typeof state.wipJobs)[number]) => {
     setSelectedJobId(job.id);
@@ -358,6 +460,12 @@ export function WipJobs() {
   };
 
   const laborCost = selectedJob ? selectedJob.laborEntries.reduce((a, l) => a + l.hours * l.rate, 0) : 0;
+  const selectedWipAudit = useMemo(() => {
+    if (!selectedJob) return [];
+    return state.movementLog
+      .filter((entry) => entry.entityType === "wip" && entry.ref === selectedJob.wip)
+      .slice(0, 12);
+  }, [selectedJob, state.movementLog]);
   const totalJobCost = selectedJob ? selectedJob.partsCost + laborCost : 0;
   const completionGate = selectedJob ? evaluateWipCompletionGate(selectedJob) : null;
   const nextStepSuggestions = useMemo(() => {
@@ -386,6 +494,12 @@ export function WipJobs() {
     const idx = stages.indexOf(selectedJob.stage);
     if (idx >= 0 && idx < stages.length - 1) {
       suggestions.push(`Move stage to ${stages[idx + 1]} using “✓ Complete Status”.`);
+    }
+
+    const agingDays = getWipAgingDays(selectedJob.opened);
+    const agingRisk = classifyWipAgingRisk(selectedJob.opened, selectedJob.status);
+    if (agingRisk !== "Healthy") {
+      suggestions.push(`SLA ${agingRisk.toLowerCase()}: job has been open ${agingDays} day(s). Prioritize escalation.`);
     }
 
     if (completionGate?.canComplete) {
@@ -427,10 +541,14 @@ export function WipJobs() {
 
       <SectionHelpHint hint={getPageSectionHint("wipJobs")} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-10 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-12 gap-4">
         <KpiCard label="Active Jobs" value={activeCount} tone="cyan" icon="⬢" />
         <KpiCard label="In Progress" value={inProgressCount} tone="purple" icon="⚙" />
         <KpiCard label="Awaiting Parts" value={awaitingParts} tone="yellow" icon="⏳" />
+        <KpiCard label="SLA Watch" value={riskCounts.Watch} tone="yellow" icon="⚠️" />
+        <KpiCard label="SLA Risk" value={riskCounts.Risk} tone="red" icon="🚨" />
+        <KpiCard label="Risk Due Today" value={slaDueToday} tone="magenta" icon="📍" />
+        <KpiCard label="SLA Overdue" value={slaOverdue} tone="red" icon="⛔" />
         <KpiCard label="Completed Jobs" value={completedCount} tone="green" icon="✓" />
         <KpiCard label="Total Parts Cost" value={`AED ${totalPartsCost.toFixed(2)}`} tone="magenta" icon="◈" />
         <KpiCard label="Ready to Complete" value={qualityAnalytics.readyToComplete} tone="green" icon="◎" />
@@ -566,12 +684,42 @@ export function WipJobs() {
             <option>Awaiting Parts</option>
             <option>Completed</option>
           </select>
+          <select
+            value={slaRiskFilter}
+            onChange={(e) => setSlaRiskFilter(e.target.value as "All" | "Healthy" | "Watch" | "Risk")}
+            className="px-3 py-2 rounded-lg text-sm min-w-[140px]"
+          >
+            <option value="All">All SLA Risk</option>
+            <option value="Risk">Risk</option>
+            <option value="Watch">Watch</option>
+            <option value="Healthy">Healthy</option>
+          </select>
+          <select
+            value={slaDeltaFilter}
+            onChange={(e) => setSlaDeltaFilter(e.target.value as "All" | "DueToday" | "Overdue")}
+            className="px-3 py-2 rounded-lg text-sm min-w-[140px]"
+          >
+            <option value="All">All SLA Δ</option>
+            <option value="DueToday">Due Today</option>
+            <option value="Overdue">Overdue</option>
+          </select>
+          <label className="inline-flex items-center gap-2 text-xs text-cyan-300/70 px-2">
+            <input
+              type="checkbox"
+              checked={prioritizeSlaRisk}
+              onChange={(e) => setPrioritizeSlaRisk(e.target.checked)}
+            />
+            Prioritize SLA risk
+          </label>
           <button
             className="btn-ghost text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!hasActiveFilters}
             onClick={() => {
               setSearch("");
               setStatusFilter("All");
+              setSlaRiskFilter("All");
+              setSlaDeltaFilter("All");
+              setPrioritizeSlaRisk(true);
             }}
           >
             ✕ Clear
@@ -581,6 +729,39 @@ export function WipJobs() {
           Showing {filtered.length} of {state.wipJobs.length} jobs
           {hasActiveFilters ? " (filtered)" : ""}
         </div>
+        <div
+          className="mt-3 flex flex-wrap items-center gap-2 text-[11px]"
+          style={{ fontFamily: "var(--font-mono)" }}
+          role="group"
+          aria-label="Quick SLA focus"
+        >
+          <span className="text-cyan-500/45">Quick SLA focus:</span>
+          {quickSlaFocusOptions.map((option) => {
+            const isActive =
+              (option.value === "All" && slaDeltaFilter === "All") ||
+              (option.value !== "All" && slaDeltaFilter === option.value);
+            const isDisabled = option.value !== "All" && option.count === 0;
+            const inactiveClass = isDisabled
+              ? "border-cyan-500/20 text-cyan-300/45"
+              : "border-cyan-500/20 text-cyan-300/70 hover:bg-cyan-500/10";
+            return (
+              <button
+                key={option.value}
+                className={`px-2 py-1 rounded border ${isActive ? quickSlaToneByValue[option.value] : inactiveClass} ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                type="button"
+                aria-pressed={isActive}
+                disabled={isDisabled}
+                title={isDisabled ? `${option.label} currently has no jobs` : option.title}
+                onClick={() => applySlaQuickFocus(option.value)}
+              >
+                {option.label} ({option.count})
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-cyan-400/50" aria-live="polite">
+          Active quick focus: {slaQuickFocusLabel} ({activeQuickSlaFocusCount})
+        </p>
       </div>
 
       {showCreate && (
@@ -654,6 +835,8 @@ export function WipJobs() {
                 <th className="py-3 px-4 text-right">Cost</th>
                 <th className="py-3 px-4 text-left">Priority</th>
                 <th className="py-3 px-4 text-left">Status</th>
+                <th className="py-3 px-4 text-left">SLA Risk</th>
+                <th className="py-3 px-4 text-left">SLA Δ</th>
                 <th className="py-3 px-4 text-left">Opened</th>
                 <th className="py-3 px-4 text-left">Actions</th>
               </tr>
@@ -704,6 +887,29 @@ export function WipJobs() {
                   <td className="py-3 px-4">
                     <span className={`cyber-chip ${statusColors[job.status] || ""}`}>{job.status}</span>
                   </td>
+                  <td className="py-3 px-4">
+                    {(() => {
+                      const risk = classifyWipAgingRisk(job.opened, job.status);
+                      const days = getWipAgingDays(job.opened);
+                      const delta = getWipSlaRiskDeltaDays(job.opened, job.status);
+                      const title =
+                        delta === null
+                          ? `Completed • ${days} day(s) open`
+                          : delta > 0
+                            ? `${days} day(s) open • ${delta} day(s) until risk`
+                            : delta === 0
+                              ? `${days} day(s) open • risk threshold today`
+                              : `${days} day(s) open • ${Math.abs(delta)} day(s) over risk threshold`;
+                      return (
+                        <span className={`cyber-chip ${riskColors[risk] || ""}`} title={title}>
+                          {risk}
+                        </span>
+                      );
+                    })()}
+                  </td>
+                  <td className="py-3 px-4" style={{ fontFamily: "var(--font-mono)", fontSize: "11px" }}>
+                    <span className="text-cyan-300/70">{formatWipSlaDelta(job.opened, job.status)}</span>
+                  </td>
                   <td
                     className="py-3 px-4 text-cyan-300/30"
                     style={{ fontFamily: "var(--font-mono)", fontSize: "11px" }}
@@ -727,7 +933,7 @@ export function WipJobs() {
               {filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={13}
                     className="py-8 px-4 text-center text-cyan-500/35"
                     style={{ fontFamily: "var(--font-mono)" }}
                   >
@@ -994,18 +1200,48 @@ export function WipJobs() {
               </div>
             )}
             {detailTab === "history" && (
-              <div className="space-y-2">
-                {selectedJob.history.map((h, i) => (
-                  <div key={i} className="flex items-start gap-3 py-2 border-b border-cyan-500/5">
-                    <div className="w-2 h-2 rounded-full bg-cyan-500/30 mt-1.5" />
-                    <div className="flex-1">
-                      <p className="text-sm text-cyan-200/70">{h.action}</p>
-                      <p className="text-[10px] text-cyan-500/20" style={{ fontFamily: "var(--font-mono)" }}>
-                        {h.ts} • {h.user}
-                      </p>
-                    </div>
+              <div className="space-y-3 max-h-[360px] overflow-auto pr-1">
+                <div>
+                  <p className="text-[11px] font-bold text-cyan-300/75 mb-2" style={{ fontFamily: "Rajdhani" }}>
+                    JOB HISTORY
+                  </p>
+                  <div className="space-y-2">
+                    {selectedJob.history.map((h, i) => (
+                      <div key={i} className="flex items-start gap-3 py-2 border-b border-cyan-500/5">
+                        <div className="w-2 h-2 rounded-full bg-cyan-500/30 mt-1.5" />
+                        <div className="flex-1">
+                          <p className="text-sm text-cyan-200/70">{h.action}</p>
+                          <p className="text-[10px] text-cyan-500/20" style={{ fontFamily: "var(--font-mono)" }}>
+                            {h.ts} • {h.user}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-bold text-cyan-300/75 mb-2" style={{ fontFamily: "Rajdhani" }}>
+                    SYSTEM AUDIT TRAIL
+                  </p>
+                  {selectedWipAudit.length === 0 ? (
+                    <p className="text-xs text-cyan-500/50">No system audit entries yet for this job.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedWipAudit.map((entry) => (
+                        <div key={entry.id} className="p-2 rounded bg-purple-500/5 border border-purple-500/20 text-xs">
+                          <p className="text-cyan-100/80">
+                            {entry.action}
+                            {entry.note ? ` — ${entry.note}` : ""}
+                          </p>
+                          <p className="text-cyan-500/40">
+                            {new Date(entry.ts).toLocaleString()} · {entry.user}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             {completionGate && (

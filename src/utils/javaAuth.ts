@@ -28,8 +28,15 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}
 }
 
 async function readErrorBody(res: Response) {
-  const text = await res.text();
-  return text.trim();
+  const text = (await res.text()).trim();
+  if (!text) return "";
+
+  try {
+    const parsed = JSON.parse(text) as { message?: string; error?: string };
+    return parsed.message || parsed.error || text;
+  } catch {
+    return text;
+  }
 }
 
 async function requestJson<T>(path: string, init: RequestInit, action: string): Promise<T> {

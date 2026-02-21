@@ -203,7 +203,7 @@ class LauncherApp:
     def clear_logs(self):
         self.log_text.delete("1.0", tk.END)
 
-    def _run_background(self, name: str, cmd: str, keep_running: bool = False):
+    def _run_background(self, name: str, cmd: str | list[str], keep_running: bool = False):
         if name in self.running and self.running[name].poll() is None:
             self._log(f"[{name}] already running")
             return
@@ -212,10 +212,16 @@ class LauncherApp:
 
         def worker():
             self.status_var.set(f"Running: {name}")
-            self._log(f"[{name}] $ {cmd}")
+            display_cmd = cmd if isinstance(cmd, str) else " ".join(cmd)
+            self._log(f"[{name}] $ {display_cmd}")
             try:
+                args = shlex.split(cmd, posix=os.name != "nt") if isinstance(cmd, str) else list(cmd)
+                if args:
+                    resolved = shutil.which(args[0])
+                    if resolved:
+                        args[0] = resolved
                 proc = subprocess.Popen(
-                    shlex.split(cmd),
+                    args,
                     cwd=ROOT,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -377,7 +383,6 @@ class LauncherApp:
         java_required = strict_optional and self.start_java_var.get()
         docker_required = strict_optional and self.start_db_var.get()
         checks = [
-            ("python3", "required for launcher", True),
             ("node", "required for frontend runtime", True),
             ("npm", "required for dependency install", True),
             ("java", "required for Java API if enabled", java_required),
@@ -388,10 +393,18 @@ class LauncherApp:
         self._log("[preflight] checking required tools")
         self._log(f"[preflight] target LAN URL: http://{self.host_var.get().strip() or '127.0.0.1'}:{port}")
         all_required_ok = True
+
+        python_cmd = shutil.which("python3") or shutil.which("python")
+        python_level = "OK" if python_cmd else "MISSING"
+        python_label = "python3/python"
+        self._log(f"[preflight] {python_label:14s} {python_level:16s} — required for launcher")
+        if not python_cmd:
+            all_required_ok = False
+
         for cmd, desc, required in checks:
             available = self._command_exists(cmd)
             level = "OK" if available else ("MISSING" if required else "OPTIONAL-MISSING")
-            self._log(f"[preflight] {cmd:7s} {level:16s} — {desc}")
+            self._log(f"[preflight] {cmd:14s} {level:16s} — {desc}")
             if required and not available:
                 all_required_ok = False
 
@@ -433,12 +446,15 @@ class LauncherApp:
             flags.append("--require-docker")
 
         flag_text = " ".join(flags)
-        self._run_background("prerequisites", f"{shlex.quote(python_cmd)} tools/preflight_check.py {flag_text}")
+        prereq_cmd = [python_cmd, "tools/preflight_check.py"]
+        if flag_text:
+            prereq_cmd.extend(flag_text.split())
+        self._run_background("prerequisites", prereq_cmd)
 
     def install_dependencies(self):
         if not self.preflight_check():
             return
-        self._run_background("install", "npm install")
+        self._run_background("install", "npm run deps:install")
 
     def run_tests(self):
         if not self.preflight_check():
@@ -543,13 +559,13 @@ class LauncherApp:
             self.status_var.set("Failed: db")
             return
 
-        self._run_background("db-pull", "docker compose pull")
+        self._run_background("db-pull", "docker compose pull postgres adminer")
 
         def start_after_pull(proc: subprocess.Popen | None):
             if proc is None or proc.returncode != 0:
                 self._log("[db] skipped compose up because docker compose pull failed or could not start")
                 return
-            self._run_background("db", "docker compose up -d")
+            self._run_background("db", "docker compose up -d postgres adminer")
 
         self._wait_for_process("db-pull", start_after_pull)
 
@@ -561,7 +577,7 @@ class LauncherApp:
         if not (ROOT / "docker-compose.yml").exists():
             self._log("[db-stop] docker-compose.yml missing. Nothing to stop.")
             return
-        self._run_background("db-stop", "docker compose down")
+        self._run_background("db-stop", "docker compose stop postgres adminer")
 
     def one_click(self):
         if self.pipeline_active:
@@ -581,11 +597,11 @@ class LauncherApp:
             return
 
         self._log("[one-click] step 1/6 install dependencies")
-        self._run_background("install", "npm install")
+        self._run_background("install", "npm run deps:install")
 
         def after_install(proc: subprocess.Popen | None):
             if proc is None or proc.returncode != 0:
-                self._log("[one-click] stopped: npm install failed")
+                self._log("[one-click] stopped: npm run deps:install failed")
                 self._set_pipeline_active(False)
                 return
 

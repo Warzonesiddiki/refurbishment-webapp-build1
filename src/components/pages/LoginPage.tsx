@@ -205,7 +205,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
           )}
 
           <p className="text-[11px] text-cyan-500/45" style={{ fontFamily: "Share Tech Mono" }}>
-            If you see a network error, start the Java API server (`npm run java:server`) and ensure VITE_JAVA_API_BASE is reachable.
+            If you see a network error, run `npm run dev:with-java` (or start `npm run java:server`) and ensure VITE_JAVA_API_BASE is reachable.
           </p>
         </form>
       </div>

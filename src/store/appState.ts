@@ -10,7 +10,11 @@
 import { laptopTable, partTable, activityFeed, alertList } from "@/data/mockData";
 import { makeSequenceGenerator, computeVat, canAdvance, trackStages } from "@/domain";
 import { canTransitionLaptopStatus, canTransitionLotStatus } from "@/domain/statusTransitions";
-import { buildHarvestedPartName, calculateReplacementNetCost, normalizeReplacementDestination } from "@/utils/wipReplacement";
+import {
+  buildHarvestedPartName,
+  calculateReplacementNetCost,
+  normalizeReplacementDestination,
+} from "@/utils/wipReplacement";
 
 // ── Sequence Generators ──
 const seqLaptop = makeSequenceGenerator("laptop");
@@ -34,7 +38,7 @@ export const generators = {
 };
 
 // ── Types ──
-export type LaptopRecord = typeof laptopTable[0] & {
+export type LaptopRecord = (typeof laptopTable)[0] & {
   id: string;
   selected?: boolean;
   lot?: string;
@@ -47,7 +51,7 @@ export type LaptopRecord = typeof laptopTable[0] & {
   importMeta?: Record<string, string>;
 };
 
-export type PartRecord = typeof partTable[0] & {
+export type PartRecord = (typeof partTable)[0] & {
   id: string;
   /** Reserved quantity (allocated to WIP, etc.) */
   reserved?: number;
@@ -70,7 +74,17 @@ export type WipRecord = {
   opened: string;
   diagnosisNotes: string;
   parts: { name: string; barcode: string; cost: number }[];
-  laborEntries: { tech: string; hours: number; rate: number; date: string; source?: "manual" | "timer"; approved?: boolean; approvedBy?: string; startedAt?: string; endedAt?: string }[];
+  laborEntries: {
+    tech: string;
+    hours: number;
+    rate: number;
+    date: string;
+    source?: "manual" | "timer";
+    approved?: boolean;
+    approvedBy?: string;
+    startedAt?: string;
+    endedAt?: string;
+  }[];
   history: { ts: string; action: string; user: string }[];
 };
 
@@ -84,7 +98,6 @@ export type WipPartReplacementInput = {
   removedSerial?: string;
   destination?: "Harvest QA Bin" | "Scrap Bin";
 };
-
 
 export type SaleRecord = {
   id: string;
@@ -174,6 +187,11 @@ export type LotRecord = {
   graded: number;
   cost: number;
   verificationNotes?: string;
+  importJobId?: string;
+  importedAt?: string;
+  importedBy?: string;
+  sourceFileName?: string;
+  sourceFileHash?: string;
 };
 
 export type ActivityItem = { action: string; time: string };
@@ -276,9 +294,6 @@ function deriveReserved(onHand: number, available: number | undefined) {
   return Math.max(0, onHand - avail);
 }
 
-
-
-
 function getTrackKey(trackLabel: string): keyof typeof trackStages | null {
   const m = /Track\s*([A-E])/i.exec(trackLabel);
   if (!m) return null;
@@ -317,7 +332,6 @@ function isVerifiedStatus(status: string) {
 function isGradedStatus(status: string) {
   return !["Pending Verification", "Pending Grading"].includes(status);
 }
-
 
 function deriveLotLifecycleStatus(lotLaptops: LaptopRecord[]) {
   const items = lotLaptops.length;
@@ -363,9 +377,7 @@ function syncSupplierLotsFromLots(suppliers: SupplierRecord[], lots: LotRecord[]
 
 function reconcileSalesStatuses(sales: SaleRecord[], receipts: ReceiptRecord[]) {
   return sales.map((sale) => {
-    const paidAmount = receipts
-      .filter((r) => r.invoice === sale.invoice)
-      .reduce((sum, r) => sum + r.amount, 0);
+    const paidAmount = receipts.filter((r) => r.invoice === sale.invoice).reduce((sum, r) => sum + r.amount, 0);
     const dueAmount = Math.max(0, sale.total - paidAmount);
     const status = dueAmount === 0 ? "Paid" : paidAmount > 0 ? "Partial" : "Unpaid";
     return { ...sale, status };
@@ -384,7 +396,6 @@ function normalizePart(part: PartRecord): PartRecord {
     available,
   };
 }
-
 
 function recalculateCashLedger(entries: CashEntry[]) {
   const sorted = [...entries].sort((a, b) => a.time.localeCompare(b.time));
@@ -426,7 +437,7 @@ function recalculateOwnerLedger(entries: OwnerEntry[]) {
 function appendLogs(
   state: AppState,
   movement?: Omit<MovementLogRecord, "id" | "ts" | "user">,
-  audit?: Omit<AuditLogRecord, "id" | "ts" | "user">
+  audit?: Omit<AuditLogRecord, "id" | "ts" | "user">,
 ): Pick<AppState, "movementLog" | "auditLog"> {
   const user = systemUser();
   const ts = nowTs();
@@ -452,7 +463,7 @@ export function createInitialState(): AppState {
       ...p,
       id: uid(),
       reserved: deriveReserved(p.onHand, p.available),
-    })
+    }),
   );
 
   // Wire seeded WIP to *real* seeded laptop/part barcodes.
@@ -642,7 +653,14 @@ export function createInitialState(): AppState {
       },
     ],
     ownerEntries: [
-      { id: uid(), date: "2024-01-01", type: "Investment", desc: "Initial capital injection", amount: 50000, balance: 50000 },
+      {
+        id: uid(),
+        date: "2024-01-01",
+        type: "Investment",
+        desc: "Initial capital injection",
+        amount: 50000,
+        balance: 50000,
+      },
       { id: uid(), date: "2024-01-15", type: "Profit", desc: "January profit", amount: 15200, balance: 65200 },
     ],
     suppliers: [
@@ -741,14 +759,22 @@ export type Action =
   | { type: "WIP_MOVE_STAGE"; wipId: string; toStage: string }
   | { type: "WIP_ADD_PART"; wipId: string; partBarcode: string }
   | {
-    type: "WIP_REPLACE_PART";
-    wipId: string;
-    installedPartBarcode: string;
-    removedPart: WipPartReplacementInput;
-    technician?: string;
-  }
+      type: "WIP_REPLACE_PART";
+      wipId: string;
+      installedPartBarcode: string;
+      removedPart: WipPartReplacementInput;
+      technician?: string;
+    }
   | { type: "WIP_REMOVE_PART"; wipId: string; index: number }
-  | { type: "WIP_ADD_LABOR"; wipId: string; tech: string; hours: number; source?: "manual" | "timer"; startedAt?: string; endedAt?: string }
+  | {
+      type: "WIP_ADD_LABOR";
+      wipId: string;
+      tech: string;
+      hours: number;
+      source?: "manual" | "timer";
+      startedAt?: string;
+      endedAt?: string;
+    }
   | { type: "WIP_APPROVE_LABOR_ENTRY"; wipId: string; index: number; approvedBy: string }
   | { type: "WIP_UPDATE_DIAGNOSIS"; wipId: string; notes: string }
   | { type: "WIP_COMPLETE"; wipId: string }
@@ -772,7 +798,12 @@ export function appReducer(state: AppState, action: Action): AppState {
         return {
           ...state,
           alerts: [
-            { id: uid(), title: "Duplicate barcode", description: `${action.payload.barcode} already exists`, tone: "red" },
+            {
+              id: uid(),
+              title: "Duplicate barcode",
+              description: `${action.payload.barcode} already exists`,
+              tone: "red",
+            },
             ...state.alerts,
           ].slice(0, 50),
         };
@@ -783,10 +814,26 @@ export function appReducer(state: AppState, action: Action): AppState {
       const nextLots = record.lot
         ? state.lots.map((lot) => (lot.lot === record.lot ? recalculateLotCounters(lot.lot, nextLaptops, lot) : lot))
         : state.lots;
+      const importJobId = action.payload.importMeta?.importJobId;
       const logs = appendLogs(
         state,
-        { entityType: "laptop", entityId: record.id, ref: record.barcode, action: "create" },
-        { entityType: "laptop", entityId: record.id, ref: record.barcode, action: "create", payload: { ...action.payload } }
+        {
+          entityType: "laptop",
+          entityId: record.id,
+          ref: record.barcode,
+          action: "create",
+          from: action.payload.lot ? `RECEIVING:${action.payload.lot}` : "MANUAL_ENTRY",
+          to: "INVENTORY",
+          qty: 1,
+          note: importJobId ? `importJob=${importJobId}` : undefined,
+        },
+        {
+          entityType: "laptop",
+          entityId: record.id,
+          ref: record.barcode,
+          action: "create",
+          payload: { ...action.payload },
+        },
       );
       return {
         ...state,
@@ -801,7 +848,12 @@ export function appReducer(state: AppState, action: Action): AppState {
         return {
           ...state,
           alerts: [
-            { id: uid(), title: "Invalid laptop transition", description: `${before.status} → ${action.payload.status} is not allowed`, tone: "red" },
+            {
+              id: uid(),
+              title: "Invalid laptop transition",
+              description: `${before.status} → ${action.payload.status} is not allowed`,
+              tone: "red",
+            },
             ...state.alerts,
           ].slice(0, 50),
         };
@@ -809,27 +861,30 @@ export function appReducer(state: AppState, action: Action): AppState {
       const nextLaptops = state.laptops.map((l) => (l.id === action.id ? { ...l, ...action.payload } : l));
       const after = nextLaptops.find((l) => l.id === action.id);
       const impactedLots = new Set([before?.lot, after?.lot].filter(Boolean));
-      const nextLots = state.lots.map((lot) => (impactedLots.has(lot.lot) ? recalculateLotCounters(lot.lot, nextLaptops, lot) : lot));
-      const logs = before && after
-        ? appendLogs(
-            state,
-            {
-              entityType: "laptop",
-              entityId: action.id,
-              ref: before.barcode,
-              action: "update",
-              from: before.status,
-              to: after.status,
-            },
-            {
-              entityType: "laptop",
-              entityId: action.id,
-              ref: before.barcode,
-              action: "update",
-              payload: { ...action.payload },
-            }
-          )
-        : { movementLog: state.movementLog, auditLog: state.auditLog };
+      const nextLots = state.lots.map((lot) =>
+        impactedLots.has(lot.lot) ? recalculateLotCounters(lot.lot, nextLaptops, lot) : lot,
+      );
+      const logs =
+        before && after
+          ? appendLogs(
+              state,
+              {
+                entityType: "laptop",
+                entityId: action.id,
+                ref: before.barcode,
+                action: "update",
+                from: before.status,
+                to: after.status,
+              },
+              {
+                entityType: "laptop",
+                entityId: action.id,
+                ref: before.barcode,
+                action: "update",
+                payload: { ...action.payload },
+              },
+            )
+          : { movementLog: state.movementLog, auditLog: state.auditLog };
       return { ...state, ...logs, laptops: nextLaptops, lots: nextLots };
     }
     case "DELETE_LAPTOP": {
@@ -842,7 +897,7 @@ export function appReducer(state: AppState, action: Action): AppState {
         ? appendLogs(
             state,
             { entityType: "laptop", entityId: action.id, ref: before.barcode, action: "delete" },
-            { entityType: "laptop", entityId: action.id, ref: before.barcode, action: "delete" }
+            { entityType: "laptop", entityId: action.id, ref: before.barcode, action: "delete" },
           )
         : { movementLog: state.movementLog, auditLog: state.auditLog };
       return { ...state, ...logs, laptops: nextLaptops, lots: nextLots };
@@ -853,28 +908,43 @@ export function appReducer(state: AppState, action: Action): AppState {
       const logs = appendLogs(
         state,
         { entityType: "part", entityId: record.id, ref: record.barcode, action: "create" },
-        { entityType: "part", entityId: record.id, ref: record.barcode, action: "create", payload: { ...action.payload } }
+        {
+          entityType: "part",
+          entityId: record.id,
+          ref: record.barcode,
+          action: "create",
+          payload: { ...action.payload },
+        },
       );
       return { ...state, ...logs, parts: [...state.parts, record] };
     }
     case "UPDATE_PART": {
       const before = state.parts.find((p) => p.id === action.id);
-      const nextParts = state.parts.map((p) => (p.id === action.id ? normalizePart({ ...p, ...action.payload } as PartRecord) : p));
+      const nextParts = state.parts.map((p) =>
+        p.id === action.id ? normalizePart({ ...p, ...action.payload } as PartRecord) : p,
+      );
       const after = nextParts.find((p) => p.id === action.id);
-      const logs = before && after
-        ? appendLogs(
-            state,
-            {
-              entityType: "part",
-              entityId: action.id,
-              ref: before.barcode,
-              action: "update",
-              from: `${before.onHand}/${before.reserved ?? 0}/${before.available}`,
-              to: `${after.onHand}/${after.reserved ?? 0}/${after.available}`,
-            },
-            { entityType: "part", entityId: action.id, ref: before.barcode, action: "update", payload: { ...action.payload } }
-          )
-        : { movementLog: state.movementLog, auditLog: state.auditLog };
+      const logs =
+        before && after
+          ? appendLogs(
+              state,
+              {
+                entityType: "part",
+                entityId: action.id,
+                ref: before.barcode,
+                action: "update",
+                from: `${before.onHand}/${before.reserved ?? 0}/${before.available}`,
+                to: `${after.onHand}/${after.reserved ?? 0}/${after.available}`,
+              },
+              {
+                entityType: "part",
+                entityId: action.id,
+                ref: before.barcode,
+                action: "update",
+                payload: { ...action.payload },
+              },
+            )
+          : { movementLog: state.movementLog, auditLog: state.auditLog };
       return { ...state, ...logs, parts: nextParts };
     }
     case "PART_ADJUST_STOCK": {
@@ -920,7 +990,7 @@ export function appReducer(state: AppState, action: Action): AppState {
           ref: before.barcode,
           action: "stock_adjust",
           payload: { delta: action.delta, reason: action.reason },
-        }
+        },
       );
 
       return {
@@ -939,13 +1009,16 @@ export function appReducer(state: AppState, action: Action): AppState {
       const logs = appendLogs(
         state,
         { entityType: "sale", entityId: sale.id, ref: sale.invoice, action: "create" },
-        { entityType: "sale", entityId: sale.id, ref: sale.invoice, action: "create", payload: { ...action.payload } }
+        { entityType: "sale", entityId: sale.id, ref: sale.invoice, action: "create", payload: { ...action.payload } },
       );
       return {
         ...state,
         ...logs,
         sales: [...state.sales, sale],
-        activity: [{ action: `Sale ${sale.invoice} completed for AED ${sale.total.toFixed(2)}`, time: "just now" }, ...state.activity].slice(0, 50),
+        activity: [
+          { action: `Sale ${sale.invoice} completed for AED ${sale.total.toFixed(2)}`, time: "just now" },
+          ...state.activity,
+        ].slice(0, 50),
       };
     }
     case "DELETE_SALE": {
@@ -954,7 +1027,7 @@ export function appReducer(state: AppState, action: Action): AppState {
         ? appendLogs(
             state,
             { entityType: "sale", entityId: before.id, ref: before.invoice, action: "delete" },
-            { entityType: "sale", entityId: before.id, ref: before.invoice, action: "delete" }
+            { entityType: "sale", entityId: before.id, ref: before.invoice, action: "delete" },
           )
         : { movementLog: state.movementLog, auditLog: state.auditLog };
       return { ...state, ...logs, sales: state.sales.filter((s) => s.id !== action.id) };
@@ -966,7 +1039,13 @@ export function appReducer(state: AppState, action: Action): AppState {
       const logs = appendLogs(
         state,
         { entityType: "receipt", entityId: receipt.id, ref: receipt.receipt, action: "create" },
-        { entityType: "receipt", entityId: receipt.id, ref: receipt.receipt, action: "create", payload: { ...action.payload } }
+        {
+          entityType: "receipt",
+          entityId: receipt.id,
+          ref: receipt.receipt,
+          action: "create",
+          payload: { ...action.payload },
+        },
       );
       return { ...state, ...logs, receipts: nextReceipts, sales: reconcileSalesStatuses(state.sales, nextReceipts) };
     }
@@ -977,7 +1056,7 @@ export function appReducer(state: AppState, action: Action): AppState {
         ? appendLogs(
             state,
             { entityType: "receipt", entityId: before.id, ref: before.receipt, action: "delete" },
-            { entityType: "receipt", entityId: before.id, ref: before.receipt, action: "delete" }
+            { entityType: "receipt", entityId: before.id, ref: before.receipt, action: "delete" },
           )
         : { movementLog: state.movementLog, auditLog: state.auditLog };
       return { ...state, ...logs, receipts: nextReceipts, sales: reconcileSalesStatuses(state.sales, nextReceipts) };
@@ -998,33 +1077,42 @@ export function appReducer(state: AppState, action: Action): AppState {
 
       const lotsWithLinkedPurchase = lotExists
         ? state.lots.map((lot) =>
-            lot.lot === purchase.lot ? { ...lot, supplier: purchase.supplier, cost: lot.cost + purchase.subtotal } : lot
+            lot.lot === purchase.lot
+              ? { ...lot, supplier: purchase.supplier, cost: lot.cost + purchase.subtotal }
+              : lot,
           )
         : state.lots;
 
-      const nextLots = hasLotRef && !lotExists
-        ? [
-            ...lotsWithLinkedPurchase,
-            {
-              id: uid(),
-              lot: purchase.lot,
-              supplier: purchase.supplier,
-              received: purchase.date,
-              status: "Pending",
-              items: 0,
-              verified: 0,
-              graded: 0,
-              cost: purchase.subtotal,
-            },
-          ]
-        : lotsWithLinkedPurchase;
+      const nextLots =
+        hasLotRef && !lotExists
+          ? [
+              ...lotsWithLinkedPurchase,
+              {
+                id: uid(),
+                lot: purchase.lot,
+                supplier: purchase.supplier,
+                received: purchase.date,
+                status: "Pending",
+                items: 0,
+                verified: 0,
+                graded: 0,
+                cost: purchase.subtotal,
+              },
+            ]
+          : lotsWithLinkedPurchase;
 
       const nextSuppliers = syncSupplierLotsFromLots(nextSuppliersBase, nextLots);
 
       const logs = appendLogs(
         state,
         { entityType: "purchase", entityId: purchase.id, ref: purchase.purchase, action: "create" },
-        { entityType: "purchase", entityId: purchase.id, ref: purchase.purchase, action: "create", payload: { ...action.payload } }
+        {
+          entityType: "purchase",
+          entityId: purchase.id,
+          ref: purchase.purchase,
+          action: "create",
+          payload: { ...action.payload },
+        },
       );
       return { ...state, ...logs, purchases: [...state.purchases, purchase], lots: nextLots, suppliers: nextSuppliers };
     }
@@ -1032,13 +1120,27 @@ export function appReducer(state: AppState, action: Action): AppState {
       const before = state.purchases.find((p) => p.id === action.id);
       const next = state.purchases.map((p) => (p.id === action.id ? { ...p, ...action.payload } : p));
       const after = next.find((p) => p.id === action.id);
-      const logs = before && after
-        ? appendLogs(
-            state,
-            { entityType: "purchase", entityId: action.id, ref: before.purchase, action: "update", from: before.paid, to: after.paid },
-            { entityType: "purchase", entityId: action.id, ref: before.purchase, action: "update", payload: { ...action.payload } }
-          )
-        : { movementLog: state.movementLog, auditLog: state.auditLog };
+      const logs =
+        before && after
+          ? appendLogs(
+              state,
+              {
+                entityType: "purchase",
+                entityId: action.id,
+                ref: before.purchase,
+                action: "update",
+                from: before.paid,
+                to: after.paid,
+              },
+              {
+                entityType: "purchase",
+                entityId: action.id,
+                ref: before.purchase,
+                action: "update",
+                payload: { ...action.payload },
+              },
+            )
+          : { movementLog: state.movementLog, auditLog: state.auditLog };
       return { ...state, ...logs, purchases: next };
     }
 
@@ -1047,7 +1149,9 @@ export function appReducer(state: AppState, action: Action): AppState {
       const purchase = state.purchases.find((p) => p.purchase === action.payload.purchase);
       let nextPurchases = state.purchases;
       if (purchase) {
-        const paidAmount = nextPayments.filter((p) => p.purchase === purchase.purchase).reduce((a, p) => a + p.amount, 0);
+        const paidAmount = nextPayments
+          .filter((p) => p.purchase === purchase.purchase)
+          .reduce((a, p) => a + p.amount, 0);
         const paidStatus = paidAmount >= purchase.total ? "Paid" : paidAmount > 0 ? "Partial" : "Due";
         const status = paidStatus === "Paid" ? "Closed" : "Open";
         nextPurchases = state.purchases.map((p) => (p.id === purchase.id ? { ...p, paid: paidStatus, status } : p));
@@ -1056,7 +1160,13 @@ export function appReducer(state: AppState, action: Action): AppState {
       const logs = appendLogs(
         state,
         { entityType: "payment", entityId: payment.id, ref: payment.payment, action: "create" },
-        { entityType: "payment", entityId: payment.id, ref: payment.payment, action: "create", payload: { ...action.payload } }
+        {
+          entityType: "payment",
+          entityId: payment.id,
+          ref: payment.payment,
+          action: "create",
+          payload: { ...action.payload },
+        },
       );
       return { ...state, ...logs, payments: nextPayments, purchases: nextPurchases };
     }
@@ -1068,7 +1178,9 @@ export function appReducer(state: AppState, action: Action): AppState {
       if (payment) {
         const purchase = state.purchases.find((p) => p.purchase === payment.purchase);
         if (purchase) {
-          const paidAmount = nextPayments.filter((p) => p.purchase === purchase.purchase).reduce((a, p) => a + p.amount, 0);
+          const paidAmount = nextPayments
+            .filter((p) => p.purchase === purchase.purchase)
+            .reduce((a, p) => a + p.amount, 0);
           const paidStatus = paidAmount >= purchase.total ? "Paid" : paidAmount > 0 ? "Partial" : "Due";
           const status = paidStatus === "Paid" ? "Closed" : "Open";
           nextPurchases = state.purchases.map((p) => (p.id === purchase.id ? { ...p, paid: paidStatus, status } : p));
@@ -1078,7 +1190,7 @@ export function appReducer(state: AppState, action: Action): AppState {
         ? appendLogs(
             state,
             { entityType: "payment", entityId: payment.id, ref: payment.payment, action: "delete" },
-            { entityType: "payment", entityId: payment.id, ref: payment.payment, action: "delete" }
+            { entityType: "payment", entityId: payment.id, ref: payment.payment, action: "delete" },
           )
         : { movementLog: state.movementLog, auditLog: state.auditLog };
       return { ...state, ...logs, payments: nextPayments, purchases: nextPurchases };
@@ -1101,7 +1213,12 @@ export function appReducer(state: AppState, action: Action): AppState {
         return {
           ...state,
           alerts: [
-            { id: uid(), title: "Cash day already open", description: "Opening entry is only allowed when day is closed", tone: "yellow" },
+            {
+              id: uid(),
+              title: "Cash day already open",
+              description: "Opening entry is only allowed when day is closed",
+              tone: "yellow",
+            },
             ...state.alerts,
           ].slice(0, 50),
         };
@@ -1111,7 +1228,12 @@ export function appReducer(state: AppState, action: Action): AppState {
         return {
           ...state,
           alerts: [
-            { id: uid(), title: "Cash day already closed", description: "Closing entry requires an open day", tone: "yellow" },
+            {
+              id: uid(),
+              title: "Cash day already closed",
+              description: "Closing entry requires an open day",
+              tone: "yellow",
+            },
             ...state.alerts,
           ].slice(0, 50),
         };
@@ -1121,7 +1243,13 @@ export function appReducer(state: AppState, action: Action): AppState {
       const logs = appendLogs(
         state,
         { entityType: "settings", entityId: entry.id, ref: "cash", action: "cash_entry", note: entry.desc },
-        { entityType: "settings", entityId: entry.id, ref: "cash", action: "cash_entry", payload: { ...action.payload } }
+        {
+          entityType: "settings",
+          entityId: entry.id,
+          ref: "cash",
+          action: "cash_entry",
+          payload: { ...action.payload },
+        },
       );
       const nextEntries = recalculateCashLedger([...state.cashEntries, entry]);
       return { ...state, ...logs, cashEntries: nextEntries };
@@ -1132,7 +1260,8 @@ export function appReducer(state: AppState, action: Action): AppState {
     }
 
     case "ADD_OWNER_ENTRY": {
-      const normalizedAmount = action.payload.type === "Drawing" ? -Math.abs(action.payload.amount) : Math.abs(action.payload.amount);
+      const normalizedAmount =
+        action.payload.type === "Drawing" ? -Math.abs(action.payload.amount) : Math.abs(action.payload.amount);
       const entry = { ...action.payload, amount: normalizedAmount, id: uid() };
       const nextEntries = recalculateOwnerLedger([...state.ownerEntries, entry]);
       const hasNegativeCapital = nextEntries.some((ownerEntry) => ownerEntry.balance < 0);
@@ -1154,7 +1283,13 @@ export function appReducer(state: AppState, action: Action): AppState {
       const logs = appendLogs(
         state,
         { entityType: "settings", entityId: entry.id, ref: "owner", action: "owner_entry", note: entry.desc },
-        { entityType: "settings", entityId: entry.id, ref: "owner", action: "owner_entry", payload: { ...action.payload } }
+        {
+          entityType: "settings",
+          entityId: entry.id,
+          ref: "owner",
+          action: "owner_entry",
+          payload: { ...action.payload },
+        },
       );
       return { ...state, ...logs, ownerEntries: nextEntries };
     }
@@ -1168,7 +1303,13 @@ export function appReducer(state: AppState, action: Action): AppState {
       const logs = appendLogs(
         state,
         { entityType: "settings", entityId: supplier.id, ref: supplier.name, action: "supplier_create" },
-        { entityType: "settings", entityId: supplier.id, ref: supplier.name, action: "supplier_create", payload: { ...action.payload } }
+        {
+          entityType: "settings",
+          entityId: supplier.id,
+          ref: supplier.name,
+          action: "supplier_create",
+          payload: { ...action.payload },
+        },
       );
       return { ...state, ...logs, suppliers: [...state.suppliers, supplier] };
     }
@@ -1183,7 +1324,7 @@ export function appReducer(state: AppState, action: Action): AppState {
 
       const nextLots = state.lots.map((lot) => (lot.supplier === before.name ? { ...lot, supplier: nextName } : lot));
       const nextPurchases = state.purchases.map((purchase) =>
-        purchase.supplier === before.name ? { ...purchase, supplier: nextName } : purchase
+        purchase.supplier === before.name ? { ...purchase, supplier: nextName } : purchase,
       );
 
       return {
@@ -1222,20 +1363,23 @@ export function appReducer(state: AppState, action: Action): AppState {
       const supplierExists = state.suppliers.some((s) => s.name === lot.supplier);
       const nextSuppliersBase = supplierExists
         ? state.suppliers
-        : [...state.suppliers, { id: uid(), name: lot.supplier, contact: "", email: "", trn: "", lots: 0, status: "Active" }];
+        : [
+            ...state.suppliers,
+            { id: uid(), name: lot.supplier, contact: "", email: "", trn: "", lots: 0, status: "Active" },
+          ];
       const nextLots = [...state.lots, lot];
       const nextSuppliers = syncSupplierLotsFromLots(nextSuppliersBase, nextLots);
       const logs = appendLogs(
         state,
         { entityType: "lot", entityId: lot.id, ref: lot.lot, action: "create" },
-        { entityType: "lot", entityId: lot.id, ref: lot.lot, action: "create", payload: { ...action.payload } }
+        { entityType: "lot", entityId: lot.id, ref: lot.lot, action: "create", payload: { ...action.payload } },
       );
       return { ...state, ...logs, lots: nextLots, suppliers: nextSuppliers };
     }
     case "UPDATE_LOT": {
       const currentLot = state.lots.find((l) => l.id === action.id);
       const invalidStatusTransition = Boolean(
-        currentLot && action.payload.status && !canTransitionLotStatus(currentLot.status, action.payload.status)
+        currentLot && action.payload.status && !canTransitionLotStatus(currentLot.status, action.payload.status),
       );
 
       const nextLots = state.lots.map((l) => {
@@ -1249,7 +1393,9 @@ export function appReducer(state: AppState, action: Action): AppState {
         const verified = Math.max(0, Math.min(merged.verified, items));
         const graded = Math.max(0, Math.min(merged.graded, verified));
         const status = verified >= items && items > 0 ? "Verified" : merged.status;
-        const lifecycleStatus = action.payload.status ? status : deriveLotLifecycleStatus(state.laptops.filter((lp) => lp.lot === l.lot));
+        const lifecycleStatus = action.payload.status
+          ? status
+          : deriveLotLifecycleStatus(state.laptops.filter((lp) => lp.lot === l.lot));
         return { ...merged, items, verified, graded, status: lifecycleStatus };
       });
 
@@ -1259,7 +1405,12 @@ export function appReducer(state: AppState, action: Action): AppState {
           lots: nextLots,
           suppliers: syncSupplierLotsFromLots(state.suppliers, nextLots),
           alerts: [
-            { id: uid(), title: "Invalid lot transition", description: `${currentLot.status} → ${action.payload.status} is not allowed`, tone: "red" },
+            {
+              id: uid(),
+              title: "Invalid lot transition",
+              description: `${currentLot.status} → ${action.payload.status} is not allowed`,
+              tone: "red",
+            },
             ...state.alerts,
           ].slice(0, 50),
         };
@@ -1303,7 +1454,12 @@ export function appReducer(state: AppState, action: Action): AppState {
         return {
           ...state,
           alerts: [
-            { id: uid(), title: "WIP blocked", description: `Laptop ${action.payload.laptop} not found in inventory`, tone: "red" },
+            {
+              id: uid(),
+              title: "WIP blocked",
+              description: `Laptop ${action.payload.laptop} not found in inventory`,
+              tone: "red",
+            },
             ...state.alerts,
           ].slice(0, 50),
         };
@@ -1313,16 +1469,24 @@ export function appReducer(state: AppState, action: Action): AppState {
       // Enforce one active WIP per laptop: close existing actives
       const nextWips = state.wipJobs.map((w) =>
         w.laptop === wip.laptop && w.status !== "Completed"
-          ? { ...w, status: "Completed", stage: "Complete", history: [...w.history, { ts: new Date().toLocaleString(), action: "Auto-closed (new WIP created)", user: systemUser() }] }
-          : w
+          ? {
+              ...w,
+              status: "Completed",
+              stage: "Complete",
+              history: [
+                ...w.history,
+                { ts: new Date().toLocaleString(), action: "Auto-closed (new WIP created)", user: systemUser() },
+              ],
+            }
+          : w,
       );
       const logs = appendLogs(
         state,
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "create" },
-        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "create", payload: { ...action.payload } }
+        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "create", payload: { ...action.payload } },
       );
       const nextLaptops = state.laptops.map((l) =>
-        l.barcode === wip.laptop && l.status !== "Sold" ? { ...l, status: "In Processing", track: wip.track } : l
+        l.barcode === wip.laptop && l.status !== "Sold" ? { ...l, status: "In Processing", track: wip.track } : l,
       );
       const nextLots = state.lots.map((lot) => recalculateLotCounters(lot.lot, nextLaptops, lot));
 
@@ -1332,7 +1496,10 @@ export function appReducer(state: AppState, action: Action): AppState {
         laptops: nextLaptops,
         lots: nextLots,
         wipJobs: [...nextWips, wip],
-        activity: [{ action: `WIP ${wip.wip} created for ${wip.brand}`, time: "just now" }, ...state.activity].slice(0, 50),
+        activity: [{ action: `WIP ${wip.wip} created for ${wip.brand}`, time: "just now" }, ...state.activity].slice(
+          0,
+          50,
+        ),
       };
     }
     case "UPDATE_WIP":
@@ -1376,7 +1543,13 @@ export function appReducer(state: AppState, action: Action): AppState {
             ? [{ ts: new Date().toLocaleString(), action: "Auto-routed to Track D (Testing)", user: systemUser() }]
             : []),
           ...(failedTestingToTrackE
-            ? [{ ts: new Date().toLocaleString(), action: "Marked completed after L2 Failed; Track E follow-up created", user: systemUser() }]
+            ? [
+                {
+                  ts: new Date().toLocaleString(),
+                  action: "Marked completed after L2 Failed; Track E follow-up created",
+                  user: systemUser(),
+                },
+              ]
             : []),
         ],
       };
@@ -1397,11 +1570,13 @@ export function appReducer(state: AppState, action: Action): AppState {
           ref: wip.wip,
           action: "move_stage",
           payload: { fromStage, toStage, rerouteToTesting },
-        }
+        },
       );
 
       const existingTrackE = failedTestingToTrackE
-        ? state.wipJobs.find((x) => x.id !== wip.id && x.laptop === wip.laptop && x.track === "Track E" && x.status !== "Completed")
+        ? state.wipJobs.find(
+            (x) => x.id !== wip.id && x.laptop === wip.laptop && x.track === "Track E" && x.status !== "Completed",
+          )
         : null;
       const followup = failedTestingToTrackE && !existingTrackE ? buildTrackEFollowupFromFailedTesting(wip) : null;
 
@@ -1421,10 +1596,7 @@ export function appReducer(state: AppState, action: Action): AppState {
               ...state.alerts,
             ].slice(0, 50)
           : state.alerts,
-        wipJobs: [
-          ...state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
-          ...(followup ? [followup] : []),
-        ],
+        wipJobs: [...state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)), ...(followup ? [followup] : [])],
       };
     }
 
@@ -1441,7 +1613,12 @@ export function appReducer(state: AppState, action: Action): AppState {
         return {
           ...state,
           alerts: [
-            { id: uid(), title: "Out of stock", description: `${part.name} (${part.barcode}) is not available`, tone: "red" },
+            {
+              id: uid(),
+              title: "Out of stock",
+              description: `${part.name} (${part.barcode}) is not available`,
+              tone: "red",
+            },
             ...state.alerts,
           ].slice(0, 50),
         };
@@ -1458,7 +1635,10 @@ export function appReducer(state: AppState, action: Action): AppState {
         parts: nextWipParts,
         partsUsed: nextWipParts.length,
         partsCost: nextWipCost,
-        history: [...wip.history, { ts: new Date().toLocaleString(), action: `Part allocated: ${part.name}`, user: systemUser() }],
+        history: [
+          ...wip.history,
+          { ts: new Date().toLocaleString(), action: `Part allocated: ${part.name}`, user: systemUser() },
+        ],
       };
 
       const logs = appendLogs(
@@ -1479,7 +1659,7 @@ export function appReducer(state: AppState, action: Action): AppState {
           ref: wip.wip,
           action: "add_part",
           payload: { partBarcode: part.barcode },
-        }
+        },
       );
 
       return {
@@ -1494,7 +1674,9 @@ export function appReducer(state: AppState, action: Action): AppState {
       const wip = state.wipJobs.find((w) => w.id === action.wipId);
       if (!wip) return state;
 
-      const installedPart = state.parts.find((p) => p.barcode.toUpperCase() === action.installedPartBarcode.toUpperCase());
+      const installedPart = state.parts.find(
+        (p) => p.barcode.toUpperCase() === action.installedPartBarcode.toUpperCase(),
+      );
       if (!installedPart) return state;
 
       const normalizedInstalled = normalizePart(installedPart);
@@ -1504,7 +1686,12 @@ export function appReducer(state: AppState, action: Action): AppState {
         return {
           ...state,
           alerts: [
-            { id: uid(), title: "Out of stock", description: `${installedPart.name} (${installedPart.barcode}) is not available`, tone: "red" },
+            {
+              id: uid(),
+              title: "Out of stock",
+              description: `${installedPart.name} (${installedPart.barcode}) is not available`,
+              tone: "red",
+            },
             ...state.alerts,
           ].slice(0, 50),
         };
@@ -1528,14 +1715,14 @@ export function appReducer(state: AppState, action: Action): AppState {
         available: 1,
         reorder: 0,
         cost: recoveredValue,
-        importMeta: action.removedPart.removedSerial?.trim() ? { removedSerial: action.removedPart.removedSerial.trim() } : undefined,
+        importMeta: action.removedPart.removedSerial?.trim()
+          ? { removedSerial: action.removedPart.removedSerial.trim() }
+          : undefined,
         location: destination,
         reserved: 0,
       });
 
-      const nextParts = state.parts
-        .map((p) => (p.id === installedPart.id ? nextInstalled : p))
-        .concat(harvestedPart);
+      const nextParts = state.parts.map((p) => (p.id === installedPart.id ? nextInstalled : p)).concat(harvestedPart);
 
       const installedWipPart = {
         name: installedPart.name,
@@ -1583,7 +1770,7 @@ export function appReducer(state: AppState, action: Action): AppState {
             harvestedPartBarcode: harvestedPart.barcode,
             removedPart: action.removedPart,
           },
-        }
+        },
       );
 
       const harvestMovement: MovementLogRecord = {
@@ -1661,7 +1848,7 @@ export function appReducer(state: AppState, action: Action): AppState {
             ref: wip.wip,
             action: "remove_part",
             payload: { partBarcode: removed.barcode },
-          }
+          },
         );
         movementLogs = logs.movementLog;
         auditLogs = logs.auditLog;
@@ -1674,7 +1861,10 @@ export function appReducer(state: AppState, action: Action): AppState {
         parts: nextWipParts,
         partsUsed: nextWipParts.length,
         partsCost: nextWipCost,
-        history: [...wip.history, { ts: new Date().toLocaleString(), action: `Part released: ${removed.name}`, user: systemUser() }],
+        history: [
+          ...wip.history,
+          { ts: new Date().toLocaleString(), action: `Part released: ${removed.name}`, user: systemUser() },
+        ],
       };
 
       return {
@@ -1705,13 +1895,33 @@ export function appReducer(state: AppState, action: Action): AppState {
         ...wip,
         laborEntries,
         laborHrs,
-        history: [...wip.history, { ts: new Date().toLocaleString(), action: `Labor added: ${action.hours}h (${action.tech})`, user: systemUser() }],
+        history: [
+          ...wip.history,
+          {
+            ts: new Date().toLocaleString(),
+            action: `Labor added: ${action.hours}h (${action.tech})`,
+            user: systemUser(),
+          },
+        ],
       };
 
       const logs = appendLogs(
         state,
-        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_add", qty: action.hours, note: action.tech },
-        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_add", payload: { tech: action.tech, hours: action.hours, source: action.source || "manual" } }
+        {
+          entityType: "wip",
+          entityId: wip.id,
+          ref: wip.wip,
+          action: "labor_add",
+          qty: action.hours,
+          note: action.tech,
+        },
+        {
+          entityType: "wip",
+          entityId: wip.id,
+          ref: wip.wip,
+          action: "labor_add",
+          payload: { tech: action.tech, hours: action.hours, source: action.source || "manual" },
+        },
       );
 
       return {
@@ -1727,17 +1937,37 @@ export function appReducer(state: AppState, action: Action): AppState {
       const target = wip.laborEntries[action.index];
       if (!target) return state;
       const laborEntries = wip.laborEntries.map((entry, idx) =>
-        idx === action.index ? { ...entry, approved: true, approvedBy: action.approvedBy } : entry
+        idx === action.index ? { ...entry, approved: true, approvedBy: action.approvedBy } : entry,
       );
       const nextWip: WipRecord = {
         ...wip,
         laborEntries,
-        history: [...wip.history, { ts: new Date().toLocaleString(), action: `Labor approved: ${target.hours}h (${target.tech})`, user: action.approvedBy }],
+        history: [
+          ...wip.history,
+          {
+            ts: new Date().toLocaleString(),
+            action: `Labor approved: ${target.hours}h (${target.tech})`,
+            user: action.approvedBy,
+          },
+        ],
       };
       const logs = appendLogs(
         state,
-        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_approve", qty: target.hours, note: action.approvedBy },
-        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_approve", payload: { index: action.index, approvedBy: action.approvedBy } }
+        {
+          entityType: "wip",
+          entityId: wip.id,
+          ref: wip.wip,
+          action: "labor_approve",
+          qty: target.hours,
+          note: action.approvedBy,
+        },
+        {
+          entityType: "wip",
+          entityId: wip.id,
+          ref: wip.wip,
+          action: "labor_approve",
+          payload: { index: action.index, approvedBy: action.approvedBy },
+        },
       );
       return {
         ...state,
@@ -1753,7 +1983,13 @@ export function appReducer(state: AppState, action: Action): AppState {
       const logs = appendLogs(
         state,
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "diagnosis_update" },
-        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "diagnosis_update", payload: { notesLen: action.notes.length } }
+        {
+          entityType: "wip",
+          entityId: wip.id,
+          ref: wip.wip,
+          action: "diagnosis_update",
+          payload: { notesLen: action.notes.length },
+        },
       );
       return {
         ...state,
@@ -1795,7 +2031,13 @@ export function appReducer(state: AppState, action: Action): AppState {
       const logs = appendLogs(
         state,
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "complete" },
-        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "complete", payload: { partsConsumed: wip.parts.length } }
+        {
+          entityType: "wip",
+          entityId: wip.id,
+          ref: wip.wip,
+          action: "complete",
+          payload: { partsConsumed: wip.parts.length },
+        },
       );
 
       const nextLots = state.lots.map((lot) => recalculateLotCounters(lot.lot, nextLaptops, lot));
@@ -1822,13 +2064,22 @@ export function appReducer(state: AppState, action: Action): AppState {
     case "ADD_NOTIFICATION":
       return { ...state, notifications: [{ ...action.payload, id: uid() }, ...state.notifications] };
     case "MARK_NOTIFICATION_READ":
-      return { ...state, notifications: state.notifications.map((n) => (n.id === action.id ? { ...n, read: true } : n)) };
+      return {
+        ...state,
+        notifications: state.notifications.map((n) => (n.id === action.id ? { ...n, read: true } : n)),
+      };
     case "UPDATE_SETTINGS": {
       const next = { ...state.settings, ...action.payload };
       const logs = appendLogs(
         state,
         { entityType: "settings", entityId: "settings", ref: "settings", action: "update" },
-        { entityType: "settings", entityId: "settings", ref: "settings", action: "update", payload: { ...action.payload } }
+        {
+          entityType: "settings",
+          entityId: "settings",
+          ref: "settings",
+          action: "update",
+          payload: { ...action.payload },
+        },
       );
       return { ...state, ...logs, settings: next };
     }
@@ -1844,8 +2095,18 @@ export function appReducer(state: AppState, action: Action): AppState {
       if (!q) return { ...state, searchResults: [] };
       const results: SearchResult[] = [];
       state.laptops.forEach((l) => {
-        if (l.barcode.toLowerCase().includes(q) || l.brand.toLowerCase().includes(q) || l.model.toLowerCase().includes(q))
-          results.push({ type: "laptop", id: l.id, label: `${l.brand} ${l.model}`, barcode: l.barcode, status: l.status });
+        if (
+          l.barcode.toLowerCase().includes(q) ||
+          l.brand.toLowerCase().includes(q) ||
+          l.model.toLowerCase().includes(q)
+        )
+          results.push({
+            type: "laptop",
+            id: l.id,
+            label: `${l.brand} ${l.model}`,
+            barcode: l.barcode,
+            status: l.status,
+          });
       });
       state.parts.forEach((p) => {
         if (p.barcode.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))

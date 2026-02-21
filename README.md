@@ -37,7 +37,7 @@ Tahir ERP is a React + TypeScript ERP workflow application for laptop refurbishm
 ### Installation
 
 ```bash
-npm install
+npm run deps:install
 ```
 
 ### Prerequisites Validation
@@ -80,11 +80,62 @@ Useful bash options:
 npm run dev
 ```
 
+`npm run dev` now starts both Java API + frontend automatically.
+If you only need frontend, run:
+
+```bash
+npm run dev:web
+```
+
+Java server launch options:
+
+```bash
+# Prefer Maven Java server launch (default when mvn is installed)
+npm run java:server:mvn
+
+# Force legacy javac/java launch path
+npm run java:server:javac
+
+# Force build-tool behavior for launcher scripts (auto|javac|maven)
+export TAHIR_JAVA_BUILD_TOOL=maven
+# PowerShell: $env:TAHIR_JAVA_BUILD_TOOL="maven"
+# CMD: set TAHIR_JAVA_BUILD_TOOL=maven
+
+# Force legacy javac/java flow explicitly
+export TAHIR_JAVA_BUILD_TOOL=javac
+
+# Or use CLI override (takes precedence over env)
+python tools/run_java_server.py 8085 --build-tool=maven
+
+# dev_with_java.mjs also supports: --java-port <port>, --no-java, --help
+```
+
+Optional fallback when Java is unavailable during local UI work:
+
+```bash
+export DEV_ALLOW_WEB_WITHOUT_JAVA=true
+npm run dev -- --build-tool=auto
+
+# Or skip Java startup entirely and run only frontend
+npm run dev -- --no-java
+
+# Pass-through extra Vite args after `--`
+npm run dev -- --no-java -- --port 5180 --strictPort
+```
+
+In `--no-java` mode, local Java/Python tooling is not required.
+
 ### Building
 
 ```bash
 npm run build
 ```
+
+## Complete Documentation
+
+For full technical/operational documentation, see:
+
+- `docs/PROJECT_DOCUMENTATION_FULL.md`
 
 ## LAN Access (Same Wi‑Fi)
 
@@ -92,6 +143,13 @@ Run the dev server bound to all interfaces:
 
 ```bash
 npm run dev:lan
+```
+
+`npm run dev:lan` now starts Java API + LAN frontend automatically.
+If you only need LAN frontend, run:
+
+```bash
+npm run dev:lan:web
 ```
 
 Then open from another device using your computer IP, for example:

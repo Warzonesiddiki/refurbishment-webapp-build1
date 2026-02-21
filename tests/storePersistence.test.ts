@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import { createInitialState } from "@/store/appState";
 import { STORAGE_KEY, clearPersistedState, loadPersistedState, persistState } from "@/store/persistence";
 
@@ -23,4 +23,15 @@ describe("store persistence", () => {
 
     expect(loadPersistedState()).toBeNull();
   });
+
+  it("returns null when localStorage access throws", () => {
+    const getItemSpy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("Blocked", "SecurityError");
+    });
+
+    expect(loadPersistedState()).toBeNull();
+
+    getItemSpy.mockRestore();
+  });
+
 });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-export function useLaborTimer() {
+export function useLaborTimer(storageKey = "") {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
   const intervalRef = useRef<number | null>(null);
@@ -18,6 +18,33 @@ export function useLaborTimer() {
       intervalRef.current = null;
     };
   }, [startedAt]);
+
+  useEffect(() => {
+    if (!storageKey || typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        setStartedAt(parsed);
+      }
+    } catch {
+      // ignore restore errors
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!storageKey || typeof window === "undefined") return;
+    try {
+      if (startedAt === null) {
+        window.localStorage.removeItem(storageKey);
+      } else {
+        window.localStorage.setItem(storageKey, String(startedAt));
+      }
+    } catch {
+      // ignore persistence errors
+    }
+  }, [startedAt, storageKey]);
 
   const elapsedMs = useMemo(() => (startedAt ? now - startedAt : 0), [now, startedAt]);
 
