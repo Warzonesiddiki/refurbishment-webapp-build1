@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
+import type { AppState } from "@/store/appState";
 
 export function SettingsPage() {
   const state = useAppState();
@@ -20,7 +21,7 @@ export function SettingsPage() {
     }
   };
 
-  const isValidBackupPayload = (payload: Record<string, unknown>) => {
+  const isValidBackupPayload = (payload: Record<string, unknown>): payload is AppState => {
     return requiredBackupKeys.every((key) => key in payload);
   };
 
