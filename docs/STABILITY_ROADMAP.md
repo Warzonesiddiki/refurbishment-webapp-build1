@@ -128,3 +128,9 @@ npm run verify
 - **QA**: critical-flow tests, negative-path coverage, flake triage.
 - **Release/DevEx**: verify script, CI gate, branch protection.
 
+---
+
+## 7) Implemented in this push
+- Added a single release gate command: `npm run verify` (test + typecheck + build).
+- Added CI workflow: `.github/workflows/ci-verify.yml` to execute `npm run verify` on push/PR.
+- Added explicit `typecheck` script (`tsc --noEmit`) to make static correctness a first-class gate.
