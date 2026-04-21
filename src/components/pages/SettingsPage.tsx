@@ -8,6 +8,21 @@ export function SettingsPage() {
   const [form, setForm] = useState({ ...state.settings });
   const [activeSection, setActiveSection] = useState("company");
   const [showDanger, setShowDanger] = useState(false);
+  const [restoreMessage, setRestoreMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+
+  const requiredBackupKeys = ["laptops", "parts", "wipJobs", "sales", "purchases", "settings"] as const;
+
+  const parseBackupPayload = (text: string) => {
+    try {
+      return JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  const isValidBackupPayload = (payload: Record<string, unknown>) => {
+    return requiredBackupKeys.every((key) => key in payload);
+  };
 
   const save = () => {
     dispatch({ type: "UPDATE_SETTINGS", payload: form });
@@ -181,16 +196,28 @@ export function SettingsPage() {
                         const file = input.files?.[0];
                         if (!file) return;
                         const text = await file.text();
-                        const data = JSON.parse(text);
-                        const requiredKeys = ["laptops","parts","wipJobs","sales","purchases","settings"];
-                        if (!requiredKeys.every((k) => k in data)) return;
+                        const data = parseBackupPayload(text);
+                        if (!data) {
+                          setRestoreMessage({ tone: "error", text: "Invalid JSON file. Please upload a valid backup." });
+                          return;
+                        }
+                        if (!isValidBackupPayload(data)) {
+                          setRestoreMessage({ tone: "error", text: "Backup file is missing required data sections." });
+                          return;
+                        }
                         dispatch({ type: "RESTORE_STATE", payload: data });
+                        setRestoreMessage({ tone: "success", text: "Backup restored successfully." });
                       };
                       input.click();
                     }}
                   >
                     📂 Upload Backup File
                   </button>
+                  {restoreMessage && (
+                    <p className={`text-xs ${restoreMessage.tone === "success" ? "text-green-400" : "text-red-400/80"}`}>
+                      {restoreMessage.text}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

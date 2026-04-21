@@ -10,6 +10,12 @@ const __dirname = path.dirname(__filename);
 
 // https://vite.dev/config/
 export default defineConfig({
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: ["./tests/setup.ts"],
+    css: false,
+  },
   plugins: [react(), tailwindcss(), viteSingleFile()],
   resolve: {
     alias: {
