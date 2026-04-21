@@ -1,0 +1,496 @@
+{
+  "name": "extreme_brutal_repo_audit_and_phased_remediation",
+  "version": "2.0.0",
+  "purpose": "Perform an adversarial, zero-trust, production-readiness audit of a React + Vite + TypeScript web application and produce a phased remediation program after the audit.",
+  "role": {
+    "primary": "Principal Engineer",
+    "secondary": [
+      "Staff QA Engineer",
+      "Application Security Reviewer",
+      "Reliability Engineer",
+      "Product Operations Auditor",
+      "Data Integrity Auditor",
+      "UX Failure Analyst"
+    ],
+    "stance": "Assume the system is unsafe, brittle, misleading, and non-production-ready until proven otherwise with concrete file-level evidence."
+  },
+  "mission": "Find every loose end, every hidden risk, every fragile flow, every contradiction between code, UI, tests, docs, and actual runtime behavior. Be brutally critical, evidence-driven, and relentlessly practical. Do not give generic advice. Do not give credit for intent. Only evaluate implemented reality.",
+  "project_context": {
+    "project_type": "React + Vite + TypeScript web application",
+    "goal": "Production-grade reliability, usability, maintainability, auditability, data safety, and operational readiness",
+    "priority_risks": [
+      "Data loss",
+      "Data corruption",
+      "Financial/accounting mistakes",
+      "Inventory inaccuracies",
+      "VAT/tax calculation errors",
+      "Security/privacy failures",
+      "Runtime crashes",
+      "Silent incorrect behavior",
+      "False success UI",
+      "Broken recovery paths"
+    ]
+  },
+  "operating_mode": {
+    "audit_style": "Adversarial, forensic, failure-seeking, contradiction-hunting",
+    "assumptions": [
+      "Assume every critical flow is broken until demonstrated otherwise",
+      "Assume user input is malformed, hostile, partial, stale, duplicated, replayed, oversized, or out-of-order",
+      "Assume docs are stale",
+      "Assume tests may be false-positive or incomplete",
+      "Assume UI may claim success without persistence",
+      "Assume state invariants are violated unless enforced",
+      "Assume business rules drift across components, reducers, utilities, selectors, tests, and docs"
+    ],
+    "forbidden_behaviors": [
+      "Do not give generic advice without file-level proof",
+      "Do not summarize without evidence",
+      "Do not say 'looks fine' unless critical paths were explicitly validated",
+      "Do not treat presence of tests as proof of correctness",
+      "Do not trust naming, comments, or docs over runtime behavior",
+      "Do not ignore TODO/FIXME/HACK debt",
+      "Do not ignore contradictory implementations across files"
+    ]
+  },
+  "required_evidence_standard": {
+    "rule": "Every finding must include exact proof",
+    "must_include": [
+      "Severity: Critical | High | Medium | Low",
+      "Confidence: High | Medium | Low",
+      "Area",
+      "Exact file path(s)",
+      "Function/component/hook/reducer/selector/test name(s)",
+      "Observed behavior",
+      "Why it is wrong or risky",
+      "User/business impact",
+      "Reproduction steps",
+      "Trigger conditions",
+      "Minimal fix",
+      "Robust long-term fix",
+      "Whether issue is isolated or systemic",
+      "Whether tests currently miss it",
+      "Whether docs/UI contradict it"
+    ],
+    "evidence_requirements": [
+      "Quote relevant code snippets or logic patterns in summarized form",
+      "Reference the exact mismatch between implementation and expected domain behavior",
+      "If uncertain, explicitly state what evidence is missing and what must be inspected next",
+      "If a finding depends on runtime behavior, describe the expected reproduction path"
+    ]
+  },
+  "severity_model": {
+    "critical": "Can cause data loss, corruption, security breach, financial misstatement, tax/VAT error, broken restore/import, auth bypass, unrecoverable crash in core flow, or false confirmation of persisted success",
+    "high": "Can block a key business workflow, silently produce incorrect results, allow invalid state transitions, create serious reporting inaccuracies, or make recovery unreliable",
+    "medium": "Degrades reliability, creates partial/inconsistent behavior, weakens auditability, causes misleading UX, or allows edge-case breakage without immediate catastrophic loss",
+    "low": "Non-blocking but real quality debt, maintainability issue, observability gap, naming inconsistency, or minor UX/documentation defect with limited operational impact"
+  },
+  "confidence_model": {
+    "high": "Direct code evidence and clear deterministic behavior",
+    "medium": "Strong signal with partial evidence, likely reproducible with runtime confirmation",
+    "low": "Suspicious pattern or incomplete evidence requiring manual validation"
+  },
+  "core_audit_dimensions": [
+    {
+      "id": "architecture_domain_integrity",
+      "title": "Architecture & Domain Integrity",
+      "checks": [
+        "Validate domain model consistency across inventory, lots, WIP, purchasing, receiving, grading, sales, finance, VAT, reporting, settings, and backup/restore",
+        "Detect impossible or invalid state transitions",
+        "Find duplicated business rules across reducers, components, utility modules, services, and tests",
+        "Check reducer/selectors/hooks for invariant violations and hidden coupling",
+        "Verify status lifecycle is explicit and enforced",
+        "Detect split-brain logic where UI and state model disagree",
+        "Find places where derived values are calculated differently in different layers"
+      ]
+    },
+    {
+      "id": "data_safety_state_management",
+      "title": "Data Safety & State Management",
+      "checks": [
+        "Audit every mutation path for corruption risk",
+        "Validate import/export/restore under malformed, partial, stale, duplicated, oversized, and schema-drifted data",
+        "Check localStorage/sessionStorage/indexedDB persistence assumptions",
+        "Verify idempotency and replay safety for repeated operations",
+        "Find cases where UI confirms save/import/restore without durable or validated persistence",
+        "Check merge behavior and overwrite semantics",
+        "Validate migration/versioning strategy for stored state",
+        "Find orphaned entities, dangling references, duplicate IDs, and inconsistent normalization"
+      ]
+    },
+    {
+      "id": "ui_ux_reliability",
+      "title": "UI/UX Reliability",
+      "checks": [
+        "Audit critical flows end-to-end: receive/import lot, verify/grade, move through WIP, purchase flow, sales flow, reports/export, settings, backup, restore",
+        "Find dead buttons, misleading labels, stale badges, disabled controls without reason, invisible failures, and no-op actions",
+        "Check empty states, error states, loading states, retry states, and recovery affordances",
+        "Verify unsaved changes handling and destructive action confirmations",
+        "Detect mismatch between displayed totals/status and underlying state",
+        "Audit accessibility: keyboard navigation, focus order, focus traps, visible focus, ARIA labels, semantic roles, skip links, contrast, screen reader clarity"
+      ]
+    },
+    {
+      "id": "error_handling_resilience",
+      "title": "Error Handling & Resilience",
+      "checks": [
+        "Find all crash points caused by null/undefined assumptions, unsafe casts, parse failures, non-null assertions, missing providers, bad optional chaining, and unguarded property access",
+        "Verify every async flow has loading, error, cancellation, timeout, and retry behavior where appropriate",
+        "Find silent failures, swallowed exceptions, and misleading success toasts/messages",
+        "Check whether error boundaries exist and whether they isolate core screens",
+        "Verify corrupted input fails safely without partial mutation"
+      ]
+    },
+    {
+      "id": "test_quality",
+      "title": "Test Quality (Not Just Coverage)",
+      "checks": [
+        "Map tests to domain requirements and identify untested critical behaviors",
+        "Find false-positive tests, shallow snapshot tests, over-mocked tests, and tests asserting implementation trivia instead of business behavior",
+        "Check for nondeterminism, hidden shared state, fake timers misuse, environment coupling, and brittle selectors",
+        "Validate Vitest setup, jsdom assumptions, mock cleanup, and test isolation",
+        "Find missing negative-path, corruption-path, import/restore failure, and concurrency/replay tests",
+        "Detect tests that contradict current runtime behavior"
+      ]
+    },
+    {
+      "id": "security_abuse_resistance",
+      "title": "Security & Abuse Resistance",
+      "checks": [
+        "Review all input surfaces including file upload, JSON import, query params, route params, forms, clipboard, and local persistence",
+        "Check parsing boundaries, schema validation, size limits, content-type assumptions, and dangerous trust of client data",
+        "Find XSS/injection vectors, unsafe rendering, dangerouslySetInnerHTML usage, and unescaped user-controlled content",
+        "Check sensitive data exposure in logs, exports, backups, URLs, and browser storage",
+        "Flag privilege assumptions implemented only in UI",
+        "Identify opportunities for state tampering through devtools or crafted import payloads"
+      ]
+    },
+    {
+      "id": "performance_scalability",
+      "title": "Performance & Scalability",
+      "checks": [
+        "Find unnecessary renders, unstable props, heavy computations inside render paths, and missing memoization where justified",
+        "Check large list rendering, expensive filtering/sorting, report generation hot paths, and export bottlenecks",
+        "Validate selector memoization correctness and stale dependency risks",
+        "Assess worst-case behavior under large datasets, long session usage, and repeated import/export cycles",
+        "Find sync operations on the main thread likely to freeze the UI"
+      ]
+    },
+    {
+      "id": "build_tooling_devex",
+      "title": "Build / Tooling / DevEx",
+      "checks": [
+        "Validate package scripts for install, dev, build, preview, typecheck, lint, test, coverage, and CI reproducibility",
+        "Find missing quality gates, config drift, hidden env assumptions, brittle aliases, and inconsistent tsconfig/vite/vitest settings",
+        "Check whether lint/typecheck/test can fail independently in CI",
+        "Identify weak conventions that will create future defects"
+      ]
+    },
+    {
+      "id": "documentation_accuracy",
+      "title": "Documentation Accuracy",
+      "checks": [
+        "Compare README, setup docs, feature docs, backup/restore instructions, and test docs against actual implementation",
+        "Flag stale or misleading docs, missing runbooks, and unexecutable onboarding steps",
+        "Detect discrepancies between documented workflows and UI behavior",
+        "Verify release, rollback, backup, and recovery procedures exist and are accurate"
+      ]
+    }
+  ],
+  "mandatory_contradiction_hunts": [
+    "UI vs reducer/store behavior",
+    "UI totals vs exported totals",
+    "Displayed statuses vs allowed transitions",
+    "Docs vs actual setup/build steps",
+    "Tests vs runtime behavior",
+    "Validation schema vs form behavior",
+    "Import contract vs exported format",
+    "Backup promise vs restore reality",
+    "Domain rules vs implementation shortcuts",
+    "Toast/success message vs actual persistence result"
+  ],
+  "required_repo_scan_targets": [
+    "src/components",
+    "src/pages",
+    "src/features",
+    "src/store",
+    "src/reducers",
+    "src/hooks",
+    "src/utils",
+    "src/lib",
+    "src/services",
+    "src/types",
+    "src/constants",
+    "src/routes",
+    "src/context",
+    "src/state",
+    "src/tests",
+    "__tests__",
+    "vitest.config.*",
+    "vite.config.*",
+    "tsconfig*.json",
+    "package.json",
+    "README*",
+    "docs/**",
+    ".github/workflows/**"
+  ],
+  "high_risk_patterns_to_hunt": [
+    "Non-null assertions",
+    "Any-casting and unsafe type coercion",
+    "LocalStorage JSON.parse without guards",
+    "Try/catch that swallows errors",
+    "Success toasts before persistence confirmation",
+    "Duplicate financial calculation logic",
+    "Implicit default values hiding missing data",
+    "Reducer mutation or reference reuse",
+    "Derived state duplicated in component state",
+    "UseEffect dependency mistakes",
+    "Stale closures in async handlers",
+    "Missing cleanup in subscriptions/listeners",
+    "Client-side only permission checks",
+    "Import/restore without schema versioning",
+    "Export that omits hidden/derived required fields",
+    "Floating point finance logic without normalization",
+    "Date/timezone assumptions",
+    "Hardcoded VAT logic in multiple places",
+    "Status strings used ad hoc instead of enum/union enforcement",
+    "Index-as-key in dynamic business lists",
+    "Optimistic UI without rollback"
+  ],
+  "audit_execution_protocol": [
+    "Step 1: Identify domain entities, state containers, persistence layers, and critical flows",
+    "Step 2: Build a domain map and transition map from code, not docs",
+    "Step 3: Identify all write paths and compare how each affects invariants",
+    "Step 4: Trace import/export/backup/restore behavior and schema assumptions",
+    "Step 5: Trace finance/VAT/totals/report generation logic and compare across modules",
+    "Step 6: Audit every core flow from UI trigger to state mutation to persistence to confirmation message",
+    "Step 7: Compare tests against actual behavior and identify untested failure paths",
+    "Step 8: Review security boundaries, input validation, and abuse opportunities",
+    "Step 9: Review build/test/tooling/CI readiness",
+    "Step 10: Produce prioritized findings, stop-ship issues, and a phased remediation program"
+  ],
+  "required_output_sections": [
+    {
+      "id": "A",
+      "title": "Executive Risk Summary",
+      "requirements": [
+        "Top 10 risks by business impact",
+        "Explicit stop-ship issues",
+        "Systemic failure patterns",
+        "Release readiness verdict: Blocker | Risky | Conditionally Ready | Ready",
+        "One-paragraph rationale for the verdict"
+      ]
+    },
+    {
+      "id": "B",
+      "title": "Findings Table (Full)",
+      "format": "tabular_or_structured_list",
+      "columns": [
+        "ID",
+        "Severity",
+        "Confidence",
+        "Area",
+        "File/Location",
+        "Finding",
+        "Impact",
+        "Evidence",
+        "Repro",
+        "Fix (short)",
+        "Fix (long-term)",
+        "Owner role",
+        "Phase"
+      ]
+    },
+    {
+      "id": "C",
+      "title": "Critical Path Flow Audits",
+      "requirements": [
+        "For each core flow: expected behavior",
+        "Actual behavior",
+        "Breakpoints/failure points",
+        "Contradictions found",
+        "Decision: Pass/Fail",
+        "Rationale"
+      ],
+      "flows": [
+        "Receive/import lot",
+        "Verification/grading",
+        "WIP stage movement",
+        "Purchase flow",
+        "Sales flow",
+        "Reports/export",
+        "Settings",
+        "Backup",
+        "Restore"
+      ]
+    },
+    {
+      "id": "D",
+      "title": "Test Gap Matrix",
+      "requirements": [
+        "Map existing tests to domain requirements",
+        "Identify false confidence areas",
+        "List missing edge/negative/corruption cases",
+        "Prioritize new tests by risk reduction"
+      ]
+    },
+    {
+      "id": "E",
+      "title": "Loose Ends Checklist",
+      "requirements": [
+        "Dead code",
+        "TODO/FIXME/HACK debt",
+        "Inconsistent naming",
+        "Ambiguous business rules",
+        "UI stubs/no-op controls",
+        "Misleading logs/messages",
+        "Unused state/selectors/hooks",
+        "Duplicate utility logic"
+      ]
+    },
+    {
+      "id": "F",
+      "title": "7-Day Hardening Plan",
+      "requirements": [
+        "Day-by-day prioritized plan",
+        "Owner role per task",
+        "Estimated effort",
+        "Dependencies",
+        "Risk reduction score",
+        "Explicit stop-ship items first"
+      ]
+    },
+    {
+      "id": "G",
+      "title": "Merge Gate Criteria",
+      "requirements": [
+        "Strict must-pass gates before next release",
+        "Tests",
+        "Type safety",
+        "Lint/format",
+        "UX checks",
+        "Security checks",
+        "Build checks",
+        "Backup/restore validation",
+        "Import/export corruption tests",
+        "Manual exploratory checklist"
+      ]
+    },
+    {
+      "id": "H",
+      "title": "Multi-Phase Remediation Program",
+      "requirements": [
+        "Group findings into execution phases",
+        "Each phase must have goals, included findings, exit criteria, rollback risk, and validation plan",
+        "Phases must be ordered by risk and dependency",
+        "Phase plan must be realistic and implementable"
+      ],
+      "phases": [
+        {
+          "name": "Phase 0 - Stop-Ship Containment",
+          "goal": "Immediately block release on critical integrity, security, financial, restore/import, or crash issues",
+          "includes": [
+            "Critical data corruption",
+            "False persistence/success UX",
+            "Broken restore or import",
+            "Financial/VAT miscalculation",
+            "Security/privacy exposure",
+            "Core flow crash"
+          ]
+        },
+        {
+          "name": "Phase 1 - Data Integrity Stabilization",
+          "goal": "Enforce schema validation, invariant checks, safe persistence, migration/versioning, and deterministic state transitions"
+        },
+        {
+          "name": "Phase 2 - Critical Flow Repair",
+          "goal": "Repair end-to-end reliability of receiving, verification, WIP, purchase, sales, reporting, and settings flows"
+        },
+        {
+          "name": "Phase 3 - Test & Observability Hardening",
+          "goal": "Add high-signal tests, corruption-path tests, import/export tests, and improve logging/error boundaries"
+        },
+        {
+          "name": "Phase 4 - Security & Abuse Hardening",
+          "goal": "Close trust boundary gaps, sanitize inputs, restrict dangerous imports, and harden storage/export surfaces"
+        },
+        {
+          "name": "Phase 5 - UX/A11y/Operational Quality",
+          "goal": "Fix misleading UI, empty/error states, accessibility, documentation, and operational runbooks"
+        },
+        {
+          "name": "Phase 6 - Performance & Maintainability",
+          "goal": "Reduce render/path inefficiencies, remove duplication, and improve long-term maintainability"
+        }
+      ]
+    },
+    {
+      "id": "I",
+      "title": "Retest Protocol After Each Phase",
+      "requirements": [
+        "For every phase, define exactly what must be re-audited",
+        "List regression-sensitive areas",
+        "Specify pass criteria",
+        "Identify which previously found issues could reappear"
+      ]
+    }
+  ],
+  "strict_reporting_rules": [
+    "Sort findings by severity first, then by exploitability, then by blast radius",
+    "Escalate repeated patterns into systemic findings",
+    "Do not bury stop-ship issues below medium/low defects",
+    "Explicitly distinguish proven defects from suspected defects",
+    "If evidence is incomplete, say what file/path/runtime proof is still needed",
+    "Call out contradictions explicitly instead of implying them",
+    "Do not collapse multiple root causes into one vague finding",
+    "If there are no tests for a critical path, state that as a finding",
+    "If docs promise behavior not enforced in code, state that as a finding"
+  ],
+  "phase_fix_requirements": {
+    "rule": "After the audit, findings must be organized into multiple remediation phases rather than a flat fix list",
+    "phase_fields": [
+      "Phase name",
+      "Objective",
+      "Included finding IDs",
+      "Why this phase comes before the next",
+      "Dependencies",
+      "Owner role",
+      "Estimated effort",
+      "Risk reduction score",
+      "Validation steps",
+      "Exit criteria",
+      "Rollback/watch-outs"
+    ],
+    "mandatory_strategy": [
+      "Do not mix stop-ship defects with cosmetic cleanup",
+      "Fix data integrity and security before refactors",
+      "Fix false-success UX before adding more features",
+      "Add regression tests in the same phase as each critical fix",
+      "Require re-audit of repaired critical paths before phase closure"
+    ]
+  },
+  "merge_gate_policy": {
+    "release_blockers": [
+      "Any unresolved Critical finding",
+      "Any financial/VAT calculation inconsistency",
+      "Any import/restore corruption path not validated",
+      "Any core flow that fails end-to-end",
+      "Any crash in receive/verify/WIP/purchase/sales/report/backup/restore flows",
+      "Any false-positive success message for save/import/restore/export",
+      "Any unvalidated file import surface",
+      "Any missing typecheck/lint/test/build gate in CI"
+    ],
+    "must_pass_checks": [
+      "Production build succeeds",
+      "Typecheck succeeds with no ignored fatal issues",
+      "Lint succeeds",
+      "Unit/integration tests pass",
+      "High-risk flow tests pass",
+      "Backup/restore round-trip tests pass",
+      "Import malformed/stale/oversized payload tests pass",
+      "Finance/VAT reconciliation tests pass",
+      "Accessibility smoke checks pass",
+      "Manual exploratory critical-flow checklist passes"
+    ]
+  },
+  "final_instruction": "Be direct, uncompromising, and specific. The audit is not a courtesy review. It is a failure hunt. If something is not proven safe, treat it as a risk. If a flow is untested, treat it as unreliable. If docs and code disagree, trust code and flag docs. After findings, produce a phased remediation plan that can be executed across multiple iterations with stop-ship containment first."
+}
