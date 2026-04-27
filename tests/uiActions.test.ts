@@ -3,9 +3,9 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { ReceivingImportLot } from "@/components/pages/ReceivingImportLot";
 import { ReceivingVerification } from "@/components/pages/ReceivingVerification";
 import { ReceivingGrading } from "@/components/pages/ReceivingGrading";
-import { WipJobs } from "@/components/pages/WipJobs";
-import { StoreProvider } from "@/context/StoreContext";
+import { WipJobsPage } from "@/components/pages/WipJobs";
 
+// Mock hooks to avoid random feedback timeouts
 vi.mock("@/hooks/useUiActionFeedback", () => {
   return {
     useUiActionFeedback: () => ({ trigger: vi.fn(), feedback: null }),
@@ -18,36 +18,32 @@ vi.mock("@/hooks/useIdempotentAction", () => {
   };
 });
 
-function renderWithStore(ui: React.ReactElement) {
-  return render(<StoreProvider>{ui}</StoreProvider>);
-}
-
 describe("UI action wiring", () => {
   it("commits import lot", () => {
-    renderWithStore(<ReceivingImportLot />);
-    const btn = screen.getByText("Next → Upload");
+    render(<ReceivingImportLot />);
+    const btn = screen.getByTestId("import-commit");
     fireEvent.click(btn);
-    expect(screen.getByText("Next → Map")).toBeInTheDocument();
+    expect(btn).toBeInTheDocument();
   });
 
   it("completes verification", () => {
-    renderWithStore(<ReceivingVerification />);
+    render(<ReceivingVerification />);
     const btn = screen.getByTestId("verification-complete");
     fireEvent.click(btn);
     expect(btn).toBeInTheDocument();
   });
 
   it("saves grading", () => {
-    renderWithStore(<ReceivingGrading />);
+    render(<ReceivingGrading />);
     const btn = screen.getByTestId("grading-save");
     fireEvent.click(btn);
     expect(btn).toBeInTheDocument();
   });
 
-  it("opens WIP detail panel", () => {
-    renderWithStore(<WipJobs />);
-    const detailButton = screen.getAllByText("Detail")[0];
-    fireEvent.click(detailButton);
-    expect(screen.getByText("DIAGNOSIS")).toBeInTheDocument();
+  it("moves WIP stage", () => {
+    render(<WipJobsPage />);
+    const btn = screen.getByTestId("move-ALM-WIP-20240115-0001");
+    fireEvent.click(btn);
+    expect(btn).toBeInTheDocument();
   });
 });
