@@ -13,14 +13,22 @@ export function LoadingScreen() {
   );
 }
 
-export function ErrorScreen({ title, details }: { title?: string; details?: string }) {
+export function ErrorScreen({ title, details, onReload }: { title?: string; details?: string; onReload?: () => void }) {
+  const handleReload = () => {
+    if (onReload) {
+      onReload();
+      return;
+    }
+    window.location.reload();
+  };
+
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
       <div className="glass-card corner-marks p-8 text-center space-y-4 border border-red-500/30">
         <div className="text-4xl neon-text-red">⚠</div>
         <h2 className="text-lg font-semibold text-cyan-100" style={{ fontFamily: 'Orbitron' }}>{title ?? "System Error"}</h2>
         <p className="text-sm text-cyan-500/40" style={{ fontFamily: 'Share Tech Mono' }}>{details ?? "Please reload the page or contact support."}</p>
-        <button className="btn-cyber-magenta">Reload</button>
+        <button className="btn-cyber-magenta" onClick={handleReload}>Reload</button>
       </div>
     </div>
   );
