@@ -11,9 +11,10 @@ export type LayoutProps = {
   onToggleTheme?: () => void;
   theme?: "cyber" | "pro";
   children: React.ReactNode;
+  onLogout?: () => void;
 };
 
-export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber", children }: LayoutProps) {
+export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber", children, onLogout }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { state, dispatch } = useStore();
 
@@ -201,6 +202,16 @@ export function Layout({ activePage, onNavigate, onToggleTheme, theme = "cyber",
             />
 
             {/* Backup */}
+            {onLogout && (
+              <button
+                className={cn("btn-ghost hidden md:flex items-center gap-2", theme === "pro" && "text-slate-600")}
+                onClick={onLogout}
+                data-action="logout"
+              >
+                Logout
+              </button>
+            )}
+
             <button className={cn("btn-ghost hidden md:flex items-center gap-2", theme === "pro" && "text-slate-600")} data-action="backup">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />

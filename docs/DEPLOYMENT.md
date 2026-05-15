@@ -24,7 +24,7 @@ serve dist
 
 ## Environment
 - Themes: stored in localStorage key `alm_theme` (cyber/pro)
-- No runtime env vars required for frontend-only build. Backend endpoints are stubbed; when wiring real APIs, expose `VITE_API_BASE` and use in api.ts.
+- Frontend can connect to Java LAN auth server via `VITE_JAVA_API_BASE` (default `http://localhost:8085`).
 
 ## Docker (basic)
 ```dockerfile
@@ -56,3 +56,63 @@ CMD ["nginx", "-g", "daemon off;"]
 
 ## Print Styles
 - Already included in `src/index.css` for invoices/reports/labels.
+
+
+## PostgreSQL Foundation (Phase 13)
+A baseline production schema and tenancy-RLS policy set has been added:
+
+- `db/migrations/0001_init.sql` — core ERP schema (auth, inventory, WIP, sales, purchases, finance, logs, idempotency, sequences)
+- `db/migrations/0002_rls.sql` — RLS enablement + tenant policies using `app.current_company_id`
+
+### Run locally with Docker Compose
+1. Copy environment values:
+   ```bash
+   cp .env.example .env
+   ```
+2. Start services:
+   ```bash
+   docker compose up -d
+   ```
+3. Open Adminer at `http://localhost:8080` and connect to:
+   - Server: `postgres`
+   - Username/Password/DB from `.env`
+
+The initial schema is automatically applied by PostgreSQL via `/docker-entrypoint-initdb.d` on first boot.
+
+### Integrity helpers included in migrations
+`db/migrations/0003_integrity_functions.sql` adds:
+- `next_sequence_value(...)` for atomic sequence increments under concurrency
+- `reserve_part_stock(...)`, `consume_reserved_part_stock(...)`, and `release_part_stock(...)` with row-level locking (`FOR UPDATE`)
+- `claim_idempotency_key(...)` and `cleanup_expired_idempotency_keys()` for server-side idempotency lifecycle
+- `touch_updated_at()` + triggers to keep mutable records synchronized
+
+
+
+## Local GUI Launcher (One-Click)
+A desktop launcher is available for user-friendly setup and local run:
+
+```bash
+npm run launcher
+```
+
+This opens `tools/local_launcher_gui.py` (Tkinter GUI) where users can:
+- install dependencies,
+- run tests,
+- build and launch preview on LAN,
+- optionally start/stop Docker DB stack,
+- use one-click setup + launch.
+
+
+## Java Local API (LAN)
+A lightweight Java API service is included for local network multi-user access:
+
+```bash
+npm run java:server
+```
+
+- Binds to `0.0.0.0:8085`
+- Includes auth endpoints (`/api/auth/register`, `/api/auth/login`, `/api/auth/me`)
+- Health endpoint: `/api/health`
+- Uses local file persistence for demo users at `java_server/data/users.csv`
+
+See `docs/JAVA_LOCAL_SERVER.md` for endpoint examples.
