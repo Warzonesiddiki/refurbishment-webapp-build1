@@ -8,7 +8,7 @@ type FilterBarProps = {
 
 export function FilterBar({ children, onClear, className }: FilterBarProps) {
   return (
-    <div className={cn("glass-card p-4", className)}>
+    <div data-component="ui-FilterBar" data-testid="component-ui-FilterBar" className={cn("glass-card p-4", className)}>
       <div className="flex flex-wrap gap-3 items-center">
         {children}
         {onClear && (

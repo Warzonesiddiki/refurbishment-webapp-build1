@@ -1,7 +1,11 @@
 import { useState, useMemo } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
 import { KpiCard } from "@/components/cards/KpiCard";
-import type { LaptopRecord } from "@/store/appState";
+import type { Action, LaptopRecord } from "@/store/appState";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
+
+type AddLaptopPayload = Extract<Action, { type: "ADD_LAPTOP" }>['payload'];
 
 const gradeColors: Record<string, string> = { A: "cyber-badge-green", B: "cyber-badge-yellow", C: "cyber-badge-red" };
 const statusColors: Record<string, string> = {
@@ -21,7 +25,7 @@ export function InventoryLaptops() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<LaptopRecord>>({});
   const [showAdd, setShowAdd] = useState(false);
-  const [newLaptop, setNewLaptop] = useState({ barcode: "", brand: "", model: "", specs: "", grade: "B", status: "Pending Verification", track: "-", cost: 0, date: new Date().toISOString().slice(0, 10) });
+  const [newLaptop, setNewLaptop] = useState<AddLaptopPayload>({ barcode: "", brand: "", model: "", specs: "", grade: "B", status: "Pending Verification", track: "-", cost: 0, date: new Date().toISOString().slice(0, 10), ramType: "DDR4", ramCapacityGb: 16, ssdType: "NVMe", ssdCapacityGb: 256, graphicsType: "iGPU" });
   const [bulkTrack, setBulkTrack] = useState("Track A");
   const pageSize = 10;
 
@@ -72,9 +76,13 @@ export function InventoryLaptops() {
 
   const addLaptop = () => {
     if (!newLaptop.barcode || !newLaptop.brand) return;
-    dispatch({ type: "ADD_LAPTOP", payload: newLaptop as any });
+    const payload: AddLaptopPayload = {
+      ...newLaptop,
+      specs: newLaptop.specs || `${newLaptop.ramCapacityGb || 0}GB ${newLaptop.ramType || ""} / ${newLaptop.ssdCapacityGb || 0}GB ${newLaptop.ssdType || ""} / ${newLaptop.graphicsType || "iGPU"}`,
+    };
+    dispatch({ type: "ADD_LAPTOP", payload });
     dispatch({ type: "ADD_ACTIVITY", payload: { action: `Added laptop ${newLaptop.barcode}`, time: "just now" } });
-    setNewLaptop({ barcode: "", brand: "", model: "", specs: "", grade: "B", status: "Pending Verification", track: "-", cost: 0, date: new Date().toISOString().slice(0, 10) });
+    setNewLaptop({ barcode: "", brand: "", model: "", specs: "", grade: "B", status: "Pending Verification", track: "-", cost: 0, date: new Date().toISOString().slice(0, 10), ramType: "DDR4", ramCapacityGb: 16, ssdType: "NVMe", ssdCapacityGb: 256, graphicsType: "iGPU" });
     setShowAdd(false);
   };
 
@@ -100,7 +108,7 @@ export function InventoryLaptops() {
   const totalValue = state.laptops.reduce((a, l) => a + l.cost, 0);
 
   return (
-    <div className="space-y-6">
+    <div data-page="inventory-laptops" data-testid="page-inventory-laptops" className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
@@ -110,6 +118,7 @@ export function InventoryLaptops() {
           </div>
           <p className="text-sm text-cyan-500/40 card-subtitle" style={{ fontFamily: "var(--font-mono)" }}>Inventory management • Filters • Bulk actions</p>
         </div>
+
         <div className="flex gap-3">
           <button
             className="btn-ghost"
@@ -151,6 +160,8 @@ export function InventoryLaptops() {
         </div>
       </div>
 
+      <SectionHelpHint hint={getPageSectionHint("inventoryLaptops")} />
+
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="Total Units" value={state.laptops.length} tone="cyan" icon="⬢" />
@@ -171,6 +182,17 @@ export function InventoryLaptops() {
             <input placeholder="Brand *" value={newLaptop.brand} onChange={e => setNewLaptop(p => ({ ...p, brand: e.target.value }))} className="px-3 py-2 rounded-lg text-sm" />
             <input placeholder="Model" value={newLaptop.model} onChange={e => setNewLaptop(p => ({ ...p, model: e.target.value }))} className="px-3 py-2 rounded-lg text-sm" />
             <input placeholder="Specs" value={newLaptop.specs} onChange={e => setNewLaptop(p => ({ ...p, specs: e.target.value }))} className="px-3 py-2 rounded-lg text-sm" style={{ fontFamily: "var(--font-mono)" }} />
+            <select value={newLaptop.ramType || "DDR4"} onChange={e => setNewLaptop(p => ({ ...p, ramType: e.target.value }))} className="px-3 py-2 rounded-lg text-sm">
+              <option>DDR3</option><option>DDR4</option><option>DDR5</option><option>LPDDR4</option><option>LPDDR5</option>
+            </select>
+            <input type="number" placeholder="RAM Capacity (GB)" value={newLaptop.ramCapacityGb || ""} onChange={e => setNewLaptop(p => ({ ...p, ramCapacityGb: Number(e.target.value) }))} className="px-3 py-2 rounded-lg text-sm" style={{ fontFamily: "var(--font-mono)" }} />
+            <select value={newLaptop.ssdType || "NVMe"} onChange={e => setNewLaptop(p => ({ ...p, ssdType: e.target.value }))} className="px-3 py-2 rounded-lg text-sm">
+              <option>NVMe</option><option>M.2</option><option>SATA</option>
+            </select>
+            <input type="number" placeholder="SSD Capacity (GB)" value={newLaptop.ssdCapacityGb || ""} onChange={e => setNewLaptop(p => ({ ...p, ssdCapacityGb: Number(e.target.value) }))} className="px-3 py-2 rounded-lg text-sm" style={{ fontFamily: "var(--font-mono)" }} />
+            <select value={newLaptop.graphicsType || "iGPU"} onChange={e => setNewLaptop(p => ({ ...p, graphicsType: e.target.value as "GPU" | "iGPU" }))} className="px-3 py-2 rounded-lg text-sm">
+              <option value="iGPU">iGPU</option><option value="GPU">Dedicated GPU</option>
+            </select>
             <select value={newLaptop.grade} onChange={e => setNewLaptop(p => ({ ...p, grade: e.target.value }))} className="px-3 py-2 rounded-lg text-sm">
               <option value="A">Grade A</option><option value="B">Grade B</option><option value="C">Grade C</option>
             </select>

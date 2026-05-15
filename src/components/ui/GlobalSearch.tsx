@@ -43,7 +43,7 @@ export function GlobalSearch({ theme, onNavigate }: Props) {
   const results = state.searchResults;
 
   return (
-    <div className="relative hidden md:block" ref={ref}>
+    <div data-component="ui-GlobalSearch" data-testid="component-ui-GlobalSearch" className="relative hidden md:block" ref={ref}>
       <svg
         className={cn("absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4", theme === "pro" ? "text-slate-400" : "text-cyan-500/30")}
         fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"

@@ -3,6 +3,8 @@ import { useAppState } from "@/context/StoreContext";
 import { useIdempotentAction } from "@/hooks/useIdempotentAction";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
 import { exportCsv } from "@/utils/exporters";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 
 const statusColors: Record<string, string> = { Paid: "cyber-badge-green", Partial: "cyber-badge-yellow", Unpaid: "cyber-badge-red" };
 
@@ -56,7 +58,7 @@ export function SalesAll() {
   };
 
   return (
-    <div className="space-y-6">
+    <div data-page="sales-all" data-testid="page-sales-all" className="space-y-6">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -70,6 +72,8 @@ export function SalesAll() {
           <button className="btn-ghost" data-action="print" onClick={() => window.print()}>⎙ Print</button>
         </div>
       </div>
+
+      <SectionHelpHint hint={getPageSectionHint("salesAll")} />
 
       <div className="glass-card p-4">
         <div className="flex flex-wrap gap-3 items-center">

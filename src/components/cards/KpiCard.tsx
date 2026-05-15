@@ -62,7 +62,7 @@ export function KpiCard({ label, value, trend, tone = "cyan", icon }: Props) {
   const t = toneConfig[tone] || toneConfig.neutral;
 
   return (
-    <div className={`glass-card corner-marks p-4 ${t.border} ${t.glow} transition-all group relative overflow-hidden`}>
+    <div data-component="cards-KpiCard" data-testid="component-cards-KpiCard" className={`glass-card corner-marks p-4 ${t.border} ${t.glow} transition-all group relative overflow-hidden`}>
       {/* Background gradient */}
       <div className={`absolute top-0 left-0 right-0 h-16 bg-gradient-to-b ${t.bg} pointer-events-none`} />
 

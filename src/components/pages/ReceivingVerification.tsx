@@ -19,8 +19,10 @@ export function ReceivingVerification() {
   }, [state.laptops, selectedLot]);
 
   const verifiedCount = lotLaptops.filter(l => l.status !== "Pending Verification").length;
+  const gradedCount = lotLaptops.filter(l => !["Pending Verification", "Pending Grading"].includes(l.status)).length;
   const total = lotLaptops.length || selectedLot?.items || 0;
-  const pct = total ? Math.round((verifiedCount / total) * 100) : 0;
+  const verifyPct = total ? Math.round((verifiedCount / total) * 100) : 0;
+  const gradePct = total ? Math.round((gradedCount / total) * 100) : 0;
 
   const handleVerify = () => {
     const q = scanValue.trim().toUpperCase();
@@ -39,8 +41,9 @@ export function ReceivingVerification() {
   const handleComplete = () => {
     if (!selectedLot) return;
     logComplete(selectedLot.lot, { total, verified: verifiedCount });
-    dispatch({ type: "UPDATE_LOT", id: selectedLot.id, payload: { status: "Verified", verified: total } });
-    trigger("success", `Verification complete for ${selectedLot.lot}`);
+    const nextStatus = verifiedCount >= total && total > 0 ? "Verified" : "Partially Verified";
+    dispatch({ type: "UPDATE_LOT", id: selectedLot.id, payload: { status: nextStatus, verified: verifiedCount } });
+    trigger("success", `Verification updated for ${selectedLot.lot} (${verifyPct}%)`);
   };
 
   const filteredRows = useMemo(() => {
@@ -50,7 +53,7 @@ export function ReceivingVerification() {
   }, [lotLaptops, tab]);
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div data-page="receiving-verification" data-testid="page-receiving-verification" className="space-y-6 max-w-6xl">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -59,7 +62,7 @@ export function ReceivingVerification() {
           </div>
           <p className="text-sm text-cyan-500/40" style={{ fontFamily: "Share Tech Mono" }}>Scan-first verification • Progress tracking • Discrepancy notes</p>
         </div>
-        <button data-testid="verification-complete" data-action="verification-complete" className="btn-cyber-green px-4 py-2 rounded-lg" onClick={handleComplete}>✓ Complete Verification</button>
+        <button data-testid="verification-complete" data-action="verification-complete" className="btn-cyber-green px-4 py-2 rounded-lg" disabled={total === 0} onClick={handleComplete}>✓ Complete Verification</button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -75,8 +78,12 @@ export function ReceivingVerification() {
         <div className="glass-card corner-marks p-5">
           <label className="block text-[10px] uppercase tracking-[0.12em] text-cyan-500/40 mb-2" style={{ fontFamily: "Orbitron" }}>Progress</label>
           <div className="flex items-center gap-3 mb-2">
-            <span className="text-3xl font-black neon-text-cyan" style={{ fontFamily: "Orbitron" }}>{pct}%</span>
-            <div className="flex-1"><div className="progress-cyber h-3 mb-1"><div className="progress-cyber-fill" style={{ width: `${pct}%` }} /></div><p className="text-[10px] text-cyan-500/25" style={{ fontFamily: "Share Tech Mono" }}>{verifiedCount} of {total} verified</p></div>
+            <span className="text-3xl font-black neon-text-cyan" style={{ fontFamily: "Orbitron" }}>{verifyPct}%</span>
+            <div className="flex-1">
+              <div className="progress-cyber h-3 mb-1"><div className="progress-cyber-fill" style={{ width: `${verifyPct}%` }} /></div>
+              <p className="text-[10px] text-cyan-500/25" style={{ fontFamily: "Share Tech Mono" }}>{verifiedCount} of {total} verified ({verifyPct}%)</p>
+              <p className="text-[10px] text-purple-300/40" style={{ fontFamily: "Share Tech Mono" }}>Graded: {gradedCount}/{total} ({gradePct}%)</p>
+            </div>
           </div>
         </div>
         <div className="glass-card corner-marks p-5">

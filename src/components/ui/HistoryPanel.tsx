@@ -7,7 +7,7 @@ type Props = {
 
 export function HistoryPanel({ title = "History", entries }: Props) {
   return (
-    <div className="glass-card p-4 border border-cyan-500/10">
+    <div data-component="ui-HistoryPanel" data-testid="component-ui-HistoryPanel" className="glass-card p-4 border border-cyan-500/10">
       <h4 className="text-xs font-bold neon-text-cyan mb-3" style={{ fontFamily: "var(--font-heading)" }}>{title}</h4>
       {entries.length === 0 ? (
         <p className="text-xs text-cyan-500/30" style={{ fontFamily: "var(--font-mono)" }}>No history available.</p>

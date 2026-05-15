@@ -1,5 +1,14 @@
-import { useState } from "react";
+import { useMemo, useReducer, useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
+import { BackupRestoreModal, BackupSettings as BackupSettingsPanel } from "@/components/Backup";
+import { backupReducer, createInitialBackupState } from "@/store/reducers/backupReducer";
+import { createFullBackup, createIncrementalBackup, downloadBackup } from "@/utils/backup/createBackup";
+import type { BackupData, BackupFile } from "@/store/types/BackupTypes";
+import { isRestorableBackupData, restoreStateFromBackupData, selectBackupDataModules, shouldApplyRestore } from "@/utils/backup/restoreState";
+import { runRestoreRehearsal } from "@/utils/backup/restoreRehearsal";
+import { getSettingsSectionHint } from "@/components/pages/settingsHints";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { clearRuntimeEvents, getBuildMetadata, listRuntimeEvents, recordRuntimeEvent } from "@/utils/runtimeDiagnostics";
 
 export function SettingsPage() {
   const state = useAppState();
@@ -8,6 +17,9 @@ export function SettingsPage() {
   const [form, setForm] = useState({ ...state.settings });
   const [activeSection, setActiveSection] = useState("company");
   const [showDanger, setShowDanger] = useState(false);
+  const [backupState, backupDispatch] = useReducer(backupReducer, undefined, createInitialBackupState);
+  const [backupModalMode, setBackupModalMode] = useState<"EXPORT" | "IMPORT" | null>(null);
+  const [diagnosticsRefreshTick, setDiagnosticsRefreshTick] = useState(0);
 
   const save = () => {
     dispatch({ type: "UPDATE_SETTINGS", payload: form });
@@ -26,8 +38,12 @@ export function SettingsPage() {
     { key: "danger", label: "Danger Zone", icon: "⚠️" },
   ];
 
+  const sectionHint = getSettingsSectionHint(activeSection);
+  const buildMetadata = useMemo(() => getBuildMetadata(), []);
+  const runtimeEvents = useMemo(() => listRuntimeEvents(), [activeSection, diagnosticsRefreshTick]);
+
   return (
-    <div className="space-y-6">
+    <div data-page="settings-page" data-testid="page-settings-page" className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
@@ -67,6 +83,8 @@ export function SettingsPage() {
 
         {/* Content */}
         <div className="lg:col-span-3 space-y-6">
+          <SectionHelpHint hint={sectionHint} />
+
           {activeSection === "company" && (
             <div className="glass-card corner-marks p-6 space-y-4">
               <h3 className="text-sm font-bold neon-text-cyan" style={{ fontFamily: "var(--font-heading)" }}>COMPANY INFORMATION</h3>
@@ -156,49 +174,127 @@ export function SettingsPage() {
 
           {activeSection === "backup" && (
             <div className="glass-card corner-marks p-6 space-y-4">
-              <h3 className="text-sm font-bold neon-text-cyan" style={{ fontFamily: "var(--font-heading)" }}>BACKUP & RESTORE</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-lg bg-cyan-500/5 border border-cyan-500/10 space-y-3">
-                  <h4 className="text-xs font-bold neon-text-green" style={{ fontFamily: "var(--font-heading)" }}>EXPORT DATA</h4>
-                  <p className="text-xs text-cyan-400/40">Download a complete backup of all system data as JSON.</p>
-                  <button className="btn-cyber text-xs w-full" onClick={() => {
-                    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a"); a.href = url; a.download = `almasfufa-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click();
-                    URL.revokeObjectURL(url);
-                  }}>💾 Download Backup</button>
-                </div>
-                <div className="p-4 rounded-lg bg-cyan-500/5 border border-cyan-500/10 space-y-3">
-                  <h4 className="text-xs font-bold neon-text-purple" style={{ fontFamily: "var(--font-heading)" }}>RESTORE DATA</h4>
-                  <p className="text-xs text-cyan-400/40">Upload a backup file to restore system data.</p>
-                  <button
-                    className="btn-ghost text-xs w-full"
-                    onClick={() => {
-                      const input = document.createElement("input");
-                      input.type = "file";
-                      input.accept = ".json";
-                      input.onchange = async () => {
-                        const file = input.files?.[0];
-                        if (!file) return;
-                        const text = await file.text();
-                        const data = JSON.parse(text);
-                        const requiredKeys = ["laptops","parts","wipJobs","sales","purchases","settings"];
-                        if (!requiredKeys.every((k) => k in data)) return;
-                        dispatch({ type: "RESTORE_STATE", payload: data });
-                      };
-                      input.click();
-                    }}
-                  >
-                    📂 Upload Backup File
-                  </button>
-                </div>
+              <BackupSettingsPanel
+                settings={backupState.settings}
+                history={backupState.backupHistory}
+                rollbackPoints={backupState.rollbackPoints}
+                onSettingsChange={(next) => backupDispatch({ type: "UPDATE_BACKUP_SETTINGS", payload: next })}
+                onFullBackup={async () => {
+                  const backup = await createFullBackup(state, { includeAudit: backupState.settings.includeAuditInBackup });
+                  downloadBackup(backup);
+                  backupDispatch({ type: "RECORD_BACKUP", payload: { id: backup.backupId, type: backup.backupType, checksum: backup.checksum, modules: backup.metadata.modules } });
+                }}
+                onIncrementalBackup={async () => {
+                  const backup = await createIncrementalBackup(state, backupState.changeTracker);
+                  downloadBackup(backup);
+                  backupDispatch({ type: "RECORD_BACKUP", payload: { id: backup.backupId, type: backup.backupType, checksum: backup.checksum, modules: backup.metadata.modules } });
+                }}
+                onRollback={(id) => backupDispatch({ type: "EXECUTE_ROLLBACK", payload: { rollbackId: id } })}
+                onDeleteRollback={(id) => backupDispatch({ type: "DELETE_ROLLBACK_POINT", payload: { rollbackId: id } })}
+              />
+              <div className="flex gap-2">
+                <button className="btn-cyber" onClick={() => setBackupModalMode("EXPORT")}>Open Export Modal</button>
+                <button className="btn-ghost" onClick={() => setBackupModalMode("IMPORT")}>Open Import Modal</button>
               </div>
+
+              <BackupRestoreModal
+                open={backupModalMode !== null}
+                mode={backupModalMode ?? "EXPORT"}
+                state={state}
+                onClose={() => setBackupModalMode(null)}
+                onRestore={(backup: BackupFile, options) => {
+                  if (typeof backup.data === "string") {
+                    dispatch({
+                      type: "ADD_ACTIVITY",
+                      payload: {
+                        action: "Restore skipped: encrypted backup payload requires successful decrypt/import first",
+                        time: "just now",
+                      },
+                    });
+                    return;
+                  }
+
+                  if (typeof backup.data === "object" && backup.data !== null) {
+                    const payload = backup.data as BackupData;
+                    const scopedPayload = selectBackupDataModules(payload, options.modules);
+                    if (!isRestorableBackupData(scopedPayload)) {
+                      dispatch({
+                        type: "ADD_ACTIVITY",
+                        payload: { action: "Restore skipped: backup contained no restorable modules", time: "just now" },
+                      });
+                      return;
+                    }
+
+                    const rehearsal = runRestoreRehearsal(state, scopedPayload, options.modules);
+                    if (!rehearsal.passed) {
+                      const failedChecks = rehearsal.checks.filter((check) => !check.passed).map((check) => check.id).join(", ");
+                      dispatch({
+                        type: "ADD_ACTIVITY",
+                        payload: {
+                          action: `Restore rehearsal failed for backup ${backup.backupId}: ${failedChecks || "unknown checks"}`,
+                          time: "just now",
+                        },
+                      });
+                      return;
+                    }
+
+                    if (options.dryRun) {
+                      dispatch({
+                        type: "ADD_ACTIVITY",
+                        payload: {
+                          action: `Restore dry-run passed for backup ${backup.backupId} modules: ${options.modules.join(", ") || "none"}`,
+                          time: "just now",
+                        },
+                      });
+                      return;
+                    }
+
+                    if (!shouldApplyRestore(options)) {
+                      dispatch({
+                        type: "ADD_ACTIVITY",
+                        payload: {
+                          action: `Restore skipped by conflict policy KEEP_CURRENT for backup ${backup.backupId}`,
+                          time: "just now",
+                        },
+                      });
+                      return;
+                    }
+
+                    if (options.createRollbackPoint) {
+                      backupDispatch({
+                        type: "CREATE_ROLLBACK_POINT",
+                        payload: { reason: `Before restore ${backup.backupId}`, snapshot: state },
+                      });
+                    }
+
+                    dispatch({
+                      type: "RESTORE_STATE",
+                      payload: restoreStateFromBackupData(state, scopedPayload),
+                    });
+                    dispatch({
+                      type: "ADD_ACTIVITY",
+                      payload: {
+                        action: `Restored backup ${backup.backupId} modules: ${options.modules.join(", ") || "none"} (${options.conflictResolution})`,
+                        time: "just now",
+                      },
+                    });
+                  }
+                }}
+              />
             </div>
           )}
 
           {activeSection === "diagnostics" && (
             <div className="glass-card corner-marks p-6 space-y-4">
               <h3 className="text-sm font-bold neon-text-cyan" style={{ fontFamily: "var(--font-heading)" }}>DIAGNOSTICS & REPAIR TOOLS</h3>
+
+              <div className="grid md:grid-cols-4 gap-2 text-[11px]">
+                <div className="glass-card p-3"><p className="text-cyan-500/40">Version</p><p>{buildMetadata.appVersion}</p></div>
+                <div className="glass-card p-3"><p className="text-cyan-500/40">Build Hash</p><p>{buildMetadata.buildHash}</p></div>
+                <div className="glass-card p-3"><p className="text-cyan-500/40">Build Time</p><p>{buildMetadata.buildTime}</p></div>
+                <div className="glass-card p-3"><p className="text-cyan-500/40">Mode</p><p>{buildMetadata.mode}</p></div>
+              </div>
+
               <div className="space-y-3">
                 {[
                   {
@@ -207,6 +303,8 @@ export function SettingsPage() {
                     icon: "🔄",
                     onRun: () => {
                       dispatch({ type: "ADD_ACTIVITY", payload: { action: "Recomputed stock levels", time: "just now" } });
+                      recordRuntimeEvent({ level: "info", source: "Settings.Diagnostics", message: "Recompute stock levels executed" });
+                      setDiagnosticsRefreshTick((v) => v + 1);
                     },
                   },
                   {
@@ -215,6 +313,8 @@ export function SettingsPage() {
                     icon: "💳",
                     onRun: () => {
                       dispatch({ type: "ADD_ACTIVITY", payload: { action: "Payment statuses reconciled", time: "just now" } });
+                      recordRuntimeEvent({ level: "info", source: "Settings.Diagnostics", message: "Payment status reconciliation executed" });
+                      setDiagnosticsRefreshTick((v) => v + 1);
                     },
                   },
                   {
@@ -223,6 +323,8 @@ export function SettingsPage() {
                     icon: "📊",
                     onRun: () => {
                       dispatch({ type: "ADD_ACTIVITY", payload: { action: "Barcode validation completed", time: "just now" } });
+                      recordRuntimeEvent({ level: "info", source: "Settings.Diagnostics", message: "Barcode validation executed" });
+                      setDiagnosticsRefreshTick((v) => v + 1);
                     },
                   },
                   {
@@ -231,6 +333,8 @@ export function SettingsPage() {
                     icon: "🗑️",
                     onRun: () => {
                       dispatch({ type: "CLEAR_ACTIVITY" });
+                      recordRuntimeEvent({ level: "warning", source: "Settings.Diagnostics", message: "Activity log cleared" });
+                      setDiagnosticsRefreshTick((v) => v + 1);
                     },
                   },
                 ].map(tool => (
@@ -245,6 +349,33 @@ export function SettingsPage() {
                     <button className="btn-ghost text-xs" onClick={tool.onRun}>Run</button>
                   </div>
                 ))}
+              </div>
+
+              <div className="glass-card p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-cyan-300/70">RUNTIME EVENT LOG</h4>
+                  <button
+                    className="btn-ghost text-xs"
+                    onClick={() => {
+                      clearRuntimeEvents();
+                      setDiagnosticsRefreshTick((v) => v + 1);
+                    }}
+                  >
+                    Clear Runtime Events
+                  </button>
+                </div>
+                <div className="max-h-40 overflow-auto space-y-1">
+                  {runtimeEvents.length === 0 ? (
+                    <p className="text-[11px] text-cyan-500/40">No runtime events recorded in this browser yet.</p>
+                  ) : (
+                    runtimeEvents.slice(0, 10).map((event) => (
+                      <div key={event.id} className="rounded border border-cyan-500/10 p-2 text-[11px]">
+                        <p className="text-cyan-300/70">{event.ts} • {event.level.toUpperCase()} • {event.source}</p>
+                        <p className="text-cyan-100/70">{event.message}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           )}

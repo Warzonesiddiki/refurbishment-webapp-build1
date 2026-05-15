@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tahir-erp-web
+    restart: unless-stopped
+    ports:
+      - "4173:80"
+    depends_on:
+      java-api:
+        condition: service_healthy
+
+  java-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.java
+    container_name: tahir-erp-java-api
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8085/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: tahir-erp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tahir_erp}
+      POSTGRES_USER: ${POSTGRES_USER:-tahir_erp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tahir_erp_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tahir_erp} -d ${POSTGRES_DB:-tahir_erp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  adminer:
+    image: adminer:4
+    container_name: tahir-erp-adminer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:

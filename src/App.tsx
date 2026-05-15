@@ -22,10 +22,18 @@ import { FinanceVat } from "@/components/pages/FinanceVat";
 import { MasterSuppliers } from "@/components/pages/MasterSuppliers";
 import { MasterLots } from "@/components/pages/MasterLots";
 import { ReportsPage } from "@/components/pages/ReportsPage";
+import { AuditPage } from "@/components/pages/AuditPage";
 import { SettingsPage } from "@/components/pages/SettingsPage";
 import { ActionFeedbackProvider } from "@/context/ActionFeedbackContext";
 import { StoreProvider } from "@/context/StoreContext";
 import { ToastHost } from "@/components/ui/ToastHost";
+import { LoginPage } from "@/components/pages/LoginPage";
+import { clearAuthToken, fetchCurrentUser } from "@/utils/javaAuth";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useAnnouncer } from "@/hooks/useAnnouncer";
+import { PersistenceProvider } from "@/store/persistence/PersistenceProvider";
+import { getBuildMetadata, installGlobalRuntimeExceptionHandlers, recordRuntimeEvent } from "@/utils/runtimeDiagnostics";
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -44,10 +52,35 @@ function Placeholder({ title }: { title: string }) {
 export function App() {
   const [activePage, setActivePage] = useState<string>("dashboard");
   const [theme, setTheme] = useState<"cyber" | "pro">(() => getInitialTheme());
+  const [authReady, setAuthReady] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useDocumentTitle(activePage);
+  useAnnouncer(`Navigated to ${activePage.replace(/-/g, " ")}`);
+
+  useEffect(() => {
+    fetchCurrentUser().then((u) => {
+      setIsAuthenticated(Boolean(u));
+      setAuthReady(true);
+    });
+  }, []);
 
   useEffect(() => {
     applyThemeClass(theme);
   }, [theme]);
+
+  useEffect(() => {
+    const build = getBuildMetadata();
+    recordRuntimeEvent({
+      level: "info",
+      source: "App",
+      message: "Application session started",
+      context: `${build.appVersion}@${build.buildHash} (${build.mode})`,
+    });
+
+    const cleanupRuntimeHandlers = installGlobalRuntimeExceptionHandlers();
+    return cleanupRuntimeHandlers;
+  }, []);
 
   const renderPage = () => {
     switch (activePage) {
@@ -72,24 +105,46 @@ export function App() {
       case "master-suppliers": return <MasterSuppliers />;
       case "master-lots":      return <MasterLots />;
       case "reports":          return <ReportsPage />;
+      case "audit":            return <AuditPage />;
       case "settings":         return <SettingsPage />;
       default:                 return <Placeholder title={activePage.replace(/-/g, " ")} />;
     }
   };
 
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-grid flex items-center justify-center">
+        <p className="text-cyan-300/70" style={{ fontFamily: "Orbitron" }}>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage onAuthenticated={() => setIsAuthenticated(true)} />;
+  }
+
   return (
-    <StoreProvider>
+    <PersistenceProvider>
+      <StoreProvider>
       <ActionFeedbackProvider>
-        <Layout
+        <ErrorBoundary>
+          <div id="route-announcer" aria-live="polite" className="sr-only" />
+          <Layout
           activePage={activePage}
           onNavigate={setActivePage}
           onToggleTheme={() => setTheme((t: "cyber" | "pro") => (t === "cyber" ? "pro" : "cyber"))}
           theme={theme}
+          onLogout={() => {
+            clearAuthToken();
+            setIsAuthenticated(false);
+          }}
         >
           {renderPage()}
-        </Layout>
-        <ToastHost />
+          </Layout>
+          <ToastHost />
+        </ErrorBoundary>
       </ActionFeedbackProvider>
-    </StoreProvider>
+      </StoreProvider>
+    </PersistenceProvider>
   );
 }

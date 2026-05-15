@@ -1,9 +1,9 @@
 export function LoadingScreen() {
   return (
-    <div className="min-h-[60vh] flex items-center justify-center">
+    <div data-page="loading-error-screens" data-testid="page-loading-error-screens" className="min-h-[60vh] flex items-center justify-center">
       <div className="glass-card corner-marks p-8 text-center space-y-4 neon-border">
         <div className="text-4xl neon-text-cyan">⬡</div>
-        <h2 className="text-lg font-semibold text-cyan-100" style={{ fontFamily: 'Orbitron' }}>Loading ALMASFUFA</h2>
+        <h2 className="text-lg font-semibold text-cyan-100" style={{ fontFamily: 'Orbitron' }}>Loading Tahir ERP</h2>
         <p className="text-sm text-cyan-500/40" style={{ fontFamily: 'Share Tech Mono' }}>Syncing inventory, WIP, and finance data...</p>
         <div className="w-64 h-2 bg-cyan-500/10 rounded-full overflow-hidden">
           <div className="h-2 bg-gradient-to-r from-cyan-500 to-purple-500 w-1/2 animate-pulse" />

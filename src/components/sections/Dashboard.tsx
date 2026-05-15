@@ -3,6 +3,8 @@ import { KpiCard } from "@/components/cards/KpiCard";
 import { useStore } from "@/context/StoreContext";
 import { BarChart } from "@/components/ui/BarChart";
 import { PieChart } from "@/components/ui/PieChart";
+import { resolveActionRoute } from "@/utils/actionRouting";
+import { ActionKey } from "@/data/actionKeys";
 
 const trackColors: Record<string, { bg: string; border: string; glow: string; text: string }> = {
   "Track A": { bg: "from-cyan-500/15 to-cyan-500/5", border: "border-cyan-500/30", glow: "shadow-[0_0_15px_rgba(0,240,255,0.2)]", text: "neon-text-cyan" },
@@ -12,7 +14,7 @@ const trackColors: Record<string, { bg: string; border: string; glow: string; te
   "Track E": { bg: "from-red-500/15 to-red-500/5", border: "border-red-500/30", glow: "shadow-[0_0_15px_rgba(255,0,60,0.2)]", text: "neon-text-red" },
 };
 
-const quickActions = [
+const quickActions: { icon: string; label: string; key: ActionKey }[] = [
   { icon: "⊞", label: "Quick Scan", key: "scan" },
   { icon: "◈", label: "New Sale", key: "new-sale" },
   { icon: "⇊", label: "Import Lot", key: "import-lot" },
@@ -33,7 +35,7 @@ export function DashboardSection({ onNavigate }: { onNavigate?: (page: string) =
   ];
 
   return (
-    <div className="space-y-6">
+    <div data-component="sections-Dashboard" data-testid="component-sections-Dashboard" className="space-y-6">
       {/* ── Header ── */}
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
@@ -62,11 +64,12 @@ export function DashboardSection({ onNavigate }: { onNavigate?: (page: string) =
       </div>
 
       {/* ── KPI Row 2 ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard label="Pending Verification" value={kpis.pendingVerification} tone="yellow" icon="⊘" />
+        <KpiCard label="Verification Progress" value={`${kpis.verificationProgressPct}%`} tone="cyan" icon="◔" />
         <KpiCard label="Pending Grading" value={kpis.pendingGrading} tone="yellow" icon="★" />
+        <KpiCard label="Grading Progress" value={`${kpis.gradingProgressPct}%`} tone="purple" icon="◑" />
         <KpiCard label="Low Stock Parts" value={kpis.lowStockParts} tone="red" icon="⚠" />
-        <KpiCard label="This Month Profit" value={`AED ${kpis.monthProfit.toLocaleString()}`} trend="+22%" tone="green" icon="▲" />
       </div>
 
       {/* ── Processing Tracks ── */}
@@ -116,15 +119,7 @@ export function DashboardSection({ onNavigate }: { onNavigate?: (page: string) =
               data-action={action.key}
               className="glass-card p-4 text-center border border-cyan-500/10 hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all group cursor-pointer"
               onClick={() => {
-                const map: Record<string, string> = {
-                  "scan": "scanner",
-                  "new-sale": "sales-new",
-                  "import-lot": "receiving-import",
-                  "grade": "receiving-grading",
-                  "add-laptop": "inventory-laptops",
-                  "add-part": "inventory-parts",
-                };
-                const page = map[action.key] || "dashboard";
+                const page = resolveActionRoute(action.key) ?? "dashboard";
                 onNavigate?.(page);
               }}
             >

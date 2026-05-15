@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAppState, useDispatch } from "@/context/StoreContext";
+import type { Action } from "@/store/appState";
 import { useIdempotentAction } from "@/hooks/useIdempotentAction";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
 import { canAdvance } from "@/domain";
@@ -11,6 +12,8 @@ const trackConfig: Record<string, { label: string; color: string; stages: string
   "Track D": { label: "Testing", color: "green", stages: ["L1 Queue", "L1 Testing", "L1 Failed", "L2 Queue", "L2 Testing", "L2 Failed", "Passed"] },
   "Track E": { label: "Harvest/Dispose", color: "red", stages: ["Queue", "Disassembly/Harvest", "Parts Logged", "Complete/Disposed"] },
 };
+
+type AddPartPayload = Extract<Action, { type: "ADD_PART" }>["payload"];
 
 export function ProcessingTracks() {
   const state = useAppState();
@@ -71,20 +74,21 @@ export function ProcessingTracks() {
   const addHarvestPart = () => {
     if (!selectedLaptop || !harvestPart) return;
     const laptop = state.laptops.find(l => l.id === selectedLaptop);
+    const payload: AddPartPayload = {
+      barcode: `ALM-PT-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-H`,
+      name: harvestPart,
+      category: "Harvest",
+      spec: laptop ? `${laptop.brand} ${laptop.model}` : "Harvest",
+      condition: "Harvested",
+      onHand: harvestQty,
+      available: harvestQty,
+      reorder: 0,
+      cost: 0,
+      location: "Harvest",
+    };
     dispatch({
       type: "ADD_PART",
-      payload: {
-        barcode: `ALM-PT-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-H`,
-        name: harvestPart,
-        category: "Harvest",
-        spec: laptop ? `${laptop.brand} ${laptop.model}` : "Harvest",
-        condition: "Harvested",
-        onHand: harvestQty,
-        available: harvestQty,
-        reorder: 0,
-        cost: 0,
-        location: "Harvest",
-      } as any,
+      payload,
     });
     dispatch({ type: "ADD_ACTIVITY", payload: { action: `Harvested part: ${harvestPart} x${harvestQty}`, time: "just now" } });
     trigger("success", `Harvested ${harvestPart}`);
@@ -102,7 +106,7 @@ export function ProcessingTracks() {
   };
 
   return (
-    <div className="space-y-6">
+    <div data-page="processing-tracks" data-testid="page-processing-tracks" className="space-y-6">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">

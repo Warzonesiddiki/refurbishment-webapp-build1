@@ -1,0 +1,3314 @@
+{
+  "specification_metadata": {
+    "document_title": "Tahir ERP - Enterprise Laptop Refurbishment Management System",
+    "specification_version": "3.0.0",
+    "specification_type": "full_stack_architecture_and_implementation_blueprint",
+    "target_implementer": "senior_full_stack_architect_and_engineer",
+    "business_domain": "electronics_refurbishment_reverse_logistics_retail",
+    "last_updated": "2024",
+    "change_log": [
+      {"version": "1.0", "changes": "initial_specification"},
+      {"version": "2.0", "changes": "added_financial_module_and_api_contracts"},
+      {"version": "3.0", "changes": "comprehensive_production_grade_specification"}
+    ]
+  },
+
+  "executive_summary": {
+    "mission_statement": "Build an enterprise-grade, offline-first ERP system that manages the complete lifecycle of laptop refurbishment operations from acquisition through sale, with financial precision, real-time inventory tracking, and warehouse-optimized user experience",
+    "business_value_propositions": [
+      "Reduce unit processing time by 40% through streamlined workflows",
+      "Eliminate inventory discrepancies with real-time tracking and audit trails",
+      "Enable data-driven decisions with comprehensive operational and financial reporting",
+      "Support multi-location operations with centralized management",
+      "Ensure regulatory compliance with immutable financial records"
+    ],
+    "key_differentiators": [
+      "Sub-200ms scan-to-feedback response for warehouse efficiency",
+      "Offline-first architecture with automatic conflict resolution",
+      "Financial-grade double-entry accounting with audit trail",
+      "Hardware-integrated workflows supporting barcode scanners, label printers, receipt printers",
+      "Multi-currency support with real-time exchange rate handling",
+      "Role-based access control with granular permissions",
+      "Complete traceability from lot acquisition to customer sale"
+    ],
+    "target_scale": {
+      "initial_capacity": {
+        "units_per_month": 5000,
+        "concurrent_users": 25,
+        "locations": 3,
+        "historical_data_years": 7
+      },
+      "growth_target": {
+        "units_per_month": 50000,
+        "concurrent_users": 100,
+        "locations": 10
+      }
+    }
+  },
+
+  "business_domain_model": {
+    "industry_context": {
+      "business_type": "Laptop and electronics refurbishment",
+      "operations_model": "Buy lots -> Verify -> Grade -> Process/Repair -> Sell",
+      "revenue_streams": ["Refurbished unit sales", "Parts sales", "Repair services", "Bulk wholesale"],
+      "cost_centers": ["Acquisition", "Labor", "Parts", "Overhead", "Logistics"]
+    },
+    "key_business_concepts": {
+      "lot": "A batch of laptops purchased together from a single supplier with shared acquisition cost",
+      "unit": "Individual laptop tracked throughout the system by unique barcode",
+      "grading": "Assessment of functional and cosmetic condition determining processing track",
+      "track": "Processing pathway based on grade (A=direct sale, B=light refurb, C=heavy refurb, Parts=salvage)",
+      "wip": "Work-in-progress job tracking all processing activities, parts, and labor",
+      "cost_basis": "Total cost accumulated for a unit including acquisition, parts, labor, overhead"
+    },
+    "business_rules": {
+      "pricing_rules": [
+        "Minimum margin threshold per track (A: 15%, B: 25%, C: 35%)",
+        "Bulk discount tiers (5+ units: 5%, 10+ units: 10%, 25+ units: 15%)",
+        "Age-based markdown (90+ days: 10%, 180+ days: 20%)",
+        "Customer tier pricing (Retail: 0%, Reseller: 10%, Wholesale: 20%)"
+      ],
+      "inventory_rules": [
+        "Units must have unique barcodes system-wide",
+        "Serial numbers must be unique per manufacturer/model combination",
+        "Only Ready for Sale units can be added to cart",
+        "Reserved units timeout after 30 minutes without checkout"
+      ],
+      "financial_rules": [
+        "All monetary amounts stored as cents (integer) to avoid floating point errors",
+        "Double-entry accounting for all financial transactions",
+        "VAT calculated on line items, not totals",
+        "Cost basis cannot be modified after unit is sold",
+        "Refunds must reference original transaction"
+      ]
+    }
+  },
+
+  "functional_requirements": {
+    "module_01_receiving": {
+      "module_id": "RCV",
+      "module_name": "Receiving & Lot Management",
+      "description": "Manage incoming inventory lots from suppliers including file import, validation, and commitment",
+      
+      "features": {
+        "lot_creation": {
+          "feature_id": "RCV-001",
+          "description": "Create new lot with supplier and financial information",
+          "user_stories": [
+            "As a receiving clerk, I want to create a new lot so I can track incoming inventory",
+            "As a manager, I want to associate lots with suppliers for reporting",
+            "As an accountant, I want lot costs allocated accurately for COGS calculation"
+          ],
+          "acceptance_criteria": [
+            "Lot number must be unique across all lots",
+            "Lot number auto-generated if not provided (format: LOT-YYYYMMDD-XXXX)",
+            "Supplier selection from existing suppliers or quick-add new",
+            "Total cost and currency required",
+            "Default values settable (condition, location, grading defaults)",
+            "Lot status starts as DRAFT"
+          ],
+          "data_fields": {
+            "required": [
+              {"field": "lot_number", "type": "string", "constraints": "unique, max 50 chars"},
+              {"field": "supplier_id", "type": "uuid", "constraints": "valid supplier reference"},
+              {"field": "total_cost", "type": "integer", "constraints": "cents, positive"},
+              {"field": "currency", "type": "string", "constraints": "ISO 4217 code"},
+              {"field": "received_date", "type": "date", "constraints": "not future"}
+            ],
+            "optional": [
+              {"field": "purchase_order_number", "type": "string"},
+              {"field": "invoice_number", "type": "string"},
+              {"field": "notes", "type": "text"},
+              {"field": "default_location", "type": "string"},
+              {"field": "default_condition", "type": "enum", "values": ["New", "OpenBox", "Refurbished", "Used", "Damaged", "ForParts"]},
+              {"field": "expected_quantity", "type": "integer"}
+            ]
+          }
+        },
+        
+        "file_import": {
+          "feature_id": "RCV-002",
+          "description": "Import unit data from CSV/XLSX files with mapping and validation",
+          "user_stories": [
+            "As a receiving clerk, I want to upload supplier manifests to quickly add units",
+            "As a data entry person, I want the system to detect column mappings automatically",
+            "As a supervisor, I want to review and correct data before committing"
+          ],
+          "acceptance_criteria": [
+            "Support CSV (any delimiter), XLSX (first sheet), JSON array formats",
+            "Handle files up to 10MB / 10,000 rows",
+            "Auto-detect column mappings using fuzzy matching against known headers",
+            "Allow manual column mapping with drag-drop interface",
+            "Save mapping profiles per supplier for reuse",
+            "Validate all rows before preview",
+            "Highlight validation errors with row/column location",
+            "Support inline editing in preview table"
+          ],
+          "column_mapping_targets": {
+            "identity": ["serial_number", "manufacturer", "model", "sku", "barcode"],
+            "specifications": ["cpu", "ram_gb", "storage_type", "storage_gb", "screen_size", "resolution", "gpu", "battery_health", "os_installed"],
+            "condition": ["condition", "cosmetic_grade", "functional_grade", "notes"],
+            "financial": ["unit_cost", "quantity"],
+            "metadata": ["color", "keyboard_layout", "original_owner", "asset_tag"]
+          },
+          "parsing_rules": {
+            "quantity_expansion": "If quantity > 1 and no serial, create N rows with sequence suffix",
+            "serial_splitting": "If serial contains comma/semicolon, split into individual units",
+            "barcode_generation": "If barcode empty, auto-generate using configured format",
+            "cost_allocation": "If unit_cost empty, allocate lot total cost / unit count",
+            "data_normalization": {
+              "ram_gb": "Extract numeric from strings like '8GB' or '8 GB'",
+              "storage_gb": "Convert TB to GB, extract numeric",
+              "manufacturer": "Normalize to canonical names (HP, Dell, Lenovo, Apple, etc.)"
+            }
+          }
+        },
+        
+        "import_preview": {
+          "feature_id": "RCV-003",
+          "description": "Review, validate, and edit imported data before commitment",
+          "acceptance_criteria": [
+            "Display all rows in virtualized table (handle 10k rows smoothly)",
+            "Color-code validation states: valid (green), warning (yellow), error (red)",
+            "Filter by validation state",
+            "Inline editing for all fields",
+            "Bulk edit selected rows",
+            "Remove individual rows or selected rows",
+            "Show duplicate detection (serial, barcode) against existing inventory",
+            "Real-time validation as edits are made",
+            "Show summary statistics (total, valid, warnings, errors)",
+            "Prevent commit if any errors exist"
+          ],
+          "validation_rules": [
+            {"rule": "barcode_unique", "severity": "error", "message": "Barcode already exists in system"},
+            {"rule": "serial_unique_per_model", "severity": "error", "message": "Serial number already exists for this model"},
+            {"rule": "required_fields", "severity": "error", "message": "Required field is missing"},
+            {"rule": "ram_reasonable", "severity": "warning", "message": "RAM value seems unusual (not 2/4/8/16/32/64)"},
+            {"rule": "cost_reasonable", "severity": "warning", "message": "Unit cost outside typical range for model"},
+            {"rule": "manufacturer_known", "severity": "warning", "message": "Unknown manufacturer, please verify"}
+          ]
+        },
+        
+        "import_commit": {
+          "feature_id": "RCV-004",
+          "description": "Finalize import and create inventory records",
+          "acceptance_criteria": [
+            "Atomic transaction - all or nothing",
+            "Create lot record if not exists",
+            "Create laptop record for each valid row",
+            "Set initial status to PENDING_VERIFICATION",
+            "Update lot counters (total_units, pending_verification_count)",
+            "Create movement log entry for each unit (RECEIVED)",
+            "Create AP entry for lot total cost",
+            "Generate audit log entry with user, timestamp, summary",
+            "Return summary of created records",
+            "Handle partial failure gracefully with rollback"
+          ],
+          "idempotency": {
+            "key_source": "client_generated_uuid",
+            "duplicate_handling": "Return previous result without re-processing",
+            "key_ttl": "24 hours"
+          }
+        }
+      }
+    },
+
+    "module_02_verification": {
+      "module_id": "VER",
+      "module_name": "Verification Station",
+      "description": "Physical verification of received units against system records",
+      
+      "features": {
+        "verification_queue": {
+          "feature_id": "VER-001",
+          "description": "View and manage units pending verification",
+          "acceptance_criteria": [
+            "List all units with status PENDING_VERIFICATION",
+            "Group by lot with expandable sections",
+            "Show progress per lot (verified/total)",
+            "Filter by lot, date received, location",
+            "Sort by lot, date, barcode",
+            "Quick action to start verification for a lot"
+          ]
+        },
+        
+        "scan_verification": {
+          "feature_id": "VER-002",
+          "description": "Scan-first workflow for rapid unit verification",
+          "user_stories": [
+            "As a warehouse worker, I want to scan units quickly without mouse interaction",
+            "As a supervisor, I want immediate feedback on scan success or failure",
+            "As a QA person, I want to flag discrepancies during verification"
+          ],
+          "acceptance_criteria": [
+            "Auto-focus on scan input field on page load",
+            "Accept barcode or serial number scan",
+            "Lookup unit in selected lot first, then system-wide",
+            "Provide auditory feedback (success beep, error buzz) within 100ms",
+            "Provide visual feedback (green flash, red shake) within 100ms",
+            "On successful scan: display unit details, change status to PENDING_GRADING",
+            "On mismatch: show expected vs scanned, offer resolution options",
+            "Support batch mode (continuous scanning) and single mode",
+            "Keep running count of verified units in session",
+            "Auto-advance lot status based on verification progress"
+          ],
+          "scan_modes": {
+            "quick_verify": "Scan only, auto-confirm match, move to next",
+            "detailed_verify": "Scan, show details, require manual confirm",
+            "photo_verify": "Scan, capture photo, attach to unit record"
+          },
+          "mismatch_handling": {
+            "not_found": "Offer to add as exception unit or re-scan",
+            "wrong_lot": "Show correct lot, offer to switch context",
+            "already_verified": "Show when/who verified, allow re-verification",
+            "wrong_status": "Show current status, explain why verification not applicable"
+          }
+        },
+        
+        "verification_exceptions": {
+          "feature_id": "VER-003",
+          "description": "Handle units that don't match expected records",
+          "acceptance_criteria": [
+            "Log all exceptions with reason and resolution",
+            "Support exception types: missing, extra, damaged, wrong_model",
+            "Allow adding unexpected units to lot",
+            "Allow marking expected units as missing",
+            "Require supervisor approval for exceptions over threshold",
+            "Update lot totals and costs when exceptions resolved"
+          ]
+        }
+      }
+    },
+
+    "module_03_grading": {
+      "module_id": "GRD",
+      "module_name": "Grading & Track Assignment",
+      "description": "Assess unit condition and determine processing track",
+      
+      "features": {
+        "grading_queue": {
+          "feature_id": "GRD-001",
+          "description": "View and manage units pending grading",
+          "acceptance_criteria": [
+            "List all units with status PENDING_GRADING",
+            "Show unit details preview on hover/select",
+            "Group by lot or show flat list",
+            "Filter by lot, manufacturer, model, date verified",
+            "Sort by date verified (FIFO default), lot, model",
+            "Bulk select for batch grading of identical models"
+          ]
+        },
+        
+        "grading_form": {
+          "feature_id": "GRD-002",
+          "description": "Comprehensive grading interface with condition assessment",
+          "acceptance_criteria": [
+            "Load unit by scan or selection from queue",
+            "Display all known unit information",
+            "Capture functional grade (A/B/C/D/F/Parts)",
+            "Capture cosmetic grade (Excellent/Good/Fair/Poor)",
+            "Capture detailed component assessments",
+            "Auto-suggest track based on grades",
+            "Allow track override with reason",
+            "Capture photos (min 0, max 10)",
+            "Capture grading notes (free text)",
+            "Show historical grading for similar models",
+            "Keyboard shortcuts for rapid entry"
+          ],
+          "functional_assessment": {
+            "power": ["Powers on normally", "Power issues", "Does not power"],
+            "display": ["No defects", "Minor defects", "Major defects", "Non-functional"],
+            "keyboard": ["All keys work", "Some keys issue", "Major issues", "Non-functional"],
+            "trackpad": ["Works perfectly", "Minor issues", "Major issues", "Non-functional"],
+            "ports": ["All ports work", "Some ports issue", "Major port issues"],
+            "wifi": ["Works", "Intermittent", "Non-functional"],
+            "bluetooth": ["Works", "Intermittent", "Non-functional"],
+            "camera": ["Works", "Issues", "Non-functional", "Not present"],
+            "speakers": ["Work", "Issues", "Non-functional"],
+            "battery": ["Good health >80%", "Fair 50-80%", "Poor <50%", "Non-functional", "Missing"],
+            "bios": ["Unlocked", "Password protected", "Locked to org"]
+          },
+          "cosmetic_assessment": {
+            "screen": ["Flawless", "Minor scratches", "Visible scratches", "Cracks/damage"],
+            "palmrest": ["Like new", "Light wear", "Visible wear", "Damage"],
+            "bottom": ["Like new", "Light wear", "Visible wear", "Damage"],
+            "lid": ["Like new", "Light wear", "Visible wear", "Damage"],
+            "hinges": ["Tight", "Slightly loose", "Loose", "Damaged"],
+            "stickers_residue": ["None", "Minor", "Significant"]
+          }
+        },
+        
+        "track_assignment": {
+          "feature_id": "GRD-003",
+          "description": "Assign processing track based on grading results",
+          "track_definitions": {
+            "A": {
+              "name": "Direct to Sale",
+              "criteria": "Functional A + Cosmetic Excellent/Good",
+              "next_status": "READY_FOR_SALE",
+              "creates_wip": false,
+              "typical_margin": "15-25%"
+            },
+            "B": {
+              "name": "Light Refurbishment",
+              "criteria": "Functional A/B + Cosmetic issues OR minor functional issues",
+              "next_status": "IN_WIP",
+              "creates_wip": true,
+              "wip_template": "light_refurb",
+              "typical_tasks": ["Cleaning", "Minor cosmetic repair", "Keyboard replacement", "Battery replacement"],
+              "typical_margin": "25-35%"
+            },
+            "C": {
+              "name": "Heavy Refurbishment",
+              "criteria": "Significant functional or cosmetic issues",
+              "next_status": "IN_WIP",
+              "creates_wip": true,
+              "wip_template": "heavy_refurb",
+              "typical_tasks": ["Component repair", "Screen replacement", "Board repair", "Full restoration"],
+              "typical_margin": "35-50%"
+            },
+            "Parts": {
+              "name": "Parts Salvage",
+              "criteria": "Not economically viable to repair",
+              "next_status": "FOR_PARTS",
+              "creates_wip": true,
+              "wip_template": "disassembly",
+              "outcome": "Harvest usable parts to parts inventory"
+            }
+          },
+          "auto_assignment_rules": [
+            {"condition": "functional_grade == 'A' AND cosmetic_grade IN ('Excellent', 'Good')", "track": "A"},
+            {"condition": "functional_grade == 'A' AND cosmetic_grade IN ('Fair', 'Poor')", "track": "B"},
+            {"condition": "functional_grade == 'B'", "track": "B"},
+            {"condition": "functional_grade == 'C'", "track": "C"},
+            {"condition": "functional_grade IN ('D', 'F', 'Parts')", "track": "Parts"}
+          ]
+        },
+        
+        "grading_completion": {
+          "feature_id": "GRD-004",
+          "description": "Complete grading and transition unit to next stage",
+          "acceptance_criteria": [
+            "Validate all required assessments completed",
+            "Create grading record with all assessment data",
+            "Update unit with grades and track",
+            "Transition status based on track assignment",
+            "Create WIP job if track requires it",
+            "Update lot grading progress counters",
+            "Advance lot status if all units graded",
+            "Create movement log entry",
+            "Create audit log entry"
+          ]
+        }
+      }
+    },
+
+    "module_04_wip": {
+      "module_id": "WIP",
+      "module_name": "Work-in-Progress Processing",
+      "description": "Manage refurbishment work including diagnosis, repair stages, parts, and labor",
+      
+      "features": {
+        "wip_dashboard": {
+          "feature_id": "WIP-001",
+          "description": "Overview of all active WIP jobs with filtering and views",
+          "views": {
+            "list": "Traditional sortable/filterable table view",
+            "kanban": "Columns by stage with drag-drop",
+            "calendar": "Timeline view by due date",
+            "technician": "Grouped by assigned technician"
+          },
+          "filters": [
+            "Stage (multi-select)",
+            "Track (A/B/C/Parts)",
+            "Assigned technician",
+            "Priority (Low/Normal/High/Urgent)",
+            "Age (days in WIP)",
+            "Lot",
+            "Model"
+          ],
+          "metrics_displayed": [
+            "Total active jobs",
+            "Jobs per stage",
+            "Average time in WIP",
+            "Jobs overdue",
+            "Jobs unassigned"
+          ]
+        },
+        
+        "wip_detail": {
+          "feature_id": "WIP-002",
+          "description": "Comprehensive WIP job management interface",
+          "sections": {
+            "header": {
+              "fields": ["job_number", "laptop_barcode", "status", "priority", "assigned_to", "created_date", "due_date"],
+              "actions": ["Assign", "Change priority", "Print label", "Cancel job"]
+            },
+            "unit_info": {
+              "display": "Read-only laptop details",
+              "fields": ["manufacturer", "model", "serial", "specs", "grades", "cost_basis", "photos"]
+            },
+            "diagnosis": {
+              "fields": ["initial_assessment", "identified_issues", "recommended_repairs", "parts_needed", "estimated_labor_hours", "estimated_cost"],
+              "editable_until": "first stage completion"
+            },
+            "stages": {
+              "display": "Visual pipeline with current stage highlighted",
+              "actions": ["Complete current stage", "Add stage notes", "Log time", "Upload photos"]
+            },
+            "parts": {
+              "display": "List of parts used/reserved for this job",
+              "actions": ["Add part", "Remove part", "Return unused part"],
+              "fields_per_part": ["part_number", "description", "quantity", "unit_cost", "total_cost", "status"]
+            },
+            "labor": {
+              "display": "Log of labor time entries",
+              "actions": ["Add time entry", "Edit entry", "Delete entry"],
+              "fields_per_entry": ["technician", "date", "duration_minutes", "stage", "description", "hourly_rate", "total_cost"]
+            },
+            "attachments": {
+              "types": ["Photo", "Document", "Video"],
+              "actions": ["Upload", "Download", "Delete", "View"],
+              "metadata": ["filename", "uploaded_by", "uploaded_at", "stage_captured"]
+            },
+            "history": {
+              "display": "Complete audit trail of job changes",
+              "entries": ["Stage changes", "Assignments", "Parts added/removed", "Status changes", "Notes added"]
+            },
+            "costs": {
+              "display": "Running total of job costs",
+              "breakdown": {
+                "parts_cost": "Sum of all parts used",
+                "labor_cost": "Sum of all labor entries",
+                "overhead": "Calculated percentage of labor",
+                "total_wip_cost": "Parts + Labor + Overhead",
+                "total_unit_cost": "Original cost basis + WIP cost"
+              }
+            }
+          }
+        },
+        
+        "stage_management": {
+          "feature_id": "WIP-003",
+          "description": "Progress jobs through processing stages",
+          "default_stages": [
+            {"order": 1, "id": "INTAKE", "name": "Intake & Diagnosis", "required": true, "typical_duration_minutes": 15},
+            {"order": 2, "id": "DISASSEMBLY", "name": "Disassembly", "required": false, "typical_duration_minutes": 30},
+            {"order": 3, "id": "CLEANING", "name": "Cleaning", "required": false, "typical_duration_minutes": 20},
+            {"order": 4, "id": "REPAIR", "name": "Repair", "required": false, "typical_duration_minutes": 60},
+            {"order": 5, "id": "PARTS_REPLACEMENT", "name": "Parts Replacement", "required": false, "typical_duration_minutes": 45},
+            {"order": 6, "id": "REASSEMBLY", "name": "Reassembly", "required": false, "typical_duration_minutes": 30},
+            {"order": 7, "id": "TESTING", "name": "Testing & QA", "required": true, "typical_duration_minutes": 30},
+            {"order": 8, "id": "FINAL_COSMETIC", "name": "Final Cosmetic", "required": false, "typical_duration_minutes": 15},
+            {"order": 9, "id": "COMPLETED", "name": "Completed", "required": true, "typical_duration_minutes": 0}
+          ],
+          "stage_completion_requirements": {
+            "INTAKE": ["diagnosis_completed"],
+            "TESTING": ["all_tests_passed OR exceptions_documented"],
+            "COMPLETED": ["final_grade_assigned", "photos_captured"]
+          }
+        },
+        
+        "parts_management": {
+          "feature_id": "WIP-004",
+          "description": "Track parts consumption within WIP jobs",
+          "acceptance_criteria": [
+            "Search parts inventory by number, description, compatibility",
+            "Show available quantity and locations",
+            "Reserve parts when added to job (reduces available, not on-hand)",
+            "Consume parts when job completed (reduces on-hand)",
+            "Return unused parts to inventory (increases available)",
+            "Track FIFO for cost calculation",
+            "Allow manual cost override with reason"
+          ],
+          "parts_catalog_fields": [
+            "part_number", "description", "category", "compatible_models",
+            "on_hand_quantity", "reserved_quantity", "available_quantity",
+            "average_cost", "last_cost", "preferred_supplier", "reorder_point"
+          ]
+        },
+        
+        "labor_tracking": {
+          "feature_id": "WIP-005",
+          "description": "Track technician time and calculate labor costs",
+          "acceptance_criteria": [
+            "Log time entries with technician, duration, stage, description",
+            "Support timer-based entry (start/stop) and manual entry",
+            "Calculate labor cost based on technician hourly rate",
+            "Support different rate tiers (standard, overtime, specialist)",
+            "Aggregate labor by technician for payroll/reporting",
+            "Warn if logged time significantly exceeds estimate"
+          ],
+          "labor_entry_fields": [
+            "technician_id", "wip_job_id", "stage", "start_time", "end_time",
+            "duration_minutes", "rate_type", "hourly_rate_cents", "total_cost_cents",
+            "description", "billable"
+          ]
+        },
+        
+        "wip_completion": {
+          "feature_id": "WIP-006",
+          "description": "Complete WIP job and transition unit to Ready for Sale",
+          "acceptance_criteria": [
+            "Validate all required stages completed",
+            "Validate final testing passed or exceptions documented",
+            "Calculate and lock final WIP cost",
+            "Roll up WIP cost to laptop cost basis",
+            "Consume all reserved parts (change reserved to consumed)",
+            "Transition laptop status to READY_FOR_SALE",
+            "Assign final post-refurb grade if changed",
+            "Update estimated sale price based on new grade",
+            "Create movement log entry (WIP_COMPLETED)",
+            "Create audit log entry",
+            "Mark WIP job status as COMPLETED"
+          ]
+        },
+        
+        "wip_cancellation": {
+          "feature_id": "WIP-007",
+          "description": "Cancel WIP job that cannot be completed",
+          "acceptance_criteria": [
+            "Require cancellation reason",
+            "Return all reserved parts to inventory",
+            "Retain labor cost records for analysis",
+            "Determine laptop disposition (Parts, Write-off, Return to supplier)",
+            "Update laptop status appropriately",
+            "Create detailed audit trail of cancellation"
+          ]
+        }
+      }
+    },
+
+    "module_05_inventory": {
+      "module_id": "INV",
+      "module_name": "Inventory Management",
+      "description": "Browse, search, and manage laptop and parts inventory",
+      
+      "features": {
+        "inventory_browser": {
+          "feature_id": "INV-001",
+          "description": "Comprehensive inventory search and browse interface",
+          "search_capabilities": {
+            "quick_search": "Barcode, serial number, model - instant results",
+            "advanced_search": {
+              "filters": [
+                "Status (multi-select all status values)",
+                "Grade functional (multi-select)",
+                "Grade cosmetic (multi-select)",
+                "Track (A/B/C/Parts)",
+                "Manufacturer (multi-select with counts)",
+                "Model (typeahead with counts)",
+                "Lot (searchable dropdown)",
+                "Location (multi-select)",
+                "Date range (received, graded, ready for sale)",
+                "Price range (min-max)",
+                "Cost range (min-max)",
+                "Age (days since received)",
+                "Specs (RAM, Storage, Screen size)"
+              ],
+              "saved_filters": "Allow saving filter combinations as named presets"
+            }
+          },
+          "display_options": {
+            "views": ["Table", "Grid/Cards", "Compact list"],
+            "columns_configurable": true,
+            "default_columns": ["Barcode", "Manufacturer", "Model", "Serial", "Status", "Grade", "Location", "Days in Stock", "Cost", "Price"],
+            "density": ["Comfortable", "Compact", "Dense"],
+            "pagination": "Virtual scrolling for large datasets (1000+ items)"
+          },
+          "export_options": ["CSV", "XLSX", "PDF"],
+          "print_options": ["Label sheet", "Inventory list", "Barcode list"]
+        },
+        
+        "unit_detail": {
+          "feature_id": "INV-002",
+          "description": "Comprehensive single unit view with all related information",
+          "sections": {
+            "identity": {
+              "fields": ["barcode", "serial_number", "sku", "manufacturer", "model", "asset_tag"],
+              "actions": ["Print label", "Print detail sheet"]
+            },
+            "specifications": {
+              "fields": ["cpu", "ram_gb", "storage_type", "storage_gb", "screen_size", "resolution", "gpu", "wifi", "bluetooth", "ports", "battery_health", "os_installed", "color", "keyboard_layout"],
+              "editable": true
+            },
+            "status_tracking": {
+              "current_status": "Visual badge with status name and color",
+              "status_history": "Timeline of all status changes with dates and users",
+              "location": "Current location with history",
+              "available_transitions": "Buttons for valid next statuses"
+            },
+            "grading": {
+              "functional_grade": "With detailed component assessments",
+              "cosmetic_grade": "With detailed condition notes",
+              "track": "Current track assignment",
+              "graded_by": "User and timestamp",
+              "grading_photos": "Gallery of grading-time photos"
+            },
+            "costs": {
+              "acquisition_cost": "Original cost from lot allocation",
+              "wip_parts_cost": "If applicable",
+              "wip_labor_cost": "If applicable",
+              "wip_overhead": "If applicable",
+              "total_cost_basis": "Sum of all costs",
+              "target_price": "Based on margin rules",
+              "current_price": "If set manually"
+            },
+            "wip_history": {
+              "display": "All WIP jobs for this unit",
+              "details_per_job": ["Job number", "Dates", "Stages completed", "Parts used", "Labor hours", "Total cost", "Outcome"]
+            },
+            "sales_history": {
+              "display": "All sales transactions for this unit",
+              "details": ["Sale date", "Customer", "Price", "Payment method", "Invoice number"],
+              "returns": "Any returns/RMA with details"
+            },
+            "movement_log": {
+              "display": "Complete audit trail of all movements",
+              "entry_types": ["Received", "Verified", "Graded", "Entered WIP", "WIP Stage Change", "WIP Completed", "Location Transfer", "Reserved", "Sold", "Returned", "Written Off"]
+            },
+            "photos": {
+              "display": "Gallery view with lightbox",
+              "categories": ["Receiving", "Grading", "WIP", "Ready for Sale", "Customer-provided"],
+              "actions": ["Upload", "Download", "Delete", "Set as primary"]
+            },
+            "notes": {
+              "display": "Threaded notes/comments",
+              "actions": ["Add note", "Edit own notes", "Delete own notes"],
+              "mentions": "Support @user mentions with notifications"
+            }
+          }
+        },
+        
+        "bulk_operations": {
+          "feature_id": "INV-003",
+          "description": "Perform actions on multiple units simultaneously",
+          "selection_methods": ["Individual checkboxes", "Select all on page", "Select all matching filter"],
+          "operations": {
+            "status_change": {
+              "description": "Change status for all selected units",
+              "constraints": "All selected must have valid transition to target status"
+            },
+            "location_transfer": {
+              "description": "Move all selected to new location",
+              "generates": "Bulk movement log entries"
+            },
+            "print_labels": {
+              "description": "Generate label sheet for all selected",
+              "options": ["Label size", "Include QR code", "Fields to include"]
+            },
+            "export": {
+              "description": "Export selected units to file",
+              "formats": ["CSV", "XLSX", "JSON"],
+              "fields": "Configurable column selection"
+            },
+            "bulk_edit": {
+              "description": "Update common fields across all selected",
+              "editable_fields": ["Location", "Notes", "Tags", "Price"]
+            },
+            "write_off": {
+              "description": "Mark selected as written off",
+              "requires": "Write-off reason and supervisor approval",
+              "generates": "Financial adjustment entries"
+            },
+            "delete": {
+              "description": "Soft delete (with audit trail) or hard delete",
+              "constraints": "Only units with no financial transactions",
+              "requires": "Admin permission"
+            }
+          }
+        },
+        
+        "inventory_alerts": {
+          "feature_id": "INV-004",
+          "description": "Automated alerts for inventory issues",
+          "alert_types": {
+            "aging_stock": {
+              "condition": "Days in Ready for Sale > threshold",
+              "default_threshold": 90,
+              "action": "Suggest markdown or review"
+            },
+            "duplicate_serial": {
+              "condition": "Multiple units with same serial + manufacturer + model",
+              "severity": "High",
+              "action": "Require investigation"
+            },
+            "missing_specs": {
+              "condition": "Key specifications not populated",
+              "severity": "Medium",
+              "action": "Flag for data entry"
+            },
+            "price_below_cost": {
+              "condition": "Sale price < total cost basis",
+              "severity": "High",
+              "action": "Require approval for sale"
+            },
+            "stuck_in_wip": {
+              "condition": "In WIP > threshold days",
+              "default_threshold": 30,
+              "action": "Escalate to supervisor"
+            }
+          },
+          "notification_channels": ["In-app notification", "Dashboard widget", "Email digest"]
+        },
+        
+        "parts_inventory": {
+          "feature_id": "INV-005",
+          "description": "Manage parts and components inventory",
+          "features": {
+            "parts_catalog": {
+              "fields": ["part_number", "description", "category", "manufacturer", "compatible_models", "image"],
+              "actions": ["Add", "Edit", "Deactivate"]
+            },
+            "stock_tracking": {
+              "fields": ["on_hand", "reserved", "available", "reorder_point", "max_stock"],
+              "locations": "Track quantity per location"
+            },
+            "costing": {
+              "method": "Weighted average or FIFO",
+              "fields": ["average_cost", "last_cost", "total_value"]
+            },
+            "procurement": {
+              "suppliers": "Link multiple suppliers per part",
+              "supplier_fields": ["supplier_part_number", "cost", "lead_time", "min_order_qty"]
+            },
+            "transactions": {
+              "types": ["Receive", "Issue to WIP", "Return from WIP", "Adjustment", "Write-off", "Sale"]
+            },
+            "reorder_alerts": {
+              "condition": "Available quantity <= reorder point",
+              "action": "Generate reorder suggestion"
+            }
+          }
+        }
+      }
+    },
+
+    "module_06_sales": {
+      "module_id": "SLS",
+      "module_name": "Sales & Point of Sale",
+      "description": "Complete sales workflow from cart to checkout with payments and receipts",
+      
+      "features": {
+        "pos_cart": {
+          "feature_id": "SLS-001",
+          "description": "Shopping cart with real-time availability checking",
+          "acceptance_criteria": [
+            "Add items by barcode scan or search",
+            "Only Ready for Sale items can be added",
+            "Reserve item when added (prevent double-sale)",
+            "Reservation timeout: 30 minutes",
+            "Show reservation timer in cart",
+            "Allow quantity adjustment (for accessories/parts)",
+            "Remove items (releases reservation)",
+            "Show running total with tax calculation",
+            "Apply discounts at line or cart level",
+            "Clear cart option with confirmation",
+            "Persist cart across browser sessions per user"
+          ],
+          "cart_item_display": [
+            "Product image thumbnail",
+            "Manufacturer + Model",
+            "Serial/Barcode",
+            "Specs summary",
+            "Unit price",
+            "Discount (if applied)",
+            "Line total",
+            "Reservation timer"
+          ]
+        },
+        
+        "customer_management": {
+          "feature_id": "SLS-002",
+          "description": "Customer selection and management during sale",
+          "customer_types": {
+            "walk_in": {
+              "description": "Anonymous cash customer",
+              "data_captured": "Optional phone/email for receipt"
+            },
+            "registered_individual": {
+              "description": "Individual customer with account",
+              "data_captured": "Name, phone, email, address, ID number"
+            },
+            "business": {
+              "description": "Business customer",
+              "data_captured": "Company name, tax ID, billing address, credit terms"
+            }
+          },
+          "customer_selection_ui": {
+            "search": "By name, phone, email, customer ID",
+            "recent": "Last 10 customers served by this user",
+            "quick_add": "Modal to create new customer inline",
+            "walk_in_button": "One-click for anonymous sale"
+          },
+          "credit_customers": {
+            "display": "Current balance, credit limit, available credit",
+            "block_if": "Over credit limit and not authorized"
+          }
+        },
+        
+        "pricing_discounts": {
+          "feature_id": "SLS-003",
+          "description": "Flexible pricing and discount system",
+          "pricing_rules": {
+            "base_price": "Set at unit level or calculated from cost + margin",
+            "customer_tier_pricing": {
+              "retail": "0% discount",
+              "reseller": "10% discount",
+              "wholesale": "20% discount"
+            },
+            "volume_discounts": {
+              "5_plus_units": "5% additional",
+              "10_plus_units": "10% additional",
+              "25_plus_units": "15% additional"
+            }
+          },
+          "discount_types": {
+            "percentage": "X% off line or cart",
+            "fixed_amount": "RM X off line or cart",
+            "coupon_code": "Apply predefined promotion",
+            "manager_override": "Manual price with approval"
+          },
+          "discount_controls": {
+            "max_discount_percentage": "Configurable per role (salesperson: 10%, manager: 30%)",
+            "below_cost_sale": "Requires admin approval",
+            "audit_logging": "All discounts logged with reason"
+          }
+        },
+        
+        "tax_calculation": {
+          "feature_id": "SLS-004",
+          "description": "VAT/GST calculation with jurisdiction support",
+          "calculation_methods": {
+            "tax_inclusive": "Price shown includes tax, tax extracted",
+            "tax_exclusive": "Price shown excludes tax, tax added"
+          },
+          "configuration": {
+            "default_rate": "Configurable (e.g., 8%)",
+            "tax_exempt_customers": "Flag on customer record",
+            "tax_exempt_products": "Flag on product category",
+            "multiple_rates": "Support different rates per category if needed"
+          },
+          "tax_breakdown": {
+            "display": "Show subtotal, tax amount, total",
+            "per_line": "Tax calculated per line then summed",
+            "rounding": "Standard rounding to cents"
+          }
+        },
+        
+        "checkout_payment": {
+          "feature_id": "SLS-005",
+          "description": "Payment collection with multiple methods",
+          "payment_methods": {
+            "cash": {
+              "fields": ["Amount tendered", "Change due"],
+              "cash_drawer": "Optional integration"
+            },
+            "card": {
+              "fields": ["Card type", "Last 4 digits", "Auth code"],
+              "integration": "Manual entry or terminal integration"
+            },
+            "bank_transfer": {
+              "fields": ["Reference number", "Bank name", "Transfer date"],
+              "verification": "Optional confirmation upload"
+            },
+            "credit_account": {
+              "fields": ["Customer account"],
+              "validation": "Check available credit",
+              "creates": "Accounts receivable entry"
+            },
+            "ewallet": {
+              "fields": ["Provider", "Transaction ID"],
+              "providers": ["PayPal", "GrabPay", "TouchNGo", "etc."]
+            }
+          },
+          "split_payment": {
+            "support": "Multiple payment methods per transaction",
+            "ui": "Slider or manual amount entry per method",
+            "validation": "Total payments must equal cart total"
+          },
+          "checkout_completion": {
+            "actions": [
+              "Validate all payments collected",
+              "Create sale transaction record",
+              "Create sale line items",
+              "Update laptop status to SOLD",
+              "Release reservations",
+              "Create payment records",
+              "Create financial entries (revenue, tax liability)",
+              "Update customer balance if credit sale",
+              "Generate receipt/invoice",
+              "Print receipt if configured",
+              "Update inventory counts",
+              "Create movement log entries",
+              "Create audit log entry"
+            ]
+          }
+        },
+        
+        "receipt_invoice": {
+          "feature_id": "SLS-006",
+          "description": "Generate and deliver sales documents",
+          "document_types": {
+            "receipt": {
+              "content": "Basic transaction record for customer",
+              "format": "Thermal printer or A5 PDF"
+            },
+            "invoice": {
+              "content": "Full invoice with company details, terms",
+              "format": "A4 PDF",
+              "numbering": "Sequential invoice number"
+            },
+            "delivery_note": {
+              "content": "Items for delivery/pickup",
+              "format": "A4 PDF"
+            },
+            "warranty_card": {
+              "content": "Warranty terms and registration",
+              "format": "A5 PDF"
+            }
+          },
+          "delivery_options": [
+            "Print immediately",
+            "Email to customer",
+            "Download PDF",
+            "SMS link (if configured)"
+          ],
+          "template_customization": {
+            "company_logo": "Uploadable",
+            "header_footer": "Configurable text",
+            "terms_conditions": "Configurable per document type"
+          }
+        },
+        
+        "sales_history": {
+          "feature_id": "SLS-007",
+          "description": "View and manage past sales",
+          "search_filters": [
+            "Date range",
+            "Customer",
+            "Sales person",
+            "Payment method",
+            "Invoice number",
+            "Amount range",
+            "Item barcode/serial"
+          ],
+          "display_fields": [
+            "Invoice number",
+            "Date/time",
+            "Customer",
+            "Items count",
+            "Subtotal",
+            "Tax",
+            "Total",
+            "Payment method",
+            "Sales person",
+            "Status"
+          ],
+          "actions": [
+            "View details",
+            "Reprint receipt/invoice",
+            "Email documents",
+            "Initiate return",
+            "Add notes",
+            "Void (within time limit)"
+          ]
+        },
+        
+        "returns_rma": {
+          "feature_id": "SLS-008",
+          "description": "Process returns and exchanges",
+          "return_types": {
+            "refund": {
+              "description": "Full or partial refund to customer",
+              "payment_reversal": "Refund to original method or store credit",
+              "inventory_impact": "Return to appropriate status"
+            },
+            "exchange": {
+              "description": "Swap for different unit",
+              "process": "Return original + new sale in one transaction",
+              "price_difference": "Collect or refund difference"
+            },
+            "warranty_repair": {
+              "description": "Accept for repair under warranty",
+              "creates": "RMA record and WIP job",
+              "tracking": "Customer notified of repair status"
+            }
+          },
+          "return_workflow": {
+            "initiation": [
+              "Lookup original sale by invoice or unit barcode",
+              "Verify within return period",
+              "Verify customer identity"
+            ],
+            "inspection": [
+              "Assess returned unit condition",
+              "Document any new damage",
+              "Determine restocking applicability"
+            ],
+            "resolution": [
+              "Calculate refund amount (minus restocking if applicable)",
+              "Process payment reversal",
+              "Update unit status",
+              "Generate return documentation"
+            ]
+          },
+          "rma_tracking": {
+            "rma_number": "Unique identifier for warranty claims",
+            "status_tracking": ["Received", "In Repair", "Awaiting Parts", "Completed", "Returned to Customer"],
+            "customer_portal": "Optional link for customer to check status"
+          }
+        }
+      }
+    },
+
+    "module_07_purchases": {
+      "module_id": "PUR",
+      "module_name": "Purchasing & Supplier Management",
+      "description": "Manage supplier relationships and purchase orders for lots and parts",
+      
+      "features": {
+        "supplier_management": {
+          "feature_id": "PUR-001",
+          "description": "Maintain supplier directory with full details",
+          "supplier_fields": {
+            "identity": ["supplier_code", "company_name", "tax_id", "registration_number"],
+            "contacts": ["primary_contact_name", "email", "phone", "address"],
+            "commercial": ["payment_terms", "currency", "credit_limit", "bank_details"],
+            "categories": ["supplier_type (lots/parts/both)", "product_categories"],
+            "status": ["active", "inactive", "blocked"]
+          },
+          "supplier_analytics": {
+            "metrics": [
+              "Total purchase volume (value and units)",
+              "Average lot quality (post-grading)",
+              "On-time delivery rate",
+              "Return/dispute rate",
+              "Average cost per grade"
+            ],
+            "period": "Last 30/90/365 days or custom range"
+          }
+        },
+        
+        "purchase_orders": {
+          "feature_id": "PUR-002",
+          "description": "Create and manage purchase orders",
+          "po_lifecycle": {
+            "states": ["DRAFT", "SUBMITTED", "CONFIRMED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"],
+            "transitions": {
+              "DRAFT_TO_SUBMITTED": "User submits for approval or sends to supplier",
+              "SUBMITTED_TO_CONFIRMED": "Supplier confirms or auto-confirm if direct purchase",
+              "CONFIRMED_TO_PARTIALLY_RECEIVED": "First lot received against PO",
+              "PARTIALLY_TO_RECEIVED": "All expected items received",
+              "ANY_TO_CANCELLED": "Before fully received only"
+            }
+          },
+          "po_fields": {
+            "header": ["po_number", "supplier", "order_date", "expected_date", "currency", "terms", "notes"],
+            "lines": ["description", "quantity", "unit_price", "total", "received_qty"],
+            "totals": ["subtotal", "tax", "total", "amount_received", "amount_pending"]
+          },
+          "po_receiving": {
+            "workflow": "Create receiving lot linked to PO line",
+            "partial_receipt": "Receive less than ordered, PO stays open",
+            "over_receipt": "Allowed with flag, updates PO quantity",
+            "variance_handling": "Log price or quantity variances for review"
+          }
+        },
+        
+        "parts_ordering": {
+          "feature_id": "PUR-003",
+          "description": "Automated and manual parts reordering",
+          "reorder_suggestions": {
+            "trigger": "Available quantity <= reorder point",
+            "calculation": "Suggested qty = max_stock - on_hand - on_order",
+            "preferred_supplier": "Default to supplier with best price"
+          },
+          "order_generation": {
+            "manual": "Create PO from scratch",
+            "from_suggestions": "Generate PO from reorder suggestions",
+            "from_wip": "Generate PO for parts needed by WIP jobs"
+          }
+        }
+      }
+    },
+
+    "module_08_customers": {
+      "module_id": "CUS",
+      "module_name": "Customer Relationship Management",
+      "description": "Manage customer records, credit, and relationships",
+      
+      "features": {
+        "customer_registry": {
+          "feature_id": "CUS-001",
+          "description": "Maintain customer database",
+          "customer_fields": {
+            "identity": ["customer_code", "type (individual/business)", "name", "tax_id"],
+            "contact": ["phone", "email", "address", "billing_address", "shipping_address"],
+            "commercial": ["tier", "payment_terms", "credit_limit", "discount_rate"],
+            "preferences": ["communication_preferences", "default_sales_person"]
+          },
+          "search_capabilities": [
+            "Name/company",
+            "Phone (partial match)",
+            "Email",
+            "Customer code",
+            "Tax ID"
+          ]
+        },
+        
+        "customer_detail": {
+          "feature_id": "CUS-002",
+          "description": "Comprehensive customer view",
+          "sections": {
+            "profile": "Editable customer information",
+            "financial_summary": {
+              "total_purchases": "Lifetime and period",
+              "current_balance": "Outstanding AR",
+              "credit_available": "Limit - balance",
+              "payment_history": "Aging and payment patterns"
+            },
+            "purchase_history": "All sales to this customer",
+            "returns_history": "All returns/RMA",
+            "notes": "Internal notes about customer",
+            "communications": "Log of customer interactions"
+          }
+        },
+        
+        "credit_management": {
+          "feature_id": "CUS-003",
+          "description": "Manage customer credit accounts",
+          "credit_controls": {
+            "credit_limit_setting": "Per customer with approval workflow",
+            "limit_breach_handling": "Block sale or require manager approval",
+            "terms_configuration": "Net 15/30/60/90 per customer"
+          },
+          "aging_buckets": {
+            "buckets": ["Current", "1-30 days", "31-60 days", "61-90 days", "90+ days"],
+            "display": "Per customer and system-wide",
+            "alerts": "Overdue notifications"
+          }
+        }
+      }
+    },
+
+    "module_09_finance": {
+      "module_id": "FIN",
+      "module_name": "Financial Management",
+      "description": "Complete financial tracking including cash, AP/AR, expenses, and reporting",
+      
+      "features": {
+        "chart_of_accounts": {
+          "feature_id": "FIN-001",
+          "description": "Configurable chart of accounts",
+          "default_accounts": {
+            "assets": {
+              "1000": "Cash on Hand",
+              "1010": "Bank Account - Operating",
+              "1020": "Bank Account - Savings",
+              "1100": "Accounts Receivable",
+              "1200": "Inventory - Laptops",
+              "1210": "Inventory - Parts",
+              "1220": "Inventory - WIP"
+            },
+            "liabilities": {
+              "2000": "Accounts Payable",
+              "2100": "VAT/GST Payable",
+              "2200": "Customer Deposits"
+            },
+            "equity": {
+              "3000": "Owner Capital",
+              "3100": "Retained Earnings",
+              "3200": "Owner Drawings"
+            },
+            "revenue": {
+              "4000": "Sales - Laptops",
+              "4010": "Sales - Parts",
+              "4020": "Sales - Services",
+              "4100": "Other Income"
+            },
+            "cost_of_goods": {
+              "5000": "COGS - Laptops",
+              "5010": "COGS - Parts",
+              "5100": "WIP Labor",
+              "5110": "WIP Parts Consumed",
+              "5120": "WIP Overhead"
+            },
+            "expenses": {
+              "6000": "Rent",
+              "6010": "Utilities",
+              "6020": "Salaries & Wages",
+              "6030": "Marketing",
+              "6040": "Office Supplies",
+              "6050": "Insurance",
+              "6060": "Bank Charges",
+              "6070": "Depreciation",
+              "6100": "Other Expenses"
+            }
+          }
+        },
+        
+        "cash_book": {
+          "feature_id": "FIN-002",
+          "description": "Track all cash movements with running balance",
+          "entry_fields": ["date", "description", "category", "reference", "in_amount", "out_amount", "balance", "account"],
+          "entry_types": {
+            "sales_receipt": "Auto-generated from sales",
+            "supplier_payment": "Manual or linked to AP",
+            "customer_receipt": "Manual or linked to AR",
+            "expense": "Manual expense entry",
+            "transfer": "Between cash accounts",
+            "owner_withdrawal": "Drawings",
+            "owner_contribution": "Capital injection"
+          },
+          "reconciliation": {
+            "bank_reconciliation": "Match cash book to bank statement",
+            "outstanding_items": "Uncleared deposits and payments"
+          }
+        },
+        
+        "accounts_payable": {
+          "feature_id": "FIN-003",
+          "description": "Track amounts owed to suppliers",
+          "ap_entry_sources": [
+            "Lot receiving (auto-create on commit)",
+            "Parts purchase order",
+            "Manual bill entry"
+          ],
+          "payment_workflow": {
+            "record_payment": "Full or partial payment against AP",
+            "payment_methods": ["Cash", "Bank transfer", "Check"],
+            "batch_payments": "Pay multiple bills at once"
+          },
+          "ap_reporting": {
+            "aging_report": "By supplier and bucket",
+            "payment_forecast": "Upcoming payments by due date",
+            "supplier_statement": "Detailed activity per supplier"
+          }
+        },
+        
+        "accounts_receivable": {
+          "feature_id": "FIN-004",
+          "description": "Track amounts owed by customers",
+          "ar_entry_sources": [
+            "Credit sales (auto-create on checkout)",
+            "Manual invoice"
+          ],
+          "collection_workflow": {
+            "record_receipt": "Full or partial payment against AR",
+            "receipt_methods": ["Cash", "Bank transfer", "Card", "Check"],
+            "allocation": "Apply receipt to specific invoices"
+          },
+          "ar_reporting": {
+            "aging_report": "By customer and bucket",
+            "collection_forecast": "Expected receipts by due date",
+            "customer_statement": "Detailed activity per customer"
+          }
+        },
+        
+        "expense_tracking": {
+          "feature_id": "FIN-005",
+          "description": "Track operational expenses",
+          "expense_entry": {
+            "fields": ["date", "category", "amount", "supplier", "description", "payment_method", "reference", "receipt_attachment"],
+            "categories": "Mapped to chart of accounts expense accounts",
+            "recurring": "Support recurring expense templates"
+          },
+          "expense_approval": {
+            "workflow": "Optional approval for expenses over threshold",
+            "levels": "Configurable approval hierarchy"
+          }
+        },
+        
+        "tax_management": {
+          "feature_id": "FIN-006",
+          "description": "VAT/GST calculation and reporting",
+          "configuration": {
+            "tax_rates": "Multiple rates configurable",
+            "default_rate": "Applied when not specified",
+            "tax_periods": "Monthly or quarterly"
+          },
+          "tax_transactions": {
+            "output_tax": "From sales (liability)",
+            "input_tax": "From purchases (asset/recoverable)"
+          },
+          "tax_reporting": {
+            "liability_calculation": "Output - Input = Net liability",
+            "period_report": "Summary for filing",
+            "transaction_detail": "Line-by-line for audit"
+          }
+        },
+        
+        "profit_loss": {
+          "feature_id": "FIN-007",
+          "description": "Automated P&L calculation",
+          "structure": {
+            "revenue": {
+              "gross_sales": "Total sales before discounts",
+              "discounts": "Total discounts given",
+              "net_sales": "Gross - discounts",
+              "other_income": "Non-sales revenue"
+            },
+            "cost_of_goods_sold": {
+              "opening_inventory": "Start of period",
+              "purchases": "Lot costs committed",
+              "wip_costs": "Labor + parts + overhead",
+              "closing_inventory": "End of period",
+              "cogs_calculation": "Opening + Purchases + WIP - Closing"
+            },
+            "gross_profit": "Net Sales - COGS",
+            "operating_expenses": {
+              "by_category": "Grouped expense totals"
+            },
+            "operating_profit": "Gross Profit - Operating Expenses",
+            "other_expenses": "Interest, depreciation",
+            "net_profit": "Operating Profit - Other Expenses"
+          },
+          "periods": ["Daily", "Weekly", "Monthly", "Quarterly", "Yearly", "Custom range"]
+        },
+        
+        "owner_ledger": {
+          "feature_id": "FIN-008",
+          "description": "Track owner capital and drawings",
+          "transactions": {
+            "capital_contribution": "Money invested by owner",
+            "drawings": "Money withdrawn by owner",
+            "profit_allocation": "End of period profit distribution"
+          },
+          "balance_calculation": "Capital + Profits - Drawings"
+        }
+      }
+    },
+
+    "module_10_reporting": {
+      "module_id": "RPT",
+      "module_name": "Reporting & Analytics",
+      "description": "Comprehensive operational and financial reporting",
+      
+      "features": {
+        "operational_reports": {
+          "feature_id": "RPT-001",
+          "inventory_reports": {
+            "stock_status": {
+              "description": "Current inventory by status, grade, location",
+              "grouping_options": ["Status", "Grade", "Track", "Location", "Model", "Lot"],
+              "fields": ["Count", "Total cost", "Total value", "Average age"]
+            },
+            "stock_aging": {
+              "description": "Units by time in current status",
+              "buckets": ["0-30 days", "31-60 days", "61-90 days", "90+ days"],
+              "drill_down": "To unit list"
+            },
+            "stock_movement": {
+              "description": "Units in/out over time period",
+              "metrics": ["Received", "Sold", "In WIP", "Returned", "Written off"]
+            },
+            "stock_valuation": {
+              "description": "Total inventory value by costing method",
+              "methods": ["FIFO", "Weighted Average"]
+            }
+          },
+          "lot_reports": {
+            "lot_summary": {
+              "description": "Overview of all lots",
+              "fields": ["Lot number", "Supplier", "Date", "Units", "Cost", "Status", "Grades distribution"]
+            },
+            "lot_profitability": {
+              "description": "Revenue and margin by lot",
+              "fields": ["Units sold", "Revenue", "COGS", "Gross profit", "Margin %"]
+            }
+          },
+          "wip_reports": {
+            "wip_status": {
+              "description": "Current WIP jobs by stage and track",
+              "metrics": ["Count per stage", "Average time per stage", "Overdue jobs"]
+            },
+            "wip_throughput": {
+              "description": "Jobs completed over time",
+              "metrics": ["Completed count", "Average completion time", "Parts consumed", "Labor hours"]
+            },
+            "technician_performance": {
+              "description": "Productivity metrics by technician",
+              "metrics": ["Jobs completed", "Total hours", "Parts usage", "Quality score"]
+            }
+          },
+          "grading_reports": {
+            "grade_distribution": {
+              "description": "Units by grade over time",
+              "drill_down": "By supplier, model, time period"
+            },
+            "track_routing": {
+              "description": "Units routed to each track",
+              "metrics": ["Volume", "Percentage", "Average processing time"]
+            }
+          }
+        },
+        
+        "financial_reports": {
+          "feature_id": "RPT-002",
+          "sales_reports": {
+            "sales_summary": {
+              "description": "Sales totals by period",
+              "dimensions": ["Day", "Week", "Month", "Salesperson", "Customer", "Product category"]
+            },
+            "sales_detail": {
+              "description": "Line-level sales detail",
+              "fields": ["Invoice", "Date", "Customer", "Items", "Amount", "Margin"]
+            },
+            "sales_by_product": {
+              "description": "Best and worst sellers",
+              "metrics": ["Units sold", "Revenue", "Margin", "Days to sell"]
+            }
+          },
+          "profitability_reports": {
+            "pl_statement": {
+              "description": "Profit and loss by period",
+              "format": "Standard P&L format",
+              "comparison": "Period over period"
+            },
+            "margin_analysis": {
+              "description": "Margin by product, customer, track",
+              "metrics": ["Gross margin", "Net margin", "Contribution margin"]
+            }
+          },
+          "cash_flow_reports": {
+            "cash_flow_statement": {
+              "description": "Cash in/out by category",
+              "sections": ["Operating", "Investing", "Financing"]
+            },
+            "cash_forecast": {
+              "description": "Projected cash position",
+              "inputs": ["Expected collections", "Expected payments"]
+            }
+          },
+          "ap_ar_reports": {
+            "ap_aging": {
+              "description": "Amounts owed to suppliers by age",
+              "buckets": ["Current", "1-30", "31-60", "61-90", "90+"]
+            },
+            "ar_aging": {
+              "description": "Amounts owed by customers by age",
+              "buckets": ["Current", "1-30", "31-60", "61-90", "90+"]
+            }
+          },
+          "tax_reports": {
+            "vat_summary": {
+              "description": "VAT liability for filing",
+              "fields": ["Output VAT", "Input VAT", "Net liability"]
+            },
+            "tax_detail": {
+              "description": "Transaction-level VAT detail",
+              "fields": ["Date", "Document", "Taxable amount", "Tax amount", "Rate"]
+            }
+          }
+        },
+        
+        "audit_reports": {
+          "feature_id": "RPT-003",
+          "movement_log": {
+            "description": "Complete movement history for units",
+            "filters": ["Unit", "Type", "Date range", "User", "Location"],
+            "export": "For audit purposes"
+          },
+          "user_activity": {
+            "description": "Actions performed by users",
+            "metrics": ["Login/logout", "Actions by type", "Errors encountered"]
+          },
+          "state_changes": {
+            "description": "All status transitions",
+            "fields": ["Entity", "From state", "To state", "User", "Timestamp", "Context"]
+          },
+          "data_integrity": {
+            "description": "System health checks",
+            "checks": [
+              "Orphaned records",
+              "Balance discrepancies",
+              "Missing audit entries",
+              "Duplicate detection"
+            ]
+          }
+        },
+        
+        "report_features": {
+          "feature_id": "RPT-004",
+          "common_features": {
+            "date_presets": ["Today", "Yesterday", "This week", "Last week", "This month", "Last month", "This quarter", "This year", "Custom range"],
+            "export_formats": ["PDF", "Excel", "CSV"],
+            "print_optimization": "Printer-friendly layouts",
+            "scheduling": "Automated email delivery",
+            "saved_configurations": "Save frequently used reports",
+            "drill_down": "Click to see underlying detail",
+            "comparison": "Period over period analysis"
+          }
+        }
+      }
+    },
+
+    "module_11_settings": {
+      "module_id": "SET",
+      "module_name": "Settings & Administration",
+      "description": "System configuration and user management",
+      
+      "features": {
+        "company_settings": {
+          "feature_id": "SET-001",
+          "description": "Basic company information",
+          "fields": [
+            "company_name", "legal_name", "tax_id", "registration_number",
+            "address", "phone", "email", "website",
+            "logo", "default_currency", "fiscal_year_start",
+            "invoice_prefix", "receipt_prefix"
+          ]
+        },
+        
+        "user_management": {
+          "feature_id": "SET-002",
+          "description": "User account administration",
+          "user_fields": [
+            "username", "email", "full_name", "phone",
+            "role", "department", "location", "status",
+            "hourly_rate (for technicians)"
+          ],
+          "account_actions": [
+            "Create user", "Edit user", "Deactivate user", "Reset password",
+            "Force logout", "View activity log"
+          ]
+        },
+        
+        "role_management": {
+          "feature_id": "SET-003",
+          "description": "Role-based access control configuration",
+          "default_roles": {
+            "admin": {
+              "description": "Full system access",
+              "permissions": "*"
+            },
+            "manager": {
+              "description": "Operational management",
+              "permissions": [
+                "receiving.*", "verification.*", "grading.*", "wip.*",
+                "inventory.*", "sales.*", "reports.operational.*",
+                "settings.view"
+              ]
+            },
+            "sales": {
+              "description": "Sales operations",
+              "permissions": [
+                "inventory.view", "sales.*", "customers.*",
+                "reports.sales.*"
+              ]
+            },
+            "warehouse": {
+              "description": "Warehouse operations",
+              "permissions": [
+                "receiving.*", "verification.*", "grading.*",
+                "inventory.view", "inventory.transfer"
+              ]
+            },
+            "technician": {
+              "description": "WIP processing",
+              "permissions": [
+                "wip.view", "wip.update_assigned",
+                "inventory.view", "parts.view"
+              ]
+            },
+            "finance": {
+              "description": "Financial operations",
+              "permissions": [
+                "finance.*", "reports.financial.*",
+                "sales.view", "purchases.view"
+              ]
+            },
+            "viewer": {
+              "description": "Read-only access",
+              "permissions": [
+                "*.view"
+              ]
+            }
+          },
+          "custom_roles": {
+            "support": true,
+            "permission_granularity": "Module.action level"
+          }
+        },
+        
+        "grading_configuration": {
+          "feature_id": "SET-004",
+          "description": "Configure grading criteria and track rules",
+          "grade_definitions": {
+            "functional_grades": "A/B/C/D/F/Parts with criteria",
+            "cosmetic_grades": "Excellent/Good/Fair/Poor with criteria",
+            "track_rules": "Grade combinations to track mapping"
+          },
+          "assessment_checklists": {
+            "customizable": true,
+            "per_category": "Different checklists by product category"
+          }
+        },
+        
+        "sales_configuration": {
+          "feature_id": "SET-005",
+          "description": "Sales and pricing settings",
+          "settings": {
+            "pricing_rules": "Margin targets, discount limits",
+            "customer_tiers": "Define tiers and discount levels",
+            "payment_methods": "Enable/disable payment options",
+            "receipt_settings": "Template, terms, footer",
+            "warranty_terms": "Default warranty period and terms"
+          }
+        },
+        
+        "tax_configuration": {
+          "feature_id": "SET-006",
+          "description": "Tax rates and rules",
+          "settings": {
+            "tax_rates": "Multiple rates with names",
+            "default_rate": "Applied when not specified",
+            "tax_calculation": "Inclusive vs exclusive",
+            "tax_registration": "Tax ID for documents"
+          }
+        },
+        
+        "barcode_configuration": {
+          "feature_id": "SET-007",
+          "description": "Barcode format and generation",
+          "settings": {
+            "barcode_format": "Code128, EAN13, QR",
+            "prefix": "Company-specific prefix",
+            "sequence": "Auto-increment settings",
+            "label_template": "Layout for printing"
+          }
+        },
+        
+        "notification_settings": {
+          "feature_id": "SET-008",
+          "description": "Alert thresholds and delivery",
+          "alerts_configurable": [
+            "Low stock threshold",
+            "Aging inventory threshold",
+            "WIP overdue threshold",
+            "AR overdue threshold",
+            "High value transaction threshold"
+          ],
+          "delivery_channels": ["In-app", "Email", "SMS (if configured)"]
+        },
+        
+        "data_management": {
+          "feature_id": "SET-009",
+          "description": "Backup, restore, and data maintenance",
+          "backup": {
+            "manual_backup": "Download full database backup",
+            "scheduled_backup": "Automated backup schedule",
+            "backup_formats": ["JSON", "SQLite", "Encrypted archive"]
+          },
+          "restore": {
+            "upload_restore": "Restore from backup file",
+            "validation": "Integrity check before restore",
+            "confirmation": "Require admin confirmation"
+          },
+          "data_clear": {
+            "selective_clear": "Clear by module or date range",
+            "full_reset": "Reset to initial state",
+            "require_confirmation": "Multi-step confirmation"
+          },
+          "export": {
+            "full_export": "Complete data export",
+            "selective_export": "By module or date range",
+            "formats": ["JSON", "CSV", "Excel"]
+          },
+          "migration": {
+            "schema_version": "Current schema version display",
+            "migration_history": "Applied migrations log",
+            "pending_migrations": "Migrations to apply"
+          }
+        },
+        
+        "locations": {
+          "feature_id": "SET-010",
+          "description": "Manage warehouse locations",
+          "location_fields": ["code", "name", "type", "address", "active"],
+          "location_types": ["Warehouse", "Store", "Transit", "External"]
+        },
+        
+        "integrations": {
+          "feature_id": "SET-011",
+          "description": "External system integrations",
+          "available_integrations": {
+            "accounting": ["QuickBooks", "Xero", "Wave"],
+            "ecommerce": ["WooCommerce", "Shopify", "eBay", "Amazon"],
+            "shipping": ["EasyPost", "ShipStation"],
+            "payment": ["Stripe", "PayPal"],
+            "hardware": ["Scanner configuration", "Printer configuration"]
+          }
+        }
+      }
+    }
+  },
+
+  "status_lifecycles": {
+    "laptop_status": {
+      "states": [
+        {"status": "PENDING_VERIFICATION", "description": "Received but not physically verified", "color": "#FFA500"},
+        {"status": "PENDING_GRADING", "description": "Verified, awaiting grade assessment", "color": "#FFFF00"},
+        {"status": "IN_WIP", "description": "Undergoing refurbishment", "color": "#87CEEB"},
+        {"status": "READY_FOR_SALE", "description": "Available for purchase", "color": "#00FF00"},
+        {"status": "RESERVED", "description": "Held in cart/pending sale", "color": "#90EE90"},
+        {"status": "SOLD", "description": "Sold to customer", "color": "#808080"},
+        {"status": "FOR_PARTS", "description": "Designated for parts salvage", "color": "#8B4513"},
+        {"status": "RETURNED", "description": "Returned by customer, pending inspection", "color": "#FF6347"},
+        {"status": "WRITTEN_OFF", "description": "No longer in active inventory", "color": "#000000"},
+        {"status": "TRANSFERRED", "description": "Transferred to another location", "color": "#DDA0DD"}
+      ],
+      "valid_transitions": {
+        "PENDING_VERIFICATION": ["PENDING_GRADING", "WRITTEN_OFF"],
+        "PENDING_GRADING": ["IN_WIP", "READY_FOR_SALE", "FOR_PARTS", "WRITTEN_OFF"],
+        "IN_WIP": ["READY_FOR_SALE", "FOR_PARTS", "WRITTEN_OFF"],
+        "READY_FOR_SALE": ["RESERVED", "IN_WIP", "TRANSFERRED", "WRITTEN_OFF"],
+        "RESERVED": ["READY_FOR_SALE", "SOLD"],
+        "SOLD": ["RETURNED"],
+        "FOR_PARTS": ["WRITTEN_OFF"],
+        "RETURNED": ["IN_WIP", "READY_FOR_SALE", "FOR_PARTS", "WRITTEN_OFF"],
+        "WRITTEN_OFF": [],
+        "TRANSFERRED": ["READY_FOR_SALE", "IN_WIP"]
+      },
+      "transition_requirements": {
+        "PENDING_VERIFICATION_TO_PENDING_GRADING": ["verification_completed"],
+        "PENDING_GRADING_TO_IN_WIP": ["grading_completed", "wip_job_created"],
+        "PENDING_GRADING_TO_READY_FOR_SALE": ["grading_completed", "track_A_assigned"],
+        "IN_WIP_TO_READY_FOR_SALE": ["wip_job_completed"],
+        "READY_FOR_SALE_TO_RESERVED": ["cart_item_created"],
+        "RESERVED_TO_SOLD": ["sale_completed", "payment_received"],
+        "SOLD_TO_RETURNED": ["return_authorized"]
+      }
+    },
+    
+    "lot_status": {
+      "states": [
+        {"status": "DRAFT", "description": "Lot created but not committed"},
+        {"status": "PENDING_VERIFICATION", "description": "Committed, awaiting physical verification"},
+        {"status": "PARTIALLY_VERIFIED", "description": "Some units verified"},
+        {"status": "VERIFIED", "description": "All units verified"},
+        {"status": "GRADING", "description": "Verification complete, grading in progress"},
+        {"status": "GRADED", "description": "All units graded"},
+        {"status": "PROCESSING", "description": "Units in various stages of processing"},
+        {"status": "COMPLETED", "description": "All units processed or sold"},
+        {"status": "ARCHIVED", "description": "Lot closed for historical reference"}
+      ],
+      "auto_transitions": {
+        "to_PARTIALLY_VERIFIED": "when first unit in lot is verified",
+        "to_VERIFIED": "when all units in lot are verified",
+        "to_GRADING": "when first unit in lot is graded",
+        "to_GRADED": "when all units in lot are graded",
+        "to_COMPLETED": "when all units are sold, written off, or parts-salvaged"
+      }
+    },
+    
+    "wip_job_status": {
+      "states": [
+        {"status": "CREATED", "description": "Job created, not started"},
+        {"status": "ASSIGNED", "description": "Assigned to technician"},
+        {"status": "IN_PROGRESS", "description": "Work started"},
+        {"status": "ON_HOLD", "description": "Paused (awaiting parts, info, etc.)"},
+        {"status": "QUALITY_CHECK", "description": "Work complete, in QA"},
+        {"status": "COMPLETED", "description": "Successfully finished"},
+        {"status": "CANCELLED", "description": "Job terminated without completion"}
+      ],
+      "valid_transitions": {
+        "CREATED": ["ASSIGNED", "IN_PROGRESS", "CANCELLED"],
+        "ASSIGNED": ["IN_PROGRESS", "CREATED", "CANCELLED"],
+        "IN_PROGRESS": ["ON_HOLD", "QUALITY_CHECK", "CANCELLED"],
+        "ON_HOLD": ["IN_PROGRESS", "CANCELLED"],
+        "QUALITY_CHECK": ["IN_PROGRESS", "COMPLETED"],
+        "COMPLETED": [],
+        "CANCELLED": []
+      }
+    },
+    
+    "purchase_order_status": {
+      "states": [
+        {"status": "DRAFT", "description": "PO being prepared"},
+        {"status": "SUBMITTED", "description": "Sent to supplier"},
+        {"status": "CONFIRMED", "description": "Supplier confirmed"},
+        {"status": "PARTIALLY_RECEIVED", "description": "Some items received"},
+        {"status": "RECEIVED", "description": "All items received"},
+        {"status": "CANCELLED", "description": "PO cancelled"}
+      ],
+      "valid_transitions": {
+        "DRAFT": ["SUBMITTED", "CANCELLED"],
+        "SUBMITTED": ["CONFIRMED", "CANCELLED"],
+        "CONFIRMED": ["PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"],
+        "PARTIALLY_RECEIVED": ["RECEIVED"],
+        "RECEIVED": [],
+        "CANCELLED": []
+      }
+    },
+    
+    "receivable_status": {
+      "states": [
+        {"status": "PENDING", "description": "Invoice issued, payment due"},
+        {"status": "PARTIALLY_PAID", "description": "Some payment received"},
+        {"status": "PAID", "description": "Fully paid"},
+        {"status": "OVERDUE", "description": "Past due date"},
+        {"status": "WRITTEN_OFF", "description": "Deemed uncollectable"},
+        {"status": "DISPUTED", "description": "Under dispute"}
+      ],
+      "auto_transitions": {
+        "to_OVERDUE": "when current_date > due_date and status == PENDING",
+        "to_PARTIALLY_PAID": "when 0 < amount_paid < total_amount",
+        "to_PAID": "when amount_paid >= total_amount"
+      }
+    },
+    
+    "payable_status": {
+      "states": [
+        {"status": "PENDING", "description": "Bill received, payment due"},
+        {"status": "PARTIALLY_PAID", "description": "Some payment made"},
+        {"status": "PAID", "description": "Fully paid"},
+        {"status": "OVERDUE", "description": "Past due date"},
+        {"status": "DISPUTED", "description": "Under dispute"}
+      ]
+    },
+    
+    "sale_status": {
+      "states": [
+        {"status": "COMPLETED", "description": "Sale finalized"},
+        {"status": "PARTIALLY_RETURNED", "description": "Some items returned"},
+        {"status": "FULLY_RETURNED", "description": "All items returned"},
+        {"status": "VOIDED", "description": "Sale voided within allowed period"}
+      ]
+    },
+    
+    "return_status": {
+      "states": [
+        {"status": "REQUESTED", "description": "Customer requested return"},
+        {"status": "APPROVED", "description": "Return authorized"},
+        {"status": "RECEIVED", "description": "Item received back"},
+        {"status": "INSPECTED", "description": "Condition assessed"},
+        {"status": "RESOLVED", "description": "Refund/exchange completed"},
+        {"status": "REJECTED", "description": "Return request denied"}
+      ]
+    }
+  },
+
+  "technical_architecture": {
+    "frontend": {
+      "core_stack": {
+        "framework": {
+          "name": "React",
+          "version": "18.2+",
+          "justification": "Component model, ecosystem, performance"
+        },
+        "language": {
+          "name": "TypeScript",
+          "version": "5.3+",
+          "config": {
+            "strict": true,
+            "noImplicitAny": true,
+            "strictNullChecks": true,
+            "noUnusedLocals": true,
+            "noUnusedParameters": true
+          }
+        },
+        "build_tool": {
+          "name": "Vite",
+          "version": "5.0+",
+          "config": {
+            "build_target": "ES2020",
+            "minify": "esbuild",
+            "sourcemap": true,
+            "chunk_strategy": "manual_for_vendors"
+          }
+        }
+      },
+      
+      "state_management": {
+        "pattern": "Centralized store with reducer + context",
+        "implementation": {
+          "store_structure": {
+            "approach": "Feature-based slices",
+            "slices": [
+              "auth", "inventory", "lots", "laptops", "wip", "parts",
+              "sales", "cart", "customers", "suppliers", "purchases",
+              "finance", "transactions", "settings", "ui", "audit"
+            ]
+          },
+          "reducers": {
+            "pattern": "Action type switch with immutable updates",
+            "middleware": ["logging", "audit_capture", "persistence_sync", "validation"]
+          },
+          "selectors": {
+            "pattern": "Memoized selectors for derived state",
+            "library": "Custom implementation with shallow comparison"
+          },
+          "actions": {
+            "sync_actions": "Direct dispatch",
+            "async_actions": "Thunk pattern with loading/success/error"
+          }
+        }
+      },
+      
+      "persistence_layer": {
+        "primary_store": {
+          "technology": "IndexedDB via Dexie.js",
+          "usage": "Large datasets, binary data, offline data",
+          "tables": [
+            "laptops", "lots", "wip_jobs", "wip_parts", "wip_labor",
+            "parts", "customers", "suppliers", "sales", "sale_items",
+            "transactions", "audit_log", "attachments", "settings"
+          ]
+        },
+        "secondary_store": {
+          "technology": "LocalStorage",
+          "usage": "Small data, quick access, session data",
+          "keys": ["auth_token", "user_preferences", "ui_state", "cart"]
+        },
+        "sync_strategy": {
+          "write_through": "Update both memory and IndexedDB on dispatch",
+          "read_on_load": "Hydrate state from IndexedDB on app load",
+          "conflict_resolution": "Last-write-wins with timestamp tracking",
+          "background_sync": "Queue operations when offline, sync when online"
+        }
+      },
+      
+      "ui_framework": {
+        "component_library": {
+          "primary": "shadcn/ui",
+          "justification": "Customizable, accessible, TypeScript-first"
+        },
+        "styling": {
+          "approach": "Tailwind CSS",
+          "config": {
+            "design_tokens": "Custom color palette, spacing scale, typography",
+            "dark_mode": "Class-based toggle",
+            "responsive": "Mobile-first breakpoints"
+          }
+        },
+        "icons": {
+          "library": "Lucide React",
+          "usage": "Consistent icon set across application"
+        },
+        "forms": {
+          "library": "React Hook Form",
+          "validation": "Zod schemas",
+          "error_display": "Inline field errors with accessibility"
+        },
+        "tables": {
+          "library": "TanStack Table",
+          "features": ["Sorting", "Filtering", "Pagination", "Selection", "Column resize"]
+        },
+        "notifications": {
+          "library": "Sonner or React Hot Toast",
+          "usage": "Success/error/info toast notifications"
+        },
+        "modals": {
+          "approach": "Radix Dialog via shadcn",
+          "patterns": "Confirmation dialogs, form modals, detail panels"
+        }
+      },
+      
+      "routing": {
+        "library": "React Router v6",
+        "structure": {
+          "layout_routes": "Shared layouts for authenticated/public areas",
+          "protected_routes": "Wrapper checking auth state and permissions",
+          "lazy_loading": "Route-based code splitting with React.lazy"
+        }
+      },
+      
+      "data_fetching": {
+        "library": "TanStack Query (React Query)",
+        "configuration": {
+          "stale_time": "5 minutes for most data",
+          "cache_time": "30 minutes",
+          "retry": "3 attempts with exponential backoff",
+          "refetch_on_focus": "true for critical data"
+        },
+        "offline_support": {
+          "persistence": "Query cache persisted to IndexedDB",
+          "mutations": "Queued when offline, synced when online"
+        }
+      },
+      
+      "performance_optimizations": {
+        "code_splitting": {
+          "route_level": "Each major route in separate chunk",
+          "component_level": "Heavy components lazy loaded",
+          "vendor_chunking": "React, UI library, utilities separated"
+        },
+        "rendering": {
+          "memoization": "React.memo for pure components",
+          "useMemo": "For expensive computations",
+          "useCallback": "For callback stability",
+          "virtualization": "react-window for lists over 100 items"
+        },
+        "input_handling": {
+          "debounce": "300ms for search inputs",
+          "throttle": "100ms for scroll handlers",
+          "raf": "requestAnimationFrame for scan feedback animations"
+        },
+        "bundle_optimization": {
+          "tree_shaking": "Enabled via ESM imports",
+          "compression": "Gzip/Brotli in production",
+          "target_size": "Initial bundle < 200KB gzipped"
+        }
+      }
+    },
+    
+    "backend_integration": {
+      "target_backend": {
+        "platform": "Java Spring Boot",
+        "port": 8085,
+        "context_path": "/api"
+      },
+      
+      "authentication": {
+        "method": "JWT with refresh tokens",
+        "flow": {
+          "login": "POST /api/auth/login -> {access_token, refresh_token}",
+          "refresh": "POST /api/auth/refresh -> {access_token}",
+          "logout": "POST /api/auth/logout",
+          "me": "GET /api/auth/me -> user profile and permissions"
+        },
+        "token_storage": {
+          "access_token": "Memory (React state)",
+          "refresh_token": "HttpOnly cookie (preferred) or secure localStorage"
+        },
+        "token_lifecycle": {
+          "access_token_ttl": "15 minutes",
+          "refresh_token_ttl": "7 days",
+          "silent_refresh": "Automatic before expiry",
+          "logout_on_refresh_fail": true
+        }
+      },
+      
+      "api_client": {
+        "implementation": "Axios with interceptors",
+        "interceptors": {
+          "request": ["Add auth header", "Add correlation ID", "Add idempotency key for mutations"],
+          "response": ["Handle 401 -> trigger refresh", "Normalize error format", "Log response time"]
+        },
+        "error_handling": {
+          "network_error": "Queue for retry, show offline indicator",
+          "400_validation": "Map to form field errors",
+          "401_unauthorized": "Trigger token refresh or logout",
+          "403_forbidden": "Show permission denied message",
+          "404_not_found": "Show not found state",
+          "409_conflict": "Handle idempotency conflict",
+          "500_server": "Show generic error, log details"
+        }
+      },
+      
+      "idempotency": {
+        "implementation": {
+          "key_generation": "UUID v4 generated client-side",
+          "header": "Idempotency-Key",
+          "applicable_methods": ["POST", "PUT", "PATCH"],
+          "retry_behavior": "Same key for retries within 24h window"
+        }
+      }
+    },
+    
+    "data_model": {
+      "core_entities": {
+        "laptop": {
+          "table": "laptops",
+          "fields": {
+            "id": {"type": "UUID", "primary": true},
+            "barcode": {"type": "VARCHAR(50)", "unique": true, "indexed": true},
+            "serial_number": {"type": "VARCHAR(100)", "indexed": true},
+            "sku": {"type": "VARCHAR(100)"},
+            "manufacturer": {"type": "VARCHAR(100)", "indexed": true},
+            "model": {"type": "VARCHAR(200)", "indexed": true},
+            "status": {"type": "ENUM", "indexed": true},
+            "functional_grade": {"type": "CHAR(1)"},
+            "cosmetic_grade": {"type": "VARCHAR(20)"},
+            "track": {"type": "CHAR(1)"},
+            "location": {"type": "VARCHAR(100)", "indexed": true},
+            "lot_id": {"type": "UUID", "fk": "lots.id"},
+            "acquisition_cost_cents": {"type": "BIGINT"},
+            "wip_cost_cents": {"type": "BIGINT", "default": 0},
+            "total_cost_cents": {"type": "BIGINT"},
+            "sale_price_cents": {"type": "BIGINT"},
+            "cpu": {"type": "VARCHAR(200)"},
+            "ram_gb": {"type": "INT"},
+            "storage_type": {"type": "VARCHAR(20)"},
+            "storage_gb": {"type": "INT"},
+            "screen_size": {"type": "DECIMAL(4,1)"},
+            "resolution": {"type": "VARCHAR(20)"},
+            "gpu": {"type": "VARCHAR(200)"},
+            "battery_health": {"type": "INT"},
+            "os_installed": {"type": "VARCHAR(100)"},
+            "color": {"type": "VARCHAR(50)"},
+            "keyboard_layout": {"type": "VARCHAR(20)"},
+            "notes": {"type": "TEXT"},
+            "created_at": {"type": "TIMESTAMP", "indexed": true},
+            "updated_at": {"type": "TIMESTAMP"},
+            "created_by": {"type": "UUID", "fk": "users.id"},
+            "updated_by": {"type": "UUID", "fk": "users.id"}
+          },
+          "indexes": [
+            {"name": "idx_laptop_status_grade", "columns": ["status", "functional_grade"]},
+            {"name": "idx_laptop_lot", "columns": ["lot_id"]},
+            {"name": "idx_laptop_search", "columns": ["manufacturer", "model", "status"]}
+          ]
+        },
+        
+        "lot": {
+          "table": "lots",
+          "fields": {
+            "id": {"type": "UUID", "primary": true},
+            "lot_number": {"type": "VARCHAR(50)", "unique": true},
+            "supplier_id": {"type": "UUID", "fk": "suppliers.id"},
+            "status": {"type": "ENUM"},
+            "received_date": {"type": "DATE"},
+            "total_cost_cents": {"type": "BIGINT"},
+            "currency": {"type": "CHAR(3)"},
+            "total_units": {"type": "INT"},
+            "verified_count": {"type": "INT", "default": 0},
+            "graded_count": {"type": "INT", "default": 0},
+            "purchase_order_number": {"type": "VARCHAR(100)"},
+            "invoice_number": {"type": "VARCHAR(100)"},
+            "notes": {"type": "TEXT"},
+            "created_at": {"type": "TIMESTAMP"},
+            "created_by": {"type": "UUID"}
+          }
+        },
+        
+        "wip_job": {
+          "table": "wip_jobs",
+          "fields": {
+            "id": {"type": "UUID", "primary": true},
+            "job_number": {"type": "VARCHAR(50)", "unique": true},
+            "laptop_id": {"type": "UUID", "fk": "laptops.id"},
+            "status": {"type": "ENUM"},
+            "current_stage": {"type": "VARCHAR(50)"},
+            "track": {"type": "CHAR(1)"},
+            "priority": {"type": "ENUM", "default": "NORMAL"},
+            "assigned_to": {"type": "UUID", "fk": "users.id"},
+            "diagnosis": {"type": "TEXT"},
+            "parts_cost_cents": {"type": "BIGINT", "default": 0},
+            "labor_cost_cents": {"type": "BIGINT", "default": 0},
+            "overhead_cents": {"type": "BIGINT", "default": 0},
+            "total_cost_cents": {"type": "BIGINT", "default": 0},
+            "started_at": {"type": "TIMESTAMP"},
+            "completed_at": {"type": "TIMESTAMP"},
+            "created_at": {"type": "TIMESTAMP"},
+            "created_by": {"type": "UUID"}
+          }
+        },
+        
+        "sale": {
+          "table": "sales",
+          "fields": {
+            "id": {"type": "UUID", "primary": true},
+            "invoice_number": {"type": "VARCHAR(50)", "unique": true},
+            "customer_id": {"type": "UUID", "fk": "customers.id", "nullable": true},
+            "customer_type": {"type": "ENUM"},
+            "status": {"type": "ENUM"},
+            "subtotal_cents": {"type": "BIGINT"},
+            "discount_cents": {"type": "BIGINT", "default": 0},
+            "tax_cents": {"type": "BIGINT"},
+            "total_cents": {"type": "BIGINT"},
+            "payment_method": {"type": "VARCHAR(50)"},
+            "payment_reference": {"type": "VARCHAR(200)"},
+            "notes": {"type": "TEXT"},
+            "sold_by": {"type": "UUID", "fk": "users.id"},
+            "sold_at": {"type": "TIMESTAMP"},
+            "created_at": {"type": "TIMESTAMP"}
+          }
+        },
+        
+        "transaction": {
+          "table": "transactions",
+          "fields": {
+            "id": {"type": "UUID", "primary": true},
+            "transaction_date": {"type": "DATE"},
+            "type": {"type": "ENUM"},
+            "account_id": {"type": "VARCHAR(20)"},
+            "contra_account_id": {"type": "VARCHAR(20)"},
+            "amount_cents": {"type": "BIGINT"},
+            "currency": {"type": "CHAR(3)"},
+            "reference_type": {"type": "VARCHAR(50)"},
+            "reference_id": {"type": "UUID"},
+            "description": {"type": "VARCHAR(500)"},
+            "created_at": {"type": "TIMESTAMP"},
+            "created_by": {"type": "UUID"},
+            "is_immutable": {"type": "BOOLEAN", "default": false}
+          }
+        },
+        
+        "audit_log": {
+          "table": "audit_log",
+          "fields": {
+            "id": {"type": "UUID", "primary": true},
+            "entity_type": {"type": "VARCHAR(50)"},
+            "entity_id": {"type": "UUID"},
+            "action": {"type": "VARCHAR(50)"},
+            "changes": {"type": "JSONB"},
+            "user_id": {"type": "UUID"},
+            "user_name": {"type": "VARCHAR(200)"},
+            "ip_address": {"type": "VARCHAR(45)"},
+            "user_agent": {"type": "VARCHAR(500)"},
+            "timestamp": {"type": "TIMESTAMP"},
+            "correlation_id": {"type": "UUID"}
+          },
+          "immutable": true
+        },
+        
+        "movement_log": {
+          "table": "movement_log",
+          "fields": {
+            "id": {"type": "UUID", "primary": true},
+            "laptop_id": {"type": "UUID", "fk": "laptops.id"},
+            "movement_type": {"type": "ENUM"},
+            "from_status": {"type": "VARCHAR(50)"},
+            "to_status": {"type": "VARCHAR(50)"},
+            "from_location": {"type": "VARCHAR(100)"},
+            "to_location": {"type": "VARCHAR(100)"},
+            "reference_type": {"type": "VARCHAR(50)"},
+            "reference_id": {"type": "UUID"},
+            "notes": {"type": "TEXT"},
+            "timestamp": {"type": "TIMESTAMP"},
+            "user_id": {"type": "UUID"}
+          },
+          "immutable": true
+        }
+      },
+      
+      "data_integrity": {
+        "constraints": [
+          "Barcode uniqueness enforced at application and database level",
+          "Serial number unique per manufacturer-model combination",
+          "Financial amounts stored as integers (cents) to avoid floating point",
+          "Foreign key constraints for all relationships",
+          "Check constraints for enum values",
+          "Trigger to update lot counters on laptop status change"
+        ],
+        "invariants": [
+          "Sum of unit acquisition costs in lot equals lot total cost",
+          "Laptop total cost = acquisition cost + WIP cost",
+          "WIP job total = parts + labor + overhead",
+          "Double-entry balance: debits always equal credits",
+          "Reserved units count cannot exceed Ready for Sale count"
+        ]
+      }
+    },
+    
+    "security": {
+      "authentication": {
+        "password_requirements": {
+          "min_length": 12,
+          "require_uppercase": true,
+          "require_lowercase": true,
+          "require_number": true,
+          "require_special": true
+        },
+        "session_management": {
+          "max_sessions_per_user": 5,
+          "session_timeout_minutes": 480,
+          "force_logout_on_password_change": true
+        },
+        "mfa": {
+          "required_for": ["Admin role", "Finance role"],
+          "methods": ["TOTP", "Email OTP"]
+        }
+      },
+      
+      "authorization": {
+        "model": "Role-Based Access Control (RBAC)",
+        "enforcement": {
+          "frontend": "Route guards and UI element hiding",
+          "backend": "Endpoint-level authorization checks"
+        },
+        "permission_format": "module.action (e.g., inventory.delete)"
+      },
+      
+      "data_protection": {
+        "encryption_at_rest": "AES-256 for sensitive fields",
+        "encryption_in_transit": "TLS 1.3 minimum",
+        "pii_handling": {
+          "masking": "Phone, email masked in logs",
+          "access_logging": "All PII access logged",
+          "right_to_deletion": "Soft delete with anonymization option"
+        }
+      },
+      
+      "input_validation": {
+        "frontend": "Zod schema validation",
+        "backend": "Jakarta Bean Validation",
+        "sanitization": "HTML escaping, SQL parameterization"
+      },
+      
+      "rate_limiting": {
+        "authentication": "5 attempts per minute per IP",
+        "api_general": "100 requests per minute per user",
+        "reports": "10 requests per minute per user"
+      }
+    }
+  },
+
+  "api_specification": {
+    "base_url": "http://localhost:8085/api",
+    "versioning": "URL path (/api/v1/...)",
+    "content_type": "application/json",
+    
+    "common_headers": {
+      "request": {
+        "Authorization": "Bearer {access_token}",
+        "Content-Type": "application/json",
+        "X-Correlation-ID": "UUID for request tracing",
+        "Idempotency-Key": "UUID for mutation idempotency"
+      },
+      "response": {
+        "X-Request-ID": "Server-side request ID",
+        "X-RateLimit-Remaining": "Remaining requests in window"
+      }
+    },
+    
+    "common_response_formats": {
+      "success_single": {
+        "data": "object",
+        "meta": {"timestamp": "ISO8601"}
+      },
+      "success_list": {
+        "data": ["array of objects"],
+        "meta": {
+          "total": "number",
+          "page": "number",
+          "pageSize": "number",
+          "totalPages": "number"
+        }
+      },
+      "error": {
+        "error": {
+          "code": "ERROR_CODE",
+          "message": "Human readable message",
+          "details": ["Array of specific issues"],
+          "field_errors": {"field_name": "error message"}
+        },
+        "meta": {"timestamp": "ISO8601", "request_id": "UUID"}
+      }
+    },
+    
+    "endpoints": {
+      "health": {
+        "GET /health": {
+          "description": "Service health check",
+          "authentication": false,
+          "response": {"status": "UP", "version": "1.0.0", "timestamp": "ISO8601"}
+        }
+      },
+      
+      "auth": {
+        "POST /auth/login": {
+          "description": "Authenticate user",
+          "authentication": false,
+          "request": {"username": "string", "password": "string"},
+          "response": {
+            "access_token": "JWT string",
+            "refresh_token": "JWT string",
+            "token_type": "Bearer",
+            "expires_in": 900,
+            "user": {"id": "UUID", "username": "string", "role": "string"}
+          }
+        },
+        "POST /auth/refresh": {
+          "description": "Refresh access token",
+          "request": {"refresh_token": "string"},
+          "response": {"access_token": "JWT", "expires_in": 900}
+        },
+        "POST /auth/logout": {
+          "description": "Invalidate tokens",
+          "response": {"message": "Logged out successfully"}
+        },
+        "GET /auth/me": {
+          "description": "Get current user profile",
+          "response": {
+            "id": "UUID",
+            "username": "string",
+            "email": "string",
+            "full_name": "string",
+            "role": "string",
+            "permissions": ["array of permission strings"]
+          }
+        }
+      },
+      
+      "inventory_laptops": {
+        "GET /inventory/laptops": {
+          "description": "List laptops with filtering",
+          "query_params": {
+            "status": "comma-separated status values",
+            "grade": "comma-separated grades",
+            "track": "comma-separated tracks",
+            "manufacturer": "string",
+            "model": "string",
+            "lot_id": "UUID",
+            "location": "string",
+            "barcode": "string (exact or prefix)",
+            "serial": "string (partial match)",
+            "min_cost": "integer cents",
+            "max_cost": "integer cents",
+            "created_from": "ISO8601 date",
+            "created_to": "ISO8601 date",
+            "page": "integer, default 1",
+            "page_size": "integer, default 50, max 200",
+            "sort": "field name",
+            "order": "asc or desc"
+          },
+          "response": "Paginated laptop list"
+        },
+        "GET /inventory/laptops/{id}": {
+          "description": "Get single laptop with full details",
+          "response": "Laptop object with nested relations"
+        },
+        "POST /inventory/laptops": {
+          "description": "Create laptop (usually via lot import)",
+          "idempotent": true,
+          "request": "Laptop creation object",
+          "response": "Created laptop"
+        },
+        "PATCH /inventory/laptops/{id}": {
+          "description": "Update laptop fields",
+          "request": "Partial laptop object",
+          "response": "Updated laptop"
+        },
+        "POST /inventory/laptops/{id}/status": {
+          "description": "Change laptop status",
+          "request": {"status": "NEW_STATUS", "reason": "optional string"},
+          "response": "Updated laptop with movement log entry"
+        },
+        "POST /inventory/laptops/bulk-update": {
+          "description": "Update multiple laptops",
+          "request": {
+            "ids": ["array of UUIDs"],
+            "updates": {"field": "value"}
+          },
+          "response": {"updated_count": "integer", "failed": ["array of failures"]}
+        }
+      },
+      
+      "receiving": {
+        "GET /receiving/lots": {
+          "description": "List lots",
+          "query_params": "Similar to laptops"
+        },
+        "POST /receiving/lots": {
+          "description": "Create lot",
+          "request": "Lot creation object",
+          "response": "Created lot"
+        },
+        "GET /receiving/lots/{id}": {
+          "description": "Get lot with units summary"
+        },
+        "POST /receiving/import/preview": {
+          "description": "Upload and preview import file",
+          "content_type": "multipart/form-data",
+          "request": {
+            "file": "CSV or XLSX file",
+            "lot_id": "optional, link to existing lot",
+            "mapping_profile": "optional saved mapping"
+          },
+          "response": {
+            "preview_id": "temporary ID for this preview",
+            "columns_detected": ["array of column names"],
+            "suggested_mapping": {"column": "field"},
+            "rows_preview": ["first 100 rows with validation status"],
+            "summary": {
+              "total_rows": "integer",
+              "valid_rows": "integer",
+              "warning_rows": "integer",
+              "error_rows": "integer"
+            }
+          }
+        },
+        "POST /receiving/import/validate": {
+          "description": "Re-validate with updated mapping",
+          "request": {
+            "preview_id": "string",
+            "mapping": {"column": "field"}
+          },
+          "response": "Same as preview"
+        },
+        "POST /receiving/import/commit": {
+          "description": "Commit validated import",
+          "idempotent": true,
+          "request": {
+            "preview_id": "string",
+            "lot_id": "UUID or null to create new",
+            "lot_data": "Lot fields if creating new",
+            "mapping": {"column": "field"}
+          },
+          "response": {
+            "lot_id": "UUID",
+            "created_count": "integer",
+            "laptop_ids": ["array of created UUIDs"]
+          }
+        }
+      },
+      
+      "verification": {
+        "GET /verification/queue": {
+          "description": "Get units pending verification",
+          "query_params": {"lot_id": "optional filter"}
+        },
+        "POST /verification/verify": {
+          "description": "Verify a unit by barcode",
+          "request": {
+            "barcode": "scanned barcode",
+            "lot_id": "optional, context lot",
+            "mode": "quick | detailed | photo"
+          },
+          "response": {
+            "status": "verified | not_found | already_verified | wrong_lot",
+            "laptop": "laptop object if found",
+            "message": "human readable result"
+          }
+        }
+      },
+      
+      "grading": {
+        "GET /grading/queue": {
+          "description": "Get units pending grading"
+        },
+        "POST /grading/grade": {
+          "description": "Submit grading for a unit",
+          "request": {
+            "laptop_id": "UUID",
+            "functional_grade": "A-F or Parts",
+            "cosmetic_grade": "Excellent-Poor",
+            "functional_assessment": {"component": "status"},
+            "cosmetic_assessment": {"area": "condition"},
+            "track_override": "optional, if different from auto",
+            "track_override_reason": "required if override",
+            "notes": "string",
+            "photos": ["array of attachment IDs"]
+          },
+          "response": "Graded laptop with WIP job if created"
+        }
+      },
+      
+      "wip": {
+        "GET /wip/jobs": {
+          "description": "List WIP jobs"
+        },
+        "GET /wip/jobs/{id}": {
+          "description": "Get WIP job with all details"
+        },
+        "POST /wip/jobs/{id}/assign": {
+          "description": "Assign job to technician",
+          "request": {"technician_id": "UUID"}
+        },
+        "POST /wip/jobs/{id}/stage": {
+          "description": "Progress to next stage",
+          "request": {
+            "stage": "new stage ID",
+            "notes": "optional notes",
+            "time_spent_minutes": "optional log time"
+          }
+        },
+        "POST /wip/jobs/{id}/parts": {
+          "description": "Add part to job",
+          "request": {
+            "part_id": "UUID",
+            "quantity": "integer",
+            "cost_override_cents": "optional"
+          }
+        },
+        "DELETE /wip/jobs/{id}/parts/{part_usage_id}": {
+          "description": "Remove/return part"
+        },
+        "POST /wip/jobs/{id}/labor": {
+          "description": "Log labor time",
+          "request": {
+            "technician_id": "UUID",
+            "duration_minutes": "integer",
+            "stage": "current stage",
+            "description": "work performed"
+          }
+        },
+        "POST /wip/jobs/{id}/complete": {
+          "description": "Complete WIP job",
+          "request": {
+            "final_grade": "optional if grade changed",
+            "completion_notes": "string"
+          }
+        }
+      },
+      
+      "sales": {
+        "GET /sales/orders": {
+          "description": "List sales"
+        },
+        "GET /sales/orders/{id}": {
+          "description": "Get sale details"
+        },
+        "POST /sales/cart": {
+          "description": "Add item to cart (creates reservation)",
+          "request": {"laptop_id": "UUID"}
+        },
+        "DELETE /sales/cart/{item_id}": {
+          "description": "Remove from cart (releases reservation)"
+        },
+        "POST /sales/checkout": {
+          "description": "Complete sale",
+          "idempotent": true,
+          "request": {
+            "customer_id": "UUID or null for walk-in",
+            "customer_data": "quick-add customer data if new",
+            "items": [{"laptop_id": "UUID", "price_cents": "integer", "discount_cents": "integer"}],
+            "payments": [{"method": "CASH", "amount_cents": "integer", "reference": "optional"}],
+            "notes": "optional"
+          },
+          "response": "Sale object with invoice number"
+        },
+        "POST /sales/returns": {
+          "description": "Process return",
+          "request": {
+            "sale_id": "UUID",
+            "items": [{"sale_item_id": "UUID", "reason": "string"}],
+            "return_type": "refund | exchange | warranty",
+            "refund_method": "original | store_credit",
+            "restocking_fee_cents": "integer"
+          }
+        }
+      },
+      
+      "customers": {
+        "GET /customers": {
+          "description": "List customers"
+        },
+        "POST /customers": {
+          "description": "Create customer"
+        },
+        "GET /customers/{id}": {
+          "description": "Get customer with purchase history"
+        },
+        "PATCH /customers/{id}": {
+          "description": "Update customer"
+        }
+      },
+      
+      "suppliers": {
+        "GET /suppliers": {
+          "description": "List suppliers"
+        },
+        "POST /suppliers": {
+          "description": "Create supplier"
+        },
+        "GET /suppliers/{id}": {
+          "description": "Get supplier with analytics"
+        }
+      },
+      
+      "parts": {
+        "GET /parts": {
+          "description": "List parts inventory"
+        },
+        "POST /parts": {
+          "description": "Add part to catalog"
+        },
+        "POST /parts/{id}/receive": {
+          "description": "Receive part stock"
+        },
+        "POST /parts/{id}/adjust": {
+          "description": "Adjust part quantity"
+        }
+      },
+      
+      "finance": {
+        "GET /finance/transactions": {
+          "description": "List transactions (cash book entries)"
+        },
+        "POST /finance/transactions": {
+          "description": "Record manual transaction"
+        },
+        "GET /finance/cashbook": {
+          "description": "Cash book with running balance"
+        },
+        "GET /finance/ap": {
+          "description": "Accounts payable list"
+        },
+        "POST /finance/ap/{id}/pay": {
+          "description": "Record AP payment"
+        },
+        "GET /finance/ar": {
+          "description": "Accounts receivable list"
+        },
+        "POST /finance/ar/{id}/receive": {
+          "description": "Record AR receipt"
+        },
+        "GET /finance/reports/pl": {
+          "description": "Profit & Loss report",
+          "query_params": {"from": "date", "to": "date"}
+        },
+        "GET /finance/reports/tax": {
+          "description": "VAT/Tax report",
+          "query_params": {"period": "YYYY-MM or YYYY-QN"}
+        }
+      },
+      
+      "reports": {
+        "GET /reports/inventory/summary": {
+          "description": "Inventory summary statistics"
+        },
+        "GET /reports/inventory/aging": {
+          "description": "Stock aging report"
+        },
+        "GET /reports/sales/summary": {
+          "description": "Sales summary"
+        },
+        "GET /reports/wip/throughput": {
+          "description": "WIP throughput metrics"
+        },
+        "GET /reports/audit/movements": {
+          "description": "Movement log report"
+        },
+        "GET /reports/audit/activity": {
+          "description": "User activity report"
+        }
+      },
+      
+      "admin": {
+        "GET /admin/users": {
+          "description": "List users"
+        },
+        "POST /admin/users": {
+          "description": "Create user"
+        },
+        "POST /admin/backup": {
+          "description": "Generate backup",
+          "response": {"backup_id": "UUID", "download_url": "string"}
+        },
+        "POST /admin/restore": {
+          "description": "Restore from backup",
+          "content_type": "multipart/form-data"
+        },
+        "GET /admin/settings": {
+          "description": "Get all settings"
+        },
+        "PATCH /admin/settings": {
+          "description": "Update settings"
+        }
+      }
+    }
+  },
+
+  "testing_strategy": {
+    "testing_pyramid": {
+      "unit_tests": {
+        "percentage": "70%",
+        "focus": [
+          "Reducer logic and state transitions",
+          "Utility functions (calculations, formatters, validators)",
+          "Custom hooks",
+          "Business rule validation",
+          "Component logic (not rendering)"
+        ],
+        "framework": "Vitest",
+        "coverage_threshold": {
+          "statements": 80,
+          "branches": 75,
+          "functions": 80,
+          "lines": 80
+        }
+      },
+      
+      "integration_tests": {
+        "percentage": "20%",
+        "focus": [
+          "Reducer + persistence layer interaction",
+          "Multi-component workflows",
+          "Form submission flows",
+          "API client with mock server",
+          "Cross-module interactions"
+        ],
+        "framework": "Vitest with React Testing Library",
+        "mocking": "MSW for API mocking"
+      },
+      
+      "e2e_tests": {
+        "percentage": "10%",
+        "focus": [
+          "Critical user journeys",
+          "Happy path workflows",
+          "Key business processes"
+        ],
+        "framework": "Playwright",
+        "execution": "Headless in CI, headed for debugging"
+      }
+    },
+    
+    "critical_test_scenarios": {
+      "financial_calculations": [
+        "VAT calculation with rounding edge cases",
+        "COGS calculation accuracy",
+        "Cost rollup from WIP to laptop",
+        "Split payment allocation",
+        "Refund calculation with restocking fees",
+        "Discount percentage and fixed amount application",
+        "Multi-currency conversion"
+      ],
+      
+      "inventory_integrity": [
+        "Barcode uniqueness validation",
+        "Serial uniqueness per model validation",
+        "Status transition validity",
+        "Lot quantity equals sum of units",
+        "Reserved count management",
+        "Concurrent reservation handling"
+      ],
+      
+      "workflow_completeness": [
+        "Lot import to sale complete path",
+        "WIP job lifecycle with parts and labor",
+        "Return and restock flow",
+        "AP/AR lifecycle"
+      ],
+      
+      "audit_compliance": [
+        "All state changes create audit entries",
+        "Movement log entries created for all movements",
+        "Financial transactions are immutable after period close",
+        "User attribution on all modifications"
+      ]
+    },
+    
+    "test_data": {
+      "fixtures": {
+        "seed_data": "Realistic sample data for all entities",
+        "edge_cases": "Boundary values and unusual combinations",
+        "volume_data": "Large datasets for performance testing"
+      },
+      "factories": {
+        "implementation": "Factory functions for each entity",
+        "overridable": "Allow overriding any field",
+        "related_entities": "Create related entities automatically"
+      }
+    },
+    
+    "accessibility_testing": {
+      "automated": {
+        "tool": "axe-core via @axe-core/playwright",
+        "rules": "WCAG 2.1 AA",
+        "integration": "Run on every page in E2E tests"
+      },
+      "manual_checklist": [
+        "Keyboard-only navigation",
+        "Screen reader compatibility",
+        "Color contrast in all themes",
+        "Focus management in modals and drawers"
+      ]
+    },
+    
+    "visual_regression": {
+      "tool": "Playwright screenshots or Percy",
+      "scope": "Critical pages and components",
+      "threshold": "0.1% pixel difference tolerance"
+    },
+    
+    "performance_testing": {
+      "lighthouse_targets": {
+        "performance": 90,
+        "accessibility": 100,
+        "best_practices": 100,
+        "seo": 80
+      },
+      "custom_metrics": {
+        "time_to_interactive": "<3s",
+        "largest_contentful_paint": "<2.5s",
+        "scan_to_feedback": "<200ms"
+      }
+    }
+  },
+
+  "deployment_architecture": {
+    "containerization": {
+      "frontend": {
+        "base_image": "node:20-alpine (build) + nginx:alpine (serve)",
+        "build_strategy": "Multi-stage build",
+        "nginx_config": "SPA routing, gzip, cache headers",
+        "health_check": "HTTP GET /health.html"
+      },
+      "backend": {
+        "base_image": "eclipse-temurin:21-jre-alpine",
+        "jvm_options": "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0",
+        "health_check": "HTTP GET /api/health"
+      },
+      "database": {
+        "image": "postgres:16-alpine",
+        "volume": "Persistent volume for data",
+        "extensions": ["pg_trgm", "uuid-ossp"],
+        "health_check": "pg_isready"
+      },
+      "cache": {
+        "image": "redis:7-alpine",
+        "usage": "Session storage, idempotency keys, rate limiting",
+        "persistence": "AOF for durability"
+      }
+    },
+    
+    "docker_compose": {
+      "services": [
+        "web (nginx serving React app)",
+        "api (Spring Boot)",
+        "db (PostgreSQL)",
+        "redis (Redis)",
+        "adminer (Database admin UI)"
+      ],
+      "networks": ["frontend-network", "backend-network"],
+      "volumes": ["postgres-data", "redis-data", "app-uploads"]
+    },
+    
+    "environment_configuration": {
+      "development": {
+        "hot_reload": true,
+        "debug_logging": true,
+        "mock_external_services": true
+      },
+      "staging": {
+        "production_like": true,
+        "test_data": true,
+        "debug_endpoints": true
+      },
+      "production": {
+        "optimized_builds": true,
+        "security_hardened": true,
+        "monitoring_enabled": true
+      }
+    },
+    
+    "ci_cd_pipeline": {
+      "provider": "GitHub Actions",
+      "stages": {
+        "validate": {
+          "steps": ["Checkout", "Setup Node", "Install dependencies"],
+          "checks": ["Lint (ESLint)", "Format (Prettier)", "Type check (tsc)"]
+        },
+        "test": {
+          "steps": ["Unit tests", "Integration tests", "Coverage report"],
+          "artifacts": ["Coverage report", "Test results"]
+        },
+        "build": {
+          "steps": ["Build application", "Build Docker image"],
+          "artifacts": ["Docker image pushed to registry"]
+        },
+        "e2e": {
+          "steps": ["Deploy to test environment", "Run Playwright tests"],
+          "artifacts": ["Test report", "Screenshots", "Videos"]
+        },
+        "deploy": {
+          "trigger": "Manual approval for production",
+          "steps": ["Deploy to target environment", "Run smoke tests", "Notify team"]
+        }
+      }
+    },
+    
+    "monitoring": {
+      "logging": {
+        "format": "Structured JSON",
+        "fields": ["timestamp", "level", "message", "correlation_id", "user_id", "module"],
+        "aggregation": "ELK stack or Loki"
+      },
+      "metrics": {
+        "provider": "Prometheus",
+        "metrics_collected": [
+          "HTTP request duration",
+          "Request count by endpoint",
+          "Error rate",
+          "Database query duration",
+          "Active users",
+          "Business metrics (sales, units processed)"
+        ],
+        "dashboards": "Grafana"
+      },
+      "alerting": {
+        "channels": ["Email", "Slack", "PagerDuty"],
+        "alert_rules": [
+          "Error rate > 1%",
+          "Response time > 2s",
+          "Database connection failures",
+          "Financial discrepancy detected"
+        ]
+      },
+      "health_checks": {
+        "endpoints": ["/api/health", "/api/health/db", "/api/health/redis"],
+        "interval": "30 seconds",
+        "timeout": "5 seconds"
+      }
+    }
+  },
+
+  "project_structure": {
+    "frontend": {
+      "root": "tahir-erp-frontend/",
+      "structure": {
+        "src/": {
+          "app/": {
+            "description": "Application shell and providers",
+            "files": ["App.tsx", "providers.tsx", "routes.tsx"]
+          },
+          "components/": {
+            "description": "Shared UI components",
+            "subdirs": {
+              "ui/": "shadcn/ui primitives",
+              "common/": "App-specific shared components",
+              "layout/": "Page layouts, navigation"
+            }
+          },
+          "features/": {
+            "description": "Feature modules",
+            "subdirs": {
+              "auth/": "Authentication",
+              "inventory/": "Inventory management",
+              "receiving/": "Lot receiving and import",
+              "verification/": "Unit verification",
+              "grading/": "Grading workflow",
+              "wip/": "WIP processing",
+              "sales/": "POS and sales",
+              "customers/": "Customer management",
+              "suppliers/": "Supplier management",
+              "purchases/": "Purchase orders",
+              "finance/": "Financial management",
+              "reports/": "Reporting",
+              "settings/": "Settings and admin"
+            },
+            "feature_structure": {
+              "components/": "Feature-specific components",
+              "hooks/": "Feature-specific hooks",
+              "api/": "API integration",
+              "types.ts": "Feature types",
+              "slice.ts": "State slice",
+              "selectors.ts": "Memoized selectors"
+            }
+          },
+          "hooks/": {
+            "description": "Shared custom hooks",
+            "files": ["useAuth.ts", "usePermissions.ts", "usePersistence.ts", "useDebounce.ts"]
+          },
+          "store/": {
+            "description": "State management",
+            "files": ["index.ts", "rootReducer.ts", "middleware.ts", "types.ts"]
+          },
+          "lib/": {
+            "description": "Utilities and services",
+            "subdirs": {
+              "api/": "API client configuration",
+              "db/": "IndexedDB setup",
+              "utils/": "Utility functions",
+              "validation/": "Zod schemas",
+              "constants/": "Application constants"
+            }
+          },
+          "types/": {
+            "description": "Shared TypeScript types",
+            "files": ["entities.ts", "api.ts", "common.ts"]
+          },
+          "assets/": "Static assets"
+        },
+        "tests/": {
+          "unit/": "Unit tests",
+          "integration/": "Integration tests",
+          "e2e/": "Playwright E2E tests",
+          "fixtures/": "Test data",
+          "factories/": "Test data factories"
+        },
+        "config_files": [
+          "package.json",
+          "vite.config.ts",
+          "tsconfig.json",
+          "tailwind.config.ts",
+          "eslint.config.js",
+          "prettier.config.js",
+          "playwright.config.ts",
+          "vitest.config.ts"
+        ]
+      }
+    },
+    
+    "backend": {
+      "root": "tahir-erp-api/",
+      "structure": {
+        "src/main/java/com/tahir/erp/": {
+          "TahirErpApplication.java": "Main application entry",
+          "config/": "Configuration classes",
+          "security/": "Security configuration",
+          "controller/": "REST controllers",
+          "service/": "Business logic services",
+          "repository/": "Data access layer",
+          "model/": "Entity models",
+          "dto/": "Data transfer objects",
+          "mapper/": "DTO-Entity mappers",
+          "exception/": "Exception handling",
+          "validation/": "Custom validators",
+          "audit/": "Audit logging"
+        },
+        "src/main/resources/": {
+          "application.yml": "Application configuration",
+          "application-dev.yml": "Development profile",
+          "application-prod.yml": "Production profile",
+          "db/migration/": "Flyway migrations"
+        }
+      }
+    },
+    
+    "infrastructure": {
+      "root": "infrastructure/",
+      "structure": {
+        "docker/": {
+          "Dockerfile.frontend": "Frontend container",
+          "Dockerfile.api": "Backend container",
+          "nginx.conf": "Nginx configuration"
+        },
+        "docker-compose.yml": "Local development compose",
+        "docker-compose.prod.yml": "Production compose",
+        ".env.example": "Environment template"
+      }
+    },
+    
+    "documentation": {
+      "root": "docs/",
+      "files": [
+        "README.md",
+        "ARCHITECTURE.md",
+        "API.md",
+        "DEPLOYMENT.md",
+        "TESTING.md",
+        "USER_GUIDE.md",
+        "CONTRIBUTING.md"
+      ]
+    }
+  },
+
+  "deliverables_checklist": {
+    "codebase": {
+      "frontend_application": {
+        "complete_react_app": true,
+        "all_feature_modules": true,
+        "state_management": true,
+        "persistence_layer": true,
+        "api_integration": true,
+        "responsive_design": true
+      },
+      "backend_integration": {
+        "api_client_setup": true,
+        "authentication_flow": true,
+        "mock_server_for_testing": true
+      }
+    },
+    
+    "testing": {
+      "unit_tests": "For all reducers, utilities, hooks, critical business logic",
+      "integration_tests": "For key workflows",
+      "e2e_tests": "For critical user journeys",
+      "test_fixtures": "Sample data for all entities"
+    },
+    
+    "documentation": {
+      "architecture_document": "System architecture and decisions",
+      "api_specification": "OpenAPI/Swagger spec",
+      "deployment_guide": "Setup and deployment instructions",
+      "user_documentation": "Feature documentation"
+    },
+    
+    "infrastructure": {
+      "dockerfiles": "For all services",
+      "docker_compose": "For local and production",
+      "ci_cd_config": "GitHub Actions workflows",
+      "environment_templates": "Example env files"
+    },
+    
+    "configuration": {
+      "eslint_config": "Linting rules",
+      "prettier_config": "Formatting rules",
+      "typescript_config": "Strict TypeScript",
+      "vite_config": "Build optimization"
+    }
+  },
+
+  "implementation_priorities": {
+    "phase_1_foundation": {
+      "priority": "Critical",
+      "items": [
+        "Project setup and configuration",
+        "Authentication and authorization",
+        "Core state management",
+        "Persistence layer",
+        "Shared UI components",
+        "Navigation and routing"
+      ]
+    },
+    "phase_2_core_inventory": {
+      "priority": "High",
+      "items": [
+        "Receiving module (lot creation, import)",
+        "Verification workflow",
+        "Grading workflow",
+        "Basic inventory browser"
+      ]
+    },
+    "phase_3_processing": {
+      "priority": "High",
+      "items": [
+        "WIP job management",
+        "Parts inventory",
+        "Labor tracking"
+      ]
+    },
+    "phase_4_sales": {
+      "priority": "High",
+      "items": [
+        "POS cart and checkout",
+        "Customer management",
+        "Receipt/invoice generation",
+        "Returns handling"
+      ]
+    },
+    "phase_5_finance": {
+      "priority": "Medium",
+      "items": [
+        "Cash book",
+        "AP/AR management",
+        "P&L reporting",
+        "Tax handling"
+      ]
+    },
+    "phase_6_advanced": {
+      "priority": "Medium",
+      "items": [
+        "Supplier management and POs",
+        "Advanced reporting",
+        "Settings and configuration",
+        "Backup/restore"
+      ]
+    }
+  },
+
+  "success_criteria": {
+    "functional": [
+      "Complete lot-to-sale lifecycle works end-to-end",
+      "Financial calculations accurate to the cent",
+      "Audit trails complete and immutable",
+      "Role-based access control enforced",
+      "Offline operation with sync works reliably"
+    ],
+    "performance": [
+      "Scan response < 200ms",
+      "Page navigation < 500ms",
+      "Initial load < 3s",
+      "Handles 10,000 unit inventory smoothly"
+    ],
+    "quality": [
+      "80%+ test coverage",
+      "Zero critical accessibility violations",
+      "Clean lint and type check",
+      "All critical paths E2E tested"
+    ],
+    "maintainability": [
+      "Modular architecture",
+      "Comprehensive documentation",
+      "Consistent coding patterns",
+      "Easy deployment process"
+    ]
+  }
+}

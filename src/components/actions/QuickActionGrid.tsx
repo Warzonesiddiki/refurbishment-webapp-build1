@@ -12,7 +12,7 @@ const quickActionList: { key: ActionKey; icon: string }[] = [
 
 export function QuickActionGrid({ onAction }: { onAction?: (action: ActionKey) => void }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div data-component="actions-QuickActionGrid" data-testid="component-actions-QuickActionGrid" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
       {quickActionList.map((item) => (
         <button
           key={item.key}

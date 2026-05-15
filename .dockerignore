@@ -1,0 +1,8 @@
+node_modules
+dist
+.git
+.gitignore
+coverage
+e2e/results
+e2e/report
+java_server/out

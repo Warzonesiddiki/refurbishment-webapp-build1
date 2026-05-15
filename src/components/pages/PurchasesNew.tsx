@@ -3,6 +3,8 @@ import { useAppState, useDispatch } from "@/context/StoreContext";
 import { computeVat } from "@/store/appState";
 import { useIdempotentAction } from "@/hooks/useIdempotentAction";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 
 export function PurchasesNew() {
   const state = useAppState();
@@ -23,7 +25,7 @@ export function PurchasesNew() {
   const total = vatData.total;
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div data-page="purchases-new" data-testid="page-purchases-new" className="space-y-6 max-w-5xl">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -34,6 +36,8 @@ export function PurchasesNew() {
         </div>
         <button className="btn-ghost">✕ Cancel</button>
       </div>
+
+      <SectionHelpHint hint={getPageSectionHint("purchasesNew")} />
 
       <div className="glass-card corner-marks p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

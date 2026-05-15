@@ -19,7 +19,7 @@ const badgeToneMap: Record<string, string> = {
 
 export function PageHeader({ title, subtitle, badge, badgeTone = "cyan", actions, live }: PageHeaderProps) {
   return (
-    <div className="flex flex-wrap justify-between items-end gap-4 mb-6">
+    <div data-component="ui-PageHeader" data-testid="component-ui-PageHeader" className="flex flex-wrap justify-between items-end gap-4 mb-6">
       <div>
         <div className="flex items-center gap-3 mb-1">
           <h1

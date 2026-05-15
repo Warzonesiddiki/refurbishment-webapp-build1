@@ -3,6 +3,8 @@ import { KpiCard } from "@/components/cards/KpiCard";
 import { useAppState } from "@/context/StoreContext";
 import { useIdempotentAction } from "@/hooks/useIdempotentAction";
 import { useUiActionFeedback } from "@/hooks/useUiActionFeedback";
+import { SectionHelpHint } from "@/components/ui/SectionHelpHint";
+import { getPageSectionHint } from "@/components/pages/pageSectionHints";
 
 export function FinanceVat() {
   const state = useAppState();
@@ -42,7 +44,7 @@ export function FinanceVat() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div data-page="finance-vat" data-testid="page-finance-vat" className="space-y-6 max-w-7xl">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -57,6 +59,8 @@ export function FinanceVat() {
           <button className="btn-ghost" data-action="print" onClick={handlePrint}>⎙ Print</button>
         </div>
       </div>
+
+      <SectionHelpHint hint={getPageSectionHint("financeVat")} />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <KpiCard label="Output VAT (Sales)" value={`AED ${totals.outputVat.toFixed(2)}`} tone="cyan" icon="↑" />

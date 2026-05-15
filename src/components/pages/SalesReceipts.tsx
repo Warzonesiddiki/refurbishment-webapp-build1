@@ -34,7 +34,7 @@ export function SalesReceipts() {
   };
 
   return (
-    <div className="space-y-6">
+    <div data-page="sales-receipts" data-testid="page-sales-receipts" className="space-y-6">
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">

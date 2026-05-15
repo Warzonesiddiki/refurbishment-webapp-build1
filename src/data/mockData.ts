@@ -72,6 +72,7 @@ export const navigation: NavItem[] = [
     ],
   },
   { id: "reports", label: "Reports", icon: "📈" },
+  { id: "audit", label: "Audit", icon: "🛡️" },
   { id: "settings", label: "Settings", icon: "⚙️" },
 ];
 

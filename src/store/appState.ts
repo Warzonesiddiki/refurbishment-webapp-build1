@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════
-// ALMASFUFA — Centralized App State Store
+// TAHIR ERP — Centralized App State Store
 // Client-side state management for all modules
 //
 // NOTE: This is an in-browser store used for the demo build.
@@ -8,7 +8,9 @@
 // ═══════════════════════════════════════════
 
 import { laptopTable, partTable, activityFeed, alertList } from "@/data/mockData";
-import { makeSequenceGenerator, computeVat } from "@/domain";
+import { makeSequenceGenerator, computeVat, canAdvance, trackStages } from "@/domain";
+import { canTransitionLaptopStatus, canTransitionLotStatus } from "@/domain/statusTransitions";
+import { buildHarvestedPartName, calculateReplacementNetCost, normalizeReplacementDestination } from "@/utils/wipReplacement";
 
 // ── Sequence Generators ──
 const seqLaptop = makeSequenceGenerator("laptop");
@@ -37,12 +39,19 @@ export type LaptopRecord = typeof laptopTable[0] & {
   selected?: boolean;
   lot?: string;
   testResult?: string;
+  ramType?: string;
+  ramCapacityGb?: number;
+  ssdType?: string;
+  ssdCapacityGb?: number;
+  graphicsType?: "GPU" | "iGPU";
+  importMeta?: Record<string, string>;
 };
 
 export type PartRecord = typeof partTable[0] & {
   id: string;
   /** Reserved quantity (allocated to WIP, etc.) */
   reserved?: number;
+  importMeta?: Record<string, string>;
 };
 
 export type WipRecord = {
@@ -61,9 +70,21 @@ export type WipRecord = {
   opened: string;
   diagnosisNotes: string;
   parts: { name: string; barcode: string; cost: number }[];
-  laborEntries: { tech: string; hours: number; rate: number; date: string }[];
+  laborEntries: { tech: string; hours: number; rate: number; date: string; source?: "manual" | "timer"; approved?: boolean; approvedBy?: string; startedAt?: string; endedAt?: string }[];
   history: { ts: string; action: string; user: string }[];
 };
+
+export type WipPartReplacementInput = {
+  component: string;
+  name: string;
+  category?: string;
+  spec?: string;
+  condition?: string;
+  estimatedValue?: number;
+  removedSerial?: string;
+  destination?: "Harvest QA Bin" | "Scrap Bin";
+};
+
 
 export type SaleRecord = {
   id: string;
@@ -255,6 +276,102 @@ function deriveReserved(onHand: number, available: number | undefined) {
   return Math.max(0, onHand - avail);
 }
 
+
+
+
+function getTrackKey(trackLabel: string): keyof typeof trackStages | null {
+  const m = /Track\s*([A-E])/i.exec(trackLabel);
+  if (!m) return null;
+  const key = m[1].toUpperCase() as keyof typeof trackStages;
+  return key in trackStages ? key : null;
+}
+
+export function buildTrackEFollowupFromFailedTesting(wip: WipRecord): WipRecord {
+  return {
+    id: uid(),
+    wip: generators.wip(new Date()),
+    laptop: wip.laptop,
+    brand: wip.brand,
+    track: "Track E",
+    stage: "Queue",
+    assignedTo: "Unassigned",
+    partsUsed: 0,
+    partsCost: 0,
+    laborHrs: 0,
+    priority: "High",
+    status: "Active",
+    opened: new Date().toLocaleDateString("en-GB", { month: "short", day: "numeric" }),
+    diagnosisNotes: `Auto-created from failed testing (${wip.wip})`,
+    parts: [],
+    laborEntries: [],
+    history: [
+      { ts: new Date().toLocaleString(), action: `Auto-created from ${wip.wip} after L2 Failed`, user: systemUser() },
+    ],
+  };
+}
+
+function isVerifiedStatus(status: string) {
+  return status !== "Pending Verification";
+}
+
+function isGradedStatus(status: string) {
+  return !["Pending Verification", "Pending Grading"].includes(status);
+}
+
+
+function deriveLotLifecycleStatus(lotLaptops: LaptopRecord[]) {
+  const items = lotLaptops.length;
+  if (items === 0) return "Pending";
+
+  const verified = lotLaptops.filter((l) => isVerifiedStatus(l.status)).length;
+  const graded = lotLaptops.filter((l) => isGradedStatus(l.status)).length;
+
+  if (verified === 0) return "Pending";
+  if (verified < items) return "Partially Verified";
+  if (graded === 0) return "Verified";
+  if (graded < items) return "Partially Graded";
+
+  const settledStatuses = new Set(["Ready for Sale", "Sold", "Scrapped", "Missing", "Disposed"]);
+  const completed = lotLaptops.every((l) => settledStatuses.has(l.status));
+  return completed ? "Completed" : "Fully Graded";
+}
+
+function recalculateLotCounters(lotNumber: string, laptops: LaptopRecord[], currentLot: LotRecord) {
+  const lotLaptops = laptops.filter((l) => l.lot === lotNumber);
+  if (lotLaptops.length === 0) return currentLot;
+
+  const items = lotLaptops.length;
+  const verified = lotLaptops.filter((l) => isVerifiedStatus(l.status)).length;
+  const graded = lotLaptops.filter((l) => isGradedStatus(l.status)).length;
+  const status = deriveLotLifecycleStatus(lotLaptops);
+
+  return {
+    ...currentLot,
+    items,
+    verified,
+    graded,
+    status,
+  };
+}
+
+function syncSupplierLotsFromLots(suppliers: SupplierRecord[], lots: LotRecord[]) {
+  return suppliers.map((supplier) => ({
+    ...supplier,
+    lots: lots.filter((lot) => lot.supplier === supplier.name).length,
+  }));
+}
+
+function reconcileSalesStatuses(sales: SaleRecord[], receipts: ReceiptRecord[]) {
+  return sales.map((sale) => {
+    const paidAmount = receipts
+      .filter((r) => r.invoice === sale.invoice)
+      .reduce((sum, r) => sum + r.amount, 0);
+    const dueAmount = Math.max(0, sale.total - paidAmount);
+    const status = dueAmount === 0 ? "Paid" : paidAmount > 0 ? "Partial" : "Unpaid";
+    return { ...sale, status };
+  });
+}
+
 function normalizePart(part: PartRecord): PartRecord {
   const reserved = typeof part.reserved === "number" ? part.reserved : deriveReserved(part.onHand, part.available);
   const onHand = Math.max(0, part.onHand);
@@ -266,6 +383,44 @@ function normalizePart(part: PartRecord): PartRecord {
     reserved: safeReserved,
     available,
   };
+}
+
+
+function recalculateCashLedger(entries: CashEntry[]) {
+  const sorted = [...entries].sort((a, b) => a.time.localeCompare(b.time));
+  let running = 0;
+  return sorted.map((entry) => {
+    const normalizedAmount =
+      entry.type === "Cash Out" || entry.type === "Adjustment"
+        ? -Math.abs(entry.amount)
+        : entry.type === "Cash In"
+          ? Math.abs(entry.amount)
+          : entry.type === "Opening" || entry.type === "Closing"
+            ? 0
+            : entry.amount;
+
+    if (entry.type === "Opening") {
+      running = entry.balance;
+      return { ...entry, amount: 0, balance: running };
+    }
+
+    if (entry.type === "Closing") {
+      return { ...entry, amount: 0, balance: running };
+    }
+
+    running += normalizedAmount;
+    return { ...entry, amount: normalizedAmount, balance: running };
+  });
+}
+
+function recalculateOwnerLedger(entries: OwnerEntry[]) {
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  let running = 0;
+  return sorted.map((entry) => {
+    const normalizedAmount = entry.type === "Drawing" ? -Math.abs(entry.amount) : Math.abs(entry.amount);
+    running += normalizedAmount;
+    return { ...entry, amount: normalizedAmount, balance: running };
+  });
 }
 
 function appendLogs(
@@ -540,7 +695,7 @@ export function createInitialState(): AppState {
     movementLog,
     auditLog,
     settings: {
-      companyName: "Almasfufa Refurbishment",
+      companyName: "Tahir ERP",
       trn: "100200300400005",
       address: "Dubai, UAE",
       currency: "AED",
@@ -583,9 +738,18 @@ export type Action =
   | { type: "DELETE_LOT"; id: string }
   | { type: "ADD_WIP"; payload: Omit<WipRecord, "id"> }
   | { type: "UPDATE_WIP"; id: string; payload: Partial<WipRecord> }
+  | { type: "WIP_MOVE_STAGE"; wipId: string; toStage: string }
   | { type: "WIP_ADD_PART"; wipId: string; partBarcode: string }
+  | {
+    type: "WIP_REPLACE_PART";
+    wipId: string;
+    installedPartBarcode: string;
+    removedPart: WipPartReplacementInput;
+    technician?: string;
+  }
   | { type: "WIP_REMOVE_PART"; wipId: string; index: number }
-  | { type: "WIP_ADD_LABOR"; wipId: string; tech: string; hours: number }
+  | { type: "WIP_ADD_LABOR"; wipId: string; tech: string; hours: number; source?: "manual" | "timer"; startedAt?: string; endedAt?: string }
+  | { type: "WIP_APPROVE_LABOR_ENTRY"; wipId: string; index: number; approvedBy: string }
   | { type: "WIP_UPDATE_DIAGNOSIS"; wipId: string; notes: string }
   | { type: "WIP_COMPLETE"; wipId: string }
   | { type: "ADD_ACTIVITY"; payload: ActivityItem }
@@ -603,7 +767,22 @@ export type Action =
 export function appReducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "ADD_LAPTOP": {
+      const exists = state.laptops.some((l) => l.barcode.toUpperCase() === action.payload.barcode.toUpperCase());
+      if (exists) {
+        return {
+          ...state,
+          alerts: [
+            { id: uid(), title: "Duplicate barcode", description: `${action.payload.barcode} already exists`, tone: "red" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
       const record: LaptopRecord = { ...action.payload, id: uid() };
+      const nextLaptops = [...state.laptops, record];
+      const nextLots = record.lot
+        ? state.lots.map((lot) => (lot.lot === record.lot ? recalculateLotCounters(lot.lot, nextLaptops, lot) : lot))
+        : state.lots;
       const logs = appendLogs(
         state,
         { entityType: "laptop", entityId: record.id, ref: record.barcode, action: "create" },
@@ -612,13 +791,25 @@ export function appReducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         ...logs,
-        laptops: [...state.laptops, record],
+        laptops: nextLaptops,
+        lots: nextLots,
       };
     }
     case "UPDATE_LAPTOP": {
       const before = state.laptops.find((l) => l.id === action.id);
+      if (before && action.payload.status && !canTransitionLaptopStatus(before.status, action.payload.status)) {
+        return {
+          ...state,
+          alerts: [
+            { id: uid(), title: "Invalid laptop transition", description: `${before.status} → ${action.payload.status} is not allowed`, tone: "red" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
       const nextLaptops = state.laptops.map((l) => (l.id === action.id ? { ...l, ...action.payload } : l));
       const after = nextLaptops.find((l) => l.id === action.id);
+      const impactedLots = new Set([before?.lot, after?.lot].filter(Boolean));
+      const nextLots = state.lots.map((lot) => (impactedLots.has(lot.lot) ? recalculateLotCounters(lot.lot, nextLaptops, lot) : lot));
       const logs = before && after
         ? appendLogs(
             state,
@@ -639,10 +830,14 @@ export function appReducer(state: AppState, action: Action): AppState {
             }
           )
         : { movementLog: state.movementLog, auditLog: state.auditLog };
-      return { ...state, ...logs, laptops: nextLaptops };
+      return { ...state, ...logs, laptops: nextLaptops, lots: nextLots };
     }
     case "DELETE_LAPTOP": {
       const before = state.laptops.find((l) => l.id === action.id);
+      const nextLaptops = state.laptops.filter((l) => l.id !== action.id);
+      const nextLots = before?.lot
+        ? state.lots.map((lot) => (lot.lot === before.lot ? recalculateLotCounters(lot.lot, nextLaptops, lot) : lot))
+        : state.lots;
       const logs = before
         ? appendLogs(
             state,
@@ -650,7 +845,7 @@ export function appReducer(state: AppState, action: Action): AppState {
             { entityType: "laptop", entityId: action.id, ref: before.barcode, action: "delete" }
           )
         : { movementLog: state.movementLog, auditLog: state.auditLog };
-      return { ...state, ...logs, laptops: state.laptops.filter((l) => l.id !== action.id) };
+      return { ...state, ...logs, laptops: nextLaptops, lots: nextLots };
     }
 
     case "ADD_PART": {
@@ -767,15 +962,17 @@ export function appReducer(state: AppState, action: Action): AppState {
 
     case "ADD_RECEIPT": {
       const receipt = { ...action.payload, id: uid() };
+      const nextReceipts = [...state.receipts, receipt];
       const logs = appendLogs(
         state,
         { entityType: "receipt", entityId: receipt.id, ref: receipt.receipt, action: "create" },
         { entityType: "receipt", entityId: receipt.id, ref: receipt.receipt, action: "create", payload: { ...action.payload } }
       );
-      return { ...state, ...logs, receipts: [...state.receipts, receipt] };
+      return { ...state, ...logs, receipts: nextReceipts, sales: reconcileSalesStatuses(state.sales, nextReceipts) };
     }
     case "DELETE_RECEIPT": {
       const before = state.receipts.find((r) => r.id === action.id);
+      const nextReceipts = state.receipts.filter((r) => r.id !== action.id);
       const logs = before
         ? appendLogs(
             state,
@@ -783,17 +980,53 @@ export function appReducer(state: AppState, action: Action): AppState {
             { entityType: "receipt", entityId: before.id, ref: before.receipt, action: "delete" }
           )
         : { movementLog: state.movementLog, auditLog: state.auditLog };
-      return { ...state, ...logs, receipts: state.receipts.filter((r) => r.id !== action.id) };
+      return { ...state, ...logs, receipts: nextReceipts, sales: reconcileSalesStatuses(state.sales, nextReceipts) };
     }
 
     case "ADD_PURCHASE": {
       const purchase = { ...action.payload, id: uid() };
+      const supplierExists = state.suppliers.some((s) => s.name === purchase.supplier);
+      const nextSuppliersBase = supplierExists
+        ? state.suppliers
+        : [
+            ...state.suppliers,
+            { id: uid(), name: purchase.supplier, contact: "", email: "", trn: "", lots: 0, status: "Active" },
+          ];
+
+      const hasLotRef = Boolean(purchase.lot && purchase.lot !== "-");
+      const lotExists = hasLotRef ? state.lots.some((lot) => lot.lot === purchase.lot) : true;
+
+      const lotsWithLinkedPurchase = lotExists
+        ? state.lots.map((lot) =>
+            lot.lot === purchase.lot ? { ...lot, supplier: purchase.supplier, cost: lot.cost + purchase.subtotal } : lot
+          )
+        : state.lots;
+
+      const nextLots = hasLotRef && !lotExists
+        ? [
+            ...lotsWithLinkedPurchase,
+            {
+              id: uid(),
+              lot: purchase.lot,
+              supplier: purchase.supplier,
+              received: purchase.date,
+              status: "Pending",
+              items: 0,
+              verified: 0,
+              graded: 0,
+              cost: purchase.subtotal,
+            },
+          ]
+        : lotsWithLinkedPurchase;
+
+      const nextSuppliers = syncSupplierLotsFromLots(nextSuppliersBase, nextLots);
+
       const logs = appendLogs(
         state,
         { entityType: "purchase", entityId: purchase.id, ref: purchase.purchase, action: "create" },
         { entityType: "purchase", entityId: purchase.id, ref: purchase.purchase, action: "create", payload: { ...action.payload } }
       );
-      return { ...state, ...logs, purchases: [...state.purchases, purchase] };
+      return { ...state, ...logs, purchases: [...state.purchases, purchase], lots: nextLots, suppliers: nextSuppliers };
     }
     case "UPDATE_PURCHASE": {
       const before = state.purchases.find((p) => p.id === action.id);
@@ -852,33 +1085,81 @@ export function appReducer(state: AppState, action: Action): AppState {
     }
 
     case "ADD_CASH_ENTRY": {
+      const entryType = action.payload.type;
+      const requiresOpenDay = !["Opening", "Closing"].includes(entryType);
+      if (requiresOpenDay && !state.cashDayOpen) {
+        return {
+          ...state,
+          alerts: [
+            { id: uid(), title: "Cash day closed", description: "Open day before adding cash movements", tone: "red" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
+      if (entryType === "Opening" && state.cashDayOpen) {
+        return {
+          ...state,
+          alerts: [
+            { id: uid(), title: "Cash day already open", description: "Opening entry is only allowed when day is closed", tone: "yellow" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
+      if (entryType === "Closing" && !state.cashDayOpen) {
+        return {
+          ...state,
+          alerts: [
+            { id: uid(), title: "Cash day already closed", description: "Closing entry requires an open day", tone: "yellow" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
       const entry = { ...action.payload, id: uid() };
       const logs = appendLogs(
         state,
         { entityType: "settings", entityId: entry.id, ref: "cash", action: "cash_entry", note: entry.desc },
         { entityType: "settings", entityId: entry.id, ref: "cash", action: "cash_entry", payload: { ...action.payload } }
       );
-      const nextEntries = [...state.cashEntries, entry].sort((a, b) => a.time.localeCompare(b.time));
+      const nextEntries = recalculateCashLedger([...state.cashEntries, entry]);
       return { ...state, ...logs, cashEntries: nextEntries };
     }
     case "DELETE_CASH_ENTRY": {
-      const nextEntries = state.cashEntries.filter((e) => e.id !== action.id);
+      const nextEntries = recalculateCashLedger(state.cashEntries.filter((e) => e.id !== action.id));
       return { ...state, cashEntries: nextEntries };
     }
 
     case "ADD_OWNER_ENTRY": {
-      const entry = { ...action.payload, id: uid() };
+      const normalizedAmount = action.payload.type === "Drawing" ? -Math.abs(action.payload.amount) : Math.abs(action.payload.amount);
+      const entry = { ...action.payload, amount: normalizedAmount, id: uid() };
+      const nextEntries = recalculateOwnerLedger([...state.ownerEntries, entry]);
+      const hasNegativeCapital = nextEntries.some((ownerEntry) => ownerEntry.balance < 0);
+      if (hasNegativeCapital) {
+        return {
+          ...state,
+          alerts: [
+            {
+              id: uid(),
+              title: "Owner drawing blocked",
+              description: "Drawing amount exceeds current capital balance",
+              tone: "red",
+            },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
       const logs = appendLogs(
         state,
         { entityType: "settings", entityId: entry.id, ref: "owner", action: "owner_entry", note: entry.desc },
         { entityType: "settings", entityId: entry.id, ref: "owner", action: "owner_entry", payload: { ...action.payload } }
       );
-      // Maintain running balance ordering by date/time string
-      const nextEntries = [...state.ownerEntries, entry].sort((a, b) => a.date.localeCompare(b.date));
       return { ...state, ...logs, ownerEntries: nextEntries };
     }
     case "DELETE_OWNER_ENTRY": {
-      const nextEntries = state.ownerEntries.filter((e) => e.id !== action.id);
+      const nextEntries = recalculateOwnerLedger(state.ownerEntries.filter((e) => e.id !== action.id));
       return { ...state, ownerEntries: nextEntries };
     }
 
@@ -891,26 +1172,143 @@ export function appReducer(state: AppState, action: Action): AppState {
       );
       return { ...state, ...logs, suppliers: [...state.suppliers, supplier] };
     }
-    case "UPDATE_SUPPLIER":
-      return { ...state, suppliers: state.suppliers.map((s) => (s.id === action.id ? { ...s, ...action.payload } : s)) };
-    case "DELETE_SUPPLIER":
+    case "UPDATE_SUPPLIER": {
+      const before = state.suppliers.find((s) => s.id === action.id);
+      const nextSuppliers = state.suppliers.map((s) => (s.id === action.id ? { ...s, ...action.payload } : s));
+
+      if (!before) return { ...state, suppliers: nextSuppliers };
+
+      const nextName = typeof action.payload.name === "string" ? action.payload.name : before.name;
+      if (nextName === before.name) return { ...state, suppliers: nextSuppliers };
+
+      const nextLots = state.lots.map((lot) => (lot.supplier === before.name ? { ...lot, supplier: nextName } : lot));
+      const nextPurchases = state.purchases.map((purchase) =>
+        purchase.supplier === before.name ? { ...purchase, supplier: nextName } : purchase
+      );
+
+      return {
+        ...state,
+        suppliers: syncSupplierLotsFromLots(nextSuppliers, nextLots),
+        lots: nextLots,
+        purchases: nextPurchases,
+      };
+    }
+    case "DELETE_SUPPLIER": {
+      const supplier = state.suppliers.find((s) => s.id === action.id);
+      if (!supplier) return state;
+
+      const hasLinkedLots = state.lots.some((lot) => lot.supplier === supplier.name);
+      const hasLinkedPurchases = state.purchases.some((purchase) => purchase.supplier === supplier.name);
+      if (hasLinkedLots || hasLinkedPurchases) {
+        return {
+          ...state,
+          alerts: [
+            {
+              id: uid(),
+              title: "Supplier delete blocked",
+              description: `${supplier.name} is linked to lots/purchases`,
+              tone: "red",
+            },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
       return { ...state, suppliers: state.suppliers.filter((s) => s.id !== action.id) };
+    }
 
     case "ADD_LOT": {
       const lot = { ...action.payload, id: uid() };
+      const supplierExists = state.suppliers.some((s) => s.name === lot.supplier);
+      const nextSuppliersBase = supplierExists
+        ? state.suppliers
+        : [...state.suppliers, { id: uid(), name: lot.supplier, contact: "", email: "", trn: "", lots: 0, status: "Active" }];
+      const nextLots = [...state.lots, lot];
+      const nextSuppliers = syncSupplierLotsFromLots(nextSuppliersBase, nextLots);
       const logs = appendLogs(
         state,
         { entityType: "lot", entityId: lot.id, ref: lot.lot, action: "create" },
         { entityType: "lot", entityId: lot.id, ref: lot.lot, action: "create", payload: { ...action.payload } }
       );
-      return { ...state, ...logs, lots: [...state.lots, lot] };
+      return { ...state, ...logs, lots: nextLots, suppliers: nextSuppliers };
     }
-    case "UPDATE_LOT":
-      return { ...state, lots: state.lots.map((l) => (l.id === action.id ? { ...l, ...action.payload } : l)) };
-    case "DELETE_LOT":
-      return { ...state, lots: state.lots.filter((l) => l.id !== action.id) };
+    case "UPDATE_LOT": {
+      const currentLot = state.lots.find((l) => l.id === action.id);
+      const invalidStatusTransition = Boolean(
+        currentLot && action.payload.status && !canTransitionLotStatus(currentLot.status, action.payload.status)
+      );
+
+      const nextLots = state.lots.map((l) => {
+        if (l.id !== action.id) return l;
+        const merged = {
+          ...l,
+          ...action.payload,
+          status: invalidStatusTransition ? l.status : (action.payload.status ?? l.status),
+        };
+        const items = Math.max(0, merged.items);
+        const verified = Math.max(0, Math.min(merged.verified, items));
+        const graded = Math.max(0, Math.min(merged.graded, verified));
+        const status = verified >= items && items > 0 ? "Verified" : merged.status;
+        const lifecycleStatus = action.payload.status ? status : deriveLotLifecycleStatus(state.laptops.filter((lp) => lp.lot === l.lot));
+        return { ...merged, items, verified, graded, status: lifecycleStatus };
+      });
+
+      if (invalidStatusTransition && currentLot && action.payload.status) {
+        return {
+          ...state,
+          lots: nextLots,
+          suppliers: syncSupplierLotsFromLots(state.suppliers, nextLots),
+          alerts: [
+            { id: uid(), title: "Invalid lot transition", description: `${currentLot.status} → ${action.payload.status} is not allowed`, tone: "red" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
+      return { ...state, lots: nextLots, suppliers: syncSupplierLotsFromLots(state.suppliers, nextLots) };
+    }
+    case "DELETE_LOT": {
+      const lot = state.lots.find((l) => l.id === action.id);
+      if (!lot) return state;
+
+      const hasLinkedLaptops = state.laptops.some((l) => l.lot === lot.lot);
+      if (hasLinkedLaptops) {
+        return {
+          ...state,
+          alerts: [
+            { id: uid(), title: "Lot delete blocked", description: `${lot.lot} still has linked laptops`, tone: "red" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
+      const hasLinkedPurchases = state.purchases.some((p) => p.lot === lot.lot);
+      if (hasLinkedPurchases) {
+        return {
+          ...state,
+          alerts: [
+            { id: uid(), title: "Lot delete blocked", description: `${lot.lot} is linked to purchases`, tone: "red" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
+      const nextLots = state.lots.filter((l) => l.id !== action.id);
+      return { ...state, lots: nextLots, suppliers: syncSupplierLotsFromLots(state.suppliers, nextLots) };
+    }
 
     case "ADD_WIP": {
+      const laptopExists = state.laptops.some((l) => l.barcode === action.payload.laptop);
+      if (!laptopExists) {
+        return {
+          ...state,
+          alerts: [
+            { id: uid(), title: "WIP blocked", description: `Laptop ${action.payload.laptop} not found in inventory`, tone: "red" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
       const wip = { ...action.payload, id: uid() };
       // Enforce one active WIP per laptop: close existing actives
       const nextWips = state.wipJobs.map((w) =>
@@ -923,15 +1321,112 @@ export function appReducer(state: AppState, action: Action): AppState {
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "create" },
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "create", payload: { ...action.payload } }
       );
+      const nextLaptops = state.laptops.map((l) =>
+        l.barcode === wip.laptop && l.status !== "Sold" ? { ...l, status: "In Processing", track: wip.track } : l
+      );
+      const nextLots = state.lots.map((lot) => recalculateLotCounters(lot.lot, nextLaptops, lot));
+
       return {
         ...state,
         ...logs,
+        laptops: nextLaptops,
+        lots: nextLots,
         wipJobs: [...nextWips, wip],
         activity: [{ action: `WIP ${wip.wip} created for ${wip.brand}`, time: "just now" }, ...state.activity].slice(0, 50),
       };
     }
     case "UPDATE_WIP":
       return { ...state, wipJobs: state.wipJobs.map((w) => (w.id === action.id ? { ...w, ...action.payload } : w)) };
+
+    case "WIP_MOVE_STAGE": {
+      const wip = state.wipJobs.find((w) => w.id === action.wipId);
+      if (!wip) return state;
+
+      const trackKey = getTrackKey(wip.track);
+      const fromStage = wip.stage;
+      const toStage = action.toStage;
+
+      if (trackKey && !canAdvance(trackKey, fromStage, toStage)) {
+        return {
+          ...state,
+          alerts: [
+            {
+              id: uid(),
+              title: "Invalid stage transition",
+              description: `${wip.wip}: ${fromStage} -> ${toStage} not allowed`,
+              tone: "red",
+            },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
+      const rerouteToTesting = ["Track B", "Track C"].includes(wip.track) && toStage === "To Testing";
+      const failedTestingToTrackE = wip.track === "Track D" && toStage === "L2 Failed";
+
+      const nextWip = {
+        ...wip,
+        track: rerouteToTesting ? "Track D" : wip.track,
+        stage: rerouteToTesting ? "L1 Queue" : toStage,
+        status: failedTestingToTrackE ? "Completed" : toStage === "Awaiting Parts" ? "Awaiting Parts" : wip.status,
+        history: [
+          ...wip.history,
+          { ts: new Date().toLocaleString(), action: `Stage moved: ${fromStage} → ${toStage}`, user: systemUser() },
+          ...(rerouteToTesting
+            ? [{ ts: new Date().toLocaleString(), action: "Auto-routed to Track D (Testing)", user: systemUser() }]
+            : []),
+          ...(failedTestingToTrackE
+            ? [{ ts: new Date().toLocaleString(), action: "Marked completed after L2 Failed; Track E follow-up created", user: systemUser() }]
+            : []),
+        ],
+      };
+
+      const logs = appendLogs(
+        state,
+        {
+          entityType: "wip",
+          entityId: wip.id,
+          ref: wip.wip,
+          action: "move_stage",
+          from: `${wip.track}:${fromStage}`,
+          to: `${nextWip.track}:${nextWip.stage}`,
+        },
+        {
+          entityType: "wip",
+          entityId: wip.id,
+          ref: wip.wip,
+          action: "move_stage",
+          payload: { fromStage, toStage, rerouteToTesting },
+        }
+      );
+
+      const existingTrackE = failedTestingToTrackE
+        ? state.wipJobs.find((x) => x.id !== wip.id && x.laptop === wip.laptop && x.track === "Track E" && x.status !== "Completed")
+        : null;
+      const followup = failedTestingToTrackE && !existingTrackE ? buildTrackEFollowupFromFailedTesting(wip) : null;
+
+      return {
+        ...state,
+        ...logs,
+        alerts: failedTestingToTrackE
+          ? [
+              {
+                id: uid(),
+                title: existingTrackE ? "Track E follow-up already open" : "Track E follow-up created",
+                description: existingTrackE
+                  ? `${wip.wip} failed testing; existing follow-up ${existingTrackE.wip} kept active`
+                  : `${wip.wip} failed testing and was routed to ${followup?.wip}`,
+                tone: "yellow",
+              },
+              ...state.alerts,
+            ].slice(0, 50)
+          : state.alerts,
+        wipJobs: [
+          ...state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
+          ...(followup ? [followup] : []),
+        ],
+      };
+    }
 
     case "WIP_ADD_PART": {
       const wip = state.wipJobs.find((w) => w.id === action.wipId);
@@ -992,6 +1487,143 @@ export function appReducer(state: AppState, action: Action): AppState {
         ...logs,
         parts: nextParts,
         wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
+      };
+    }
+
+    case "WIP_REPLACE_PART": {
+      const wip = state.wipJobs.find((w) => w.id === action.wipId);
+      if (!wip) return state;
+
+      const installedPart = state.parts.find((p) => p.barcode.toUpperCase() === action.installedPartBarcode.toUpperCase());
+      if (!installedPart) return state;
+
+      const normalizedInstalled = normalizePart(installedPart);
+      const reserved = normalizedInstalled.reserved ?? 0;
+      const available = normalizedInstalled.onHand - reserved;
+      if (available <= 0) {
+        return {
+          ...state,
+          alerts: [
+            { id: uid(), title: "Out of stock", description: `${installedPart.name} (${installedPart.barcode}) is not available`, tone: "red" },
+            ...state.alerts,
+          ].slice(0, 50),
+        };
+      }
+
+      const removedName = action.removedPart.name.trim();
+      if (!removedName) return state;
+
+      const nextInstalled = normalizePart({ ...normalizedInstalled, reserved: reserved + 1 } as PartRecord);
+      const harvestBarcode = generators.part(new Date());
+      const destination = normalizeReplacementDestination(action.removedPart.destination);
+      const recoveredValue = Math.max(0, action.removedPart.estimatedValue ?? 0);
+      const harvestedPart: PartRecord = normalizePart({
+        id: uid(),
+        barcode: harvestBarcode,
+        name: buildHarvestedPartName(removedName),
+        category: action.removedPart.category || action.removedPart.component || "Harvested",
+        spec: action.removedPart.spec || `Recovered from ${wip.wip}`,
+        condition: action.removedPart.condition || "Refurbished",
+        onHand: 1,
+        available: 1,
+        reorder: 0,
+        cost: recoveredValue,
+        importMeta: action.removedPart.removedSerial?.trim() ? { removedSerial: action.removedPart.removedSerial.trim() } : undefined,
+        location: destination,
+        reserved: 0,
+      });
+
+      const nextParts = state.parts
+        .map((p) => (p.id === installedPart.id ? nextInstalled : p))
+        .concat(harvestedPart);
+
+      const installedWipPart = {
+        name: installedPart.name,
+        barcode: installedPart.barcode,
+        cost: calculateReplacementNetCost(installedPart.cost, recoveredValue),
+      };
+      const nextWipParts = [...wip.parts, installedWipPart];
+      const nextWipCost = nextWipParts.reduce((a, x) => a + x.cost, 0);
+      const tech = action.technician?.trim() || systemUser();
+
+      const nextWip: WipRecord = {
+        ...wip,
+        parts: nextWipParts,
+        partsUsed: nextWipParts.length,
+        partsCost: nextWipCost,
+        history: [
+          ...wip.history,
+          {
+            ts: new Date().toLocaleString(),
+            action: `Part replaced (${action.removedPart.component}): installed ${installedPart.name}, harvested ${harvestedPart.barcode} -> ${destination}`,
+            user: tech,
+          },
+        ],
+      };
+
+      const logs = appendLogs(
+        state,
+        {
+          entityType: "part",
+          entityId: installedPart.id,
+          ref: installedPart.barcode,
+          action: "reserve",
+          from: `reserved=${reserved}`,
+          to: `reserved=${reserved + 1}`,
+          qty: 1,
+          note: `Replacement install for ${wip.wip}`,
+        },
+        {
+          entityType: "wip",
+          entityId: wip.id,
+          ref: wip.wip,
+          action: "replace_part",
+          payload: {
+            installedPartBarcode: installedPart.barcode,
+            harvestedPartBarcode: harvestedPart.barcode,
+            removedPart: action.removedPart,
+          },
+        }
+      );
+
+      const harvestMovement: MovementLogRecord = {
+        id: uid(),
+        ts: nowTs(),
+        entityType: "part",
+        entityId: harvestedPart.id,
+        ref: harvestedPart.barcode,
+        action: "harvest_in",
+        qty: 1,
+        note: `Recovered from ${wip.wip}`,
+        user: tech,
+      };
+
+      const harvestAudit: AuditLogRecord = {
+        id: uid(),
+        ts: nowTs(),
+        entityType: "part",
+        entityId: harvestedPart.id,
+        ref: harvestedPart.barcode,
+        action: "harvest_in",
+        payload: {
+          sourceWip: wip.wip,
+          sourceLaptop: wip.laptop,
+          component: action.removedPart.component,
+          removedPartName: removedName,
+          removedSerial: action.removedPart.removedSerial?.trim() || null,
+          destination,
+          recoveredValue,
+          technician: tech,
+        },
+        user: tech,
+      };
+
+      return {
+        ...state,
+        parts: nextParts,
+        wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
+        movementLog: [harvestMovement, ...logs.movementLog].slice(0, 1000),
+        auditLog: [harvestAudit, ...logs.auditLog].slice(0, 1000),
       };
     }
 
@@ -1062,6 +1694,10 @@ export function appReducer(state: AppState, action: Action): AppState {
         hours: action.hours,
         rate: state.settings.laborRate,
         date: isoDate(),
+        source: action.source || "manual",
+        approved: action.source === "timer" ? false : true,
+        startedAt: action.startedAt,
+        endedAt: action.endedAt,
       };
       const laborEntries = [...wip.laborEntries, entry];
       const laborHrs = laborEntries.reduce((a, x) => a + x.hours, 0);
@@ -1075,10 +1711,39 @@ export function appReducer(state: AppState, action: Action): AppState {
       const logs = appendLogs(
         state,
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_add", qty: action.hours, note: action.tech },
-        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_add", payload: { tech: action.tech, hours: action.hours } }
+        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_add", payload: { tech: action.tech, hours: action.hours, source: action.source || "manual" } }
       );
 
-      return { ...state, ...logs, wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)) };
+      return {
+        ...state,
+        ...logs,
+        wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
+      };
+    }
+
+    case "WIP_APPROVE_LABOR_ENTRY": {
+      const wip = state.wipJobs.find((w) => w.id === action.wipId);
+      if (!wip) return state;
+      const target = wip.laborEntries[action.index];
+      if (!target) return state;
+      const laborEntries = wip.laborEntries.map((entry, idx) =>
+        idx === action.index ? { ...entry, approved: true, approvedBy: action.approvedBy } : entry
+      );
+      const nextWip: WipRecord = {
+        ...wip,
+        laborEntries,
+        history: [...wip.history, { ts: new Date().toLocaleString(), action: `Labor approved: ${target.hours}h (${target.tech})`, user: action.approvedBy }],
+      };
+      const logs = appendLogs(
+        state,
+        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_approve", qty: target.hours, note: action.approvedBy },
+        { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "labor_approve", payload: { index: action.index, approvedBy: action.approvedBy } }
+      );
+      return {
+        ...state,
+        ...logs,
+        wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
+      };
     }
 
     case "WIP_UPDATE_DIAGNOSIS": {
@@ -1090,7 +1755,11 @@ export function appReducer(state: AppState, action: Action): AppState {
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "diagnosis_update" },
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "diagnosis_update", payload: { notesLen: action.notes.length } }
       );
-      return { ...state, ...logs, wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)) };
+      return {
+        ...state,
+        ...logs,
+        wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
+      };
     }
 
     case "WIP_COMPLETE": {
@@ -1129,11 +1798,14 @@ export function appReducer(state: AppState, action: Action): AppState {
         { entityType: "wip", entityId: wip.id, ref: wip.wip, action: "complete", payload: { partsConsumed: wip.parts.length } }
       );
 
+      const nextLots = state.lots.map((lot) => recalculateLotCounters(lot.lot, nextLaptops, lot));
+
       return {
         ...state,
         ...logs,
         parts: nextParts,
         laptops: nextLaptops,
+        lots: nextLots,
         wipJobs: state.wipJobs.map((x) => (x.id === wip.id ? nextWip : x)),
         activity: [{ action: `WIP ${wip.wip} completed`, time: "just now" }, ...state.activity].slice(0, 50),
       };
@@ -1195,20 +1867,30 @@ export function appReducer(state: AppState, action: Action): AppState {
 }
 
 // ── Selectors ──
-export const selectKpis = (s: AppState) => ({
-  totalLaptops: s.laptops.length,
-  inProcessing: s.laptops.filter((l) => l.status === "In Processing").length,
-  readyForSale: s.laptops.filter((l) => l.status === "Ready for Sale").length,
-  todaysSales: s.sales.filter((sl) => sl.date === isoDate()).reduce((a, sl) => a + sl.total, 0),
-  pendingVerification: s.lots.filter((l) => l.status === "Pending").reduce((a, l) => a + (l.items - l.verified), 0),
-  pendingGrading: s.laptops.filter((l) => l.status === "Pending Grading").length,
-  lowStockParts: s.parts.filter((p) => p.onHand <= p.reorder && p.onHand > 0).length,
-  monthProfit: s.sales.reduce((a, sl) => a + sl.profit, 0),
-  totalPartValue: s.parts.reduce((a, p) => a + p.onHand * p.cost, 0),
-  activeWip: s.wipJobs.filter((w) => w.status !== "Completed").length,
-  cashBalance: s.cashEntries.length > 0 ? s.cashEntries[s.cashEntries.length - 1].balance : 0,
-  ownerCapital: s.ownerEntries.length > 0 ? s.ownerEntries[s.ownerEntries.length - 1].balance : 0,
-});
+export const selectKpis = (s: AppState) => {
+  const totalLaptops = s.laptops.length;
+  const pendingVerification = s.laptops.filter((l) => l.status === "Pending Verification").length;
+  const pendingGrading = s.laptops.filter((l) => l.status === "Pending Grading").length;
+  const verifiedUnits = totalLaptops - pendingVerification;
+  const gradedUnits = totalLaptops - pendingVerification - pendingGrading;
+
+  return {
+    totalLaptops,
+    inProcessing: s.laptops.filter((l) => l.status === "In Processing").length,
+    readyForSale: s.laptops.filter((l) => l.status === "Ready for Sale").length,
+    todaysSales: s.sales.filter((sl) => sl.date === isoDate()).reduce((a, sl) => a + sl.total, 0),
+    pendingVerification,
+    verificationProgressPct: totalLaptops > 0 ? Math.round((verifiedUnits / totalLaptops) * 100) : 0,
+    pendingGrading,
+    gradingProgressPct: totalLaptops > 0 ? Math.round((gradedUnits / totalLaptops) * 100) : 0,
+    lowStockParts: s.parts.filter((p) => p.onHand <= p.reorder && p.onHand > 0).length,
+    monthProfit: s.sales.reduce((a, sl) => a + sl.profit, 0),
+    totalPartValue: s.parts.reduce((a, p) => a + p.onHand * p.cost, 0),
+    activeWip: s.wipJobs.filter((w) => w.status !== "Completed").length,
+    cashBalance: s.cashEntries.length > 0 ? s.cashEntries[s.cashEntries.length - 1].balance : 0,
+    ownerCapital: s.ownerEntries.length > 0 ? s.ownerEntries[s.ownerEntries.length - 1].balance : 0,
+  };
+};
 
 export const selectVatSummary = (s: AppState) => {
   const outputVat = s.sales.reduce((a, sl) => a + sl.vat, 0);
